@@ -2,7 +2,7 @@ import warnings
 from typing import Any, Dict, List, Optional, Union
 
 import numpy as np
-import torch as th
+import torch
 from gymnasium import spaces
 from stable_baselines3.common.type_aliases import ReplayBufferSamples
 from stable_baselines3.common.vec_env import VecNormalize
@@ -13,7 +13,7 @@ try:
 except ImportError:
     psutil = None
 
-from rltoolkit.data.base_buffer import BaseBuffer
+from .base_buffer import BaseBuffer
 
 
 class ReplayBuffer(BaseBuffer):
@@ -47,16 +47,18 @@ class ReplayBuffer(BaseBuffer):
         buffer_size: int,
         observation_space: spaces.Space,
         action_space: spaces.Space,
-        device: Union[th.device, str] = 'auto',
+        device: Union[torch.device, str] = "cpu",
         n_envs: int = 1,
         optimize_memory_usage: bool = False,
         handle_timeout_termination: bool = True,
     ):
-        super().__init__(buffer_size,
-                         observation_space,
-                         action_space,
-                         device,
-                         n_envs=n_envs)
+        super().__init__(
+            buffer_size,
+            observation_space,
+            action_space,
+            device,
+            n_envs=n_envs,
+        )
 
         # Adjust buffer size
         self.buffer_size = max(buffer_size // n_envs, 1)
@@ -137,26 +139,26 @@ class ReplayBuffer(BaseBuffer):
         action = action.reshape((self.n_envs, self.action_dim))
 
         # Copy to avoid modification by reference
-        self.observations[self.pos] = np.array(obs)
+        self.observations[self.curr_ptr] = np.array(obs)
 
         if self.optimize_memory_usage:
-            self.observations[(self.pos + 1) %
-                              self.buffer_size] = np.array(next_obs)
+            self.observations[(self.curr_ptr + 1) % self.buffer_size] = np.array(
+                next_obs
+            )
         else:
-            self.next_observations[self.pos] = np.array(next_obs)
+            self.next_observations[self.curr_ptr] = np.array(next_obs)
 
-        self.actions[self.pos] = np.array(action)
-        self.rewards[self.pos] = np.array(reward)
-        self.dones[self.pos] = np.array(done)
+        self.actions[self.curr_ptr] = np.array(action)
+        self.rewards[self.curr_ptr] = np.array(reward)
+        self.dones[self.curr_ptr] = np.array(done)
 
         if self.handle_timeout_termination:
-            self.timeouts[self.pos] = np.array(
-                [info.get('TimeLimit.truncated', False) for info in infos])
+            self.timeouts[self.curr_ptr] = np.array(
+                [info.get("TimeLimit.truncated", False) for info in infos]
+            )
 
-        self.pos += 1
-        if self.pos == self.buffer_size:
-            self.full = True
-            self.pos = 0
+        self.curr_ptr = (self.curr_ptr + 1) % self.buffer_size
+        self.curr_size = min(self.curr_size + 1, self.buffer_size)
 
     def sample(self,
                batch_size: int,
@@ -175,12 +177,10 @@ class ReplayBuffer(BaseBuffer):
             return super().sample(batch_size=batch_size, env=env)
         # Do not sample the element with index `self.pos` as the transitions is invalid
         # (we use only one array to store `obs` and `next_obs`)
-        if self.full:
-            batch_inds = (
-                np.random.randint(1, self.buffer_size, size=batch_size) +
-                self.pos) % self.buffer_size
+        if self.size == self.buffer_size:
+            batch_inds = np.random.randint(1, self.buffer_size, size=batch_size)
         else:
-            batch_inds = np.random.randint(0, self.pos, size=batch_size)
+            batch_inds = np.random.randint(0, self.curr_size, size=batch_size)
         return self._get_samples(batch_inds, env=env)
 
     def _get_samples(
