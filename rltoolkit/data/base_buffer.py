@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Dict, Optional, Tuple, Union
 
 import numpy as np
-import torch as th
+import torch
 from gymnasium import spaces
 from stable_baselines3.common.preprocessing import (get_action_dim,
                                                     get_obs_shape)
@@ -37,7 +37,7 @@ class BaseBuffer(ABC):
         buffer_size: int,
         observation_space: spaces.Space,
         action_space: spaces.Space,
-        device: Union[th.device, str] = 'auto',
+        device: Union[torch.device, str] = 'auto',
         n_envs: int = 1,
     ):
         super().__init__()
@@ -48,8 +48,8 @@ class BaseBuffer(ABC):
             observation_space)  # type: ignore[assignment]
 
         self.action_dim = get_action_dim(action_space)
-        self.pos = 0
-        self.full = False
+        self.curr_ptr = 0
+        self.curr_size = 0
         self.device = get_device(device)
         self.n_envs = n_envs
 
@@ -73,9 +73,7 @@ class BaseBuffer(ABC):
         """
         :return: The current size of the buffer
         """
-        if self.full:
-            return self.buffer_size
-        return self.pos
+        return self.curr_size
 
     def add(self, *args, **kwargs) -> None:
         """Add elements to the buffer."""
@@ -89,8 +87,8 @@ class BaseBuffer(ABC):
 
     def reset(self) -> None:
         """Reset the buffer."""
-        self.pos = 0
-        self.full = False
+        self.curr_ptr = 0
+        self.curr_size = 0
 
     def sample(self, batch_size: int, env: Optional[VecNormalize] = None):
         """
@@ -99,8 +97,7 @@ class BaseBuffer(ABC):
             to normalize the observations/rewards when sampling
         :return:
         """
-        upper_bound = self.buffer_size if self.full else self.pos
-        batch_inds = np.random.randint(0, upper_bound, size=batch_size)
+        batch_inds = np.random.randint(0, self.curr_size, size=batch_size)
         return self._get_samples(batch_inds, env=env)
 
     @abstractmethod
@@ -116,7 +113,7 @@ class BaseBuffer(ABC):
         """
         raise NotImplementedError()
 
-    def to_torch(self, array: np.ndarray, copy: bool = True) -> th.Tensor:
+    def to_torch(self, array: np.ndarray, copy: bool = True) -> torch.Tensor:
         """
         Convert a numpy array to a PyTorch tensor.
         Note: it copies the data by default
@@ -127,8 +124,8 @@ class BaseBuffer(ABC):
         :return:
         """
         if copy:
-            return th.tensor(array, device=self.device)
-        return th.as_tensor(array, device=self.device)
+            return torch.tensor(array, device=self.device)
+        return torch.as_tensor(array, device=self.device)
 
     @staticmethod
     def _normalize_obs(
