@@ -3,8 +3,6 @@ from typing import List
 
 import six
 
-__all__ = ['PiecewiseScheduler', 'LinearDecayScheduler']
-
 
 class PiecewiseScheduler(object):
     """Set hyper parameters by a predefined step-based scheduler."""
@@ -53,7 +51,8 @@ class LinearDecayScheduler(object):
     """Set hyper parameters by a step-based scheduler with linear decay
     values."""
 
-    def __init__(self, start_value, max_steps):
+    def __init__(self, start_value: float, end_value: float,
+                 max_steps: int) -> None:
         """Linear decay scheduler of hyper parameter. Decay value linearly
         until 0.
 
@@ -65,8 +64,9 @@ class LinearDecayScheduler(object):
         self.cur_step = 0
         self.max_steps = max_steps
         self.start_value = start_value
+        self.end_value = end_value
 
-    def step(self, step_num=1):
+    def step(self, step_num: int = 1) -> float:
         """Step step_num and fetch value according to following rule:
 
         return_value = start_value * (1.0 - (cur_steps / max_steps))
@@ -79,10 +79,9 @@ class LinearDecayScheduler(object):
         """
         assert isinstance(step_num, int) and step_num >= 1
         self.cur_step = min(self.cur_step + step_num, self.max_steps)
-
-        value = self.start_value * (1.0 -
-                                    ((self.cur_step * 1.0) / self.max_steps))
-
+        duration = (self.cur_step * 1.0) / self.max_steps
+        curr_value = self.start_value * (1.0 - duration)
+        value = max(curr_value, self.end_value)
         return value
 
 
