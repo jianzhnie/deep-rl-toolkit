@@ -3,7 +3,6 @@ from typing import Generator, Optional, Union
 import numpy as np
 import torch
 from gymnasium import spaces
-
 from stable_baselines3.common.type_aliases import RolloutBufferSamples
 from stable_baselines3.common.vec_env import VecNormalize
 
@@ -17,13 +16,11 @@ from .base_buffer import BaseBuffer
 
 
 class RolloutBuffer(BaseBuffer):
-    """
-    Rollout buffer used in on-policy algorithms like A2C/PPO.
-    It corresponds to ``buffer_size`` transitions collected
-    using the current policy.
-    This experience will be discarded after the policy update.
-    In order to use PPO objective, we also store the current value of each state
-    and the log probability of each taken action.
+    """Rollout buffer used in on-policy algorithms like A2C/PPO. It corresponds
+    to ``buffer_size`` transitions collected using the current policy. This
+    experience will be discarded after the policy update. In order to use PPO
+    objective, we also store the current value of each state and the log
+    probability of each taken action.
 
     The term rollout here refers to the model-free notion and should not
     be used with the concept of rollout used in model-based RL or planning.
@@ -53,14 +50,16 @@ class RolloutBuffer(BaseBuffer):
         buffer_size: int,
         observation_space: spaces.Space,
         action_space: spaces.Space,
-        device: Union[torch.device, str] = "auto",
+        device: Union[torch.device, str] = 'auto',
         gae_lambda: float = 1,
         gamma: float = 0.99,
         n_envs: int = 1,
     ):
-        super().__init__(
-            buffer_size, observation_space, action_space, device, n_envs=n_envs
-        )
+        super().__init__(buffer_size,
+                         observation_space,
+                         action_space,
+                         device,
+                         n_envs=n_envs)
         self.gae_lambda = gae_lambda
         self.gamma = gamma
         self.generator_ready = False
@@ -68,28 +67,28 @@ class RolloutBuffer(BaseBuffer):
 
     def reset(self) -> None:
         self.observations = np.zeros(
-            (self.buffer_size, self.n_envs, *self.obs_shape), dtype=np.float32
-        )
+            (self.buffer_size, self.n_envs, *self.obs_shape), dtype=np.float32)
         self.actions = np.zeros(
-            (self.buffer_size, self.n_envs, self.action_dim), dtype=np.float32
-        )
-        self.rewards = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
-        self.returns = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
-        self.episode_starts = np.zeros(
-            (self.buffer_size, self.n_envs), dtype=np.float32
-        )
-        self.values = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
-        self.log_probs = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
-        self.advantages = np.zeros((self.buffer_size, self.n_envs), dtype=np.float32)
+            (self.buffer_size, self.n_envs, self.action_dim), dtype=np.float32)
+        self.rewards = np.zeros((self.buffer_size, self.n_envs),
+                                dtype=np.float32)
+        self.returns = np.zeros((self.buffer_size, self.n_envs),
+                                dtype=np.float32)
+        self.episode_starts = np.zeros((self.buffer_size, self.n_envs),
+                                       dtype=np.float32)
+        self.values = np.zeros((self.buffer_size, self.n_envs),
+                               dtype=np.float32)
+        self.log_probs = np.zeros((self.buffer_size, self.n_envs),
+                                  dtype=np.float32)
+        self.advantages = np.zeros((self.buffer_size, self.n_envs),
+                                   dtype=np.float32)
         self.generator_ready = False
         super().reset()
 
-    def compute_returns_and_advantage(
-        self, last_values: torch.Tensor, dones: np.ndarray
-    ) -> None:
-        """
-        Post-processing step: compute the lambda-return (TD(lambda) estimate)
-        and GAE(lambda) advantage.
+    def compute_returns_and_advantage(self, last_values: torch.Tensor,
+                                      dones: np.ndarray) -> None:
+        """Post-processing step: compute the lambda-return (TD(lambda)
+        estimate) and GAE(lambda) advantage.
 
         Uses Generalized Advantage Estimation (https://arxiv.org/abs/1506.02438)
         to compute the advantage. To obtain Monte-Carlo advantage estimate (A(s) = R - V(S))
@@ -116,14 +115,11 @@ class RolloutBuffer(BaseBuffer):
             else:
                 next_non_terminal = 1.0 - self.episode_starts[step + 1]
                 next_values = self.values[step + 1]
-            delta = (
-                self.rewards[step]
-                + self.gamma * next_values * next_non_terminal
-                - self.values[step]
-            )
-            last_gae_lam = (
-                delta + self.gamma * self.gae_lambda * next_non_terminal * last_gae_lam
-            )
+            delta = (self.rewards[step] +
+                     self.gamma * next_values * next_non_terminal -
+                     self.values[step])
+            last_gae_lam = (delta + self.gamma * self.gae_lambda *
+                            next_non_terminal * last_gae_lam)
             self.advantages[step] = last_gae_lam
         # TD(lambda) estimator, see Github PR #375 or "Telescoping in TD(lambda)"
         # in David Silver Lecture 4: https://www.youtube.com/watch?v=PnHCvfgC_ZA
@@ -171,23 +167,25 @@ class RolloutBuffer(BaseBuffer):
         self.curr_size = min(self.curr_size + 1, self.buffer_size)
 
     def get(
-        self, batch_size: Optional[int] = None
+        self,
+        batch_size: Optional[int] = None
     ) -> Generator[RolloutBufferSamples, None, None]:
-        assert self.full, ""
+        assert self.full, ''
         indices = np.random.permutation(self.buffer_size * self.n_envs)
         # Prepare the data
         if not self.generator_ready:
             _tensor_names = [
-                "observations",
-                "actions",
-                "values",
-                "log_probs",
-                "advantages",
-                "returns",
+                'observations',
+                'actions',
+                'values',
+                'log_probs',
+                'advantages',
+                'returns',
             ]
 
             for tensor in _tensor_names:
-                self.__dict__[tensor] = self.swap_and_flatten(self.__dict__[tensor])
+                self.__dict__[tensor] = self.swap_and_flatten(
+                    self.__dict__[tensor])
             self.generator_ready = True
 
         # Return everything, don't create minibatches
@@ -196,7 +194,7 @@ class RolloutBuffer(BaseBuffer):
 
         start_idx = 0
         while start_idx < self.buffer_size * self.n_envs:
-            yield self._get_samples(indices[start_idx : start_idx + batch_size])
+            yield self._get_samples(indices[start_idx:start_idx + batch_size])
             start_idx += batch_size
 
     def _get_samples(

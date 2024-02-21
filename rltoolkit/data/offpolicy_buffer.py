@@ -16,7 +16,7 @@ except ImportError:
 from .base_buffer import BaseBuffer
 
 
-class ReplayBuffer(BaseBuffer):
+class OffPolicyBuffer(BaseBuffer):
     """Replay buffer used in off-policy algorithms like SAC/TD3.
 
     :param buffer_size: Max number of element in the buffer
@@ -47,7 +47,7 @@ class ReplayBuffer(BaseBuffer):
         buffer_size: int,
         observation_space: spaces.Space,
         action_space: spaces.Space,
-        device: Union[torch.device, str] = "cpu",
+        device: Union[torch.device, str] = 'cpu',
         n_envs: int = 1,
         optimize_memory_usage: bool = False,
         handle_timeout_termination: bool = True,
@@ -142,9 +142,8 @@ class ReplayBuffer(BaseBuffer):
         self.observations[self.curr_ptr] = np.array(obs)
 
         if self.optimize_memory_usage:
-            self.observations[(self.curr_ptr + 1) % self.buffer_size] = np.array(
-                next_obs
-            )
+            self.observations[(self.curr_ptr + 1) %
+                              self.buffer_size] = np.array(next_obs)
         else:
             self.next_observations[self.curr_ptr] = np.array(next_obs)
 
@@ -154,8 +153,7 @@ class ReplayBuffer(BaseBuffer):
 
         if self.handle_timeout_termination:
             self.timeouts[self.curr_ptr] = np.array(
-                [info.get("TimeLimit.truncated", False) for info in infos]
-            )
+                [info.get('TimeLimit.truncated', False) for info in infos])
 
         self.curr_ptr = (self.curr_ptr + 1) % self.buffer_size
         self.curr_size = min(self.curr_size + 1, self.buffer_size)
@@ -178,7 +176,9 @@ class ReplayBuffer(BaseBuffer):
         # Do not sample the element with index `self.pos` as the transitions is invalid
         # (we use only one array to store `obs` and `next_obs`)
         if self.size == self.buffer_size:
-            batch_inds = np.random.randint(1, self.buffer_size, size=batch_size)
+            batch_inds = np.random.randint(1,
+                                           self.buffer_size,
+                                           size=batch_size)
         else:
             batch_inds = np.random.randint(0, self.curr_size, size=batch_size)
         return self._get_samples(batch_inds, env=env)
