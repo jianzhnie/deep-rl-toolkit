@@ -1,5 +1,5 @@
 import os
-from abc import ABC
+from abc import ABC, abstractmethod
 from argparse import Namespace
 from typing import Optional, Tuple, Union
 
@@ -33,7 +33,6 @@ class BaseAgent(ABC):
         self.device = device
 
         self.render = config.render
-        self.gamma = config.gamma
 
         # environment parameters
         self.num_envs = envs.num_envs if envs else 1
@@ -41,7 +40,13 @@ class BaseAgent(ABC):
         self.act_space = envs.action_space if envs else None
 
         # training parameters
+        self.gamma = config.gamma
+        self.batch_size = config.batch_size
+        self.repeat_times = config.repeat_times
+        self.reward_scale = config.reward_scale
+        self.if_off_policy = config.if_off_policy
         self.clip_grad_norm = config.clip_grad_norm
+        self.soft_update_tau = config.soft_update_tau
         self.epsilon_start = config.epsilon_start
         self.epsilon_end = config.epsilon_end
         self.learning_rate = config.learning_rate
@@ -78,12 +83,12 @@ class BaseAgent(ABC):
 
         # Save and Load
         self.save_attr_names = {
-            'act',
+            'actor_model',
             'actor_target',
             'act_optimizer',
-            'cri',
+            'critic_model',
             'critic_target',
-            'cri_optimizer',
+            'critic_optimizer',
         }
 
     def update_net(self, buffer: Union[BaseBuffer,
@@ -97,8 +102,10 @@ class BaseAgent(ABC):
         return obj_critic, obj_actor
 
     def get_obj_critic_raw(
-            self, buffer: BaseBuffer,
-            batch_size: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        self,
+        buffer: BaseBuffer,
+        batch_size: int,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
         with torch.no_grad():
             states, actions, rewards, undones, next_ss = buffer.sample(
                 batch_size)  # next_ss: next states
@@ -111,8 +118,10 @@ class BaseAgent(ABC):
         return obj_critic, states
 
     def get_obj_critic_per(
-            self, buffer: BaseBuffer,
-            batch_size: int) -> Tuple[torch.Tensor, torch.torch.Tensor]:
+        self,
+        buffer: BaseBuffer,
+        batch_size: int,
+    ) -> Tuple[torch.Tensor, torch.torch.Tensor]:
         with torch.no_grad():
             (
                 states,
@@ -187,31 +196,8 @@ class BaseAgent(ABC):
         amp_scale.step(optimizer)  # optimizer.step()
         amp_scale.update()  # optimizer.step()
 
-    def update_avg_std_for_normalization(self, states: torch.Tensor,
-                                         returns: torch.Tensor):
-        tau = self.state_value_tau
-        if tau == 0:
-            return
-
-        state_avg = states.mean(dim=0, keepdim=True)
-        state_std = states.std(dim=0, keepdim=True)
-        self.act.state_avg[:] = self.act.state_avg * (1 -
-                                                      tau) + state_avg * tau
-        self.act.state_std[:] = self.cri.state_std * (
-            1 - tau) + state_std * tau + 1e-4
-        self.cri.state_avg[:] = self.act.state_avg
-        self.cri.state_std[:] = self.act.state_std
-
-        returns_avg = returns.mean(dim=0)
-        returns_std = returns.std(dim=0)
-        self.cri.value_avg[:] = self.cri.value_avg * (1 -
-                                                      tau) + returns_avg * tau
-        self.cri.value_std[:] = (self.cri.value_std * (1 - tau) +
-                                 returns_std * tau + 1e-4)
-
     @staticmethod
-    def soft_update(target_net: torch.nn.Module, current_net: torch.nn.Module,
-                    tau: float):
+    def soft_update(target_net: nn.Module, current_net: nn.Module, tau: float):
         """soft update target network via current network.
 
         target_net: update target network via current network to make training more stable.
@@ -221,22 +207,30 @@ class BaseAgent(ABC):
         for tar, cur in zip(target_net.parameters(), current_net.parameters()):
             tar.data.copy_(cur.data * tau + tar.data * (1.0 - tau))
 
-    def save_or_load_agent(self, cwd: str, if_save: bool):
+    def save_or_load_agent(self, save_dir: str, if_save: bool) -> None:
         """save or load training files for Agent.
 
         cwd: Current Working Directory. ElegantRL save training files in CWD.
         if_save: True: save files. False: load files.
         """
         assert self.save_attr_names.issuperset(
-            {'act', 'actor_target', 'act_optimizer'})
+            {'actor_model', 'actor_target', 'act_optimizer'})
 
         for attr_name in self.save_attr_names:
-            file_path = f'{cwd}/{attr_name}.pth'
+            file_path = f'{save_dir}/{attr_name}.pth'
             if if_save:
                 torch.save(getattr(self, attr_name), file_path)
             elif os.path.isfile(file_path):
                 setattr(self, attr_name,
                         torch.load(file_path, map_location=self.device))
+
+    @abstractmethod
+    def train(self, steps):
+        raise NotImplementedError
+
+    @abstractmethod
+    def test(self, env_fn, steps):
+        raise NotImplementedError
 
 
 def get_optim_param(optimizer: torch.optim) -> list:  # backup
