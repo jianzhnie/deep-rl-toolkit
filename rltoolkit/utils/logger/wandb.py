@@ -1,4 +1,4 @@
-"""Code Reference Tianshou https://github.com/thu-
+"""Code Reference tianshou https://github.com/thu-
 ml/tianshou/tree/master/tianshou/utils/logger."""
 
 import argparse
@@ -39,7 +39,7 @@ class WandbLogger(BaseLogger):
         the end of each epoch).
     :param bool write_flush: whether to flush tensorboard result after each
         add_scalar operation. Default to True.
-    :param str project: W&B project name. Default to "tianshou".
+    :param str project: W&B project name. Default to "rltoolkit".
     :param str name: W&B run name. Default to None. If None, random name is assigned.
     :param str entity: W&B team/organization name. Default to None.
     :param str run_id: run id of W&B run to be resumed. Default to None.
@@ -66,7 +66,7 @@ class WandbLogger(BaseLogger):
         self.write_flush = write_flush
         self.restored = False
         if project is None:
-            project = os.getenv('WANDB_PROJECT', 'tianshou')
+            project = os.getenv('WANDB_PROJECT', 'rltoolkit')
 
         self.wandb_run = (
             wandb.init(
@@ -80,7 +80,7 @@ class WandbLogger(BaseLogger):
                 monitor_gym=True,
                 config=config,  # type: ignore
             ) if not wandb.run else wandb.run)
-        self.wandb_run._label(repo='tianshou')  # type: ignore
+        self.wandb_run._label(repo='rltoolkit')  # type: ignore
         self.tensorboard_logger: Optional[TensorboardLogger] = None
 
     def load(self, writer: SummaryWriter) -> None:
