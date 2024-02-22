@@ -1,11 +1,13 @@
 from argparse import Namespace
-from typing import Optional, Tuple, Union
+from typing import List, Optional, Union
 
+import numpy as np
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from rltoolkit.agents.base_agent import BaseAgent as AgentBase
 from rltoolkit.buffers import BaseBuffer
-from rltoolkit.buffers import OffPolicyBuffer as ReplayBuffer
+from rltoolkit.utils import hard_target_update, soft_target_update
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 
@@ -39,101 +41,126 @@ class AgentDQN(AgentBase):
             actor_lr_scheduler,
             device,
         )
+        if self.is_soft_tgt_update:
+            self.tgt_update_fn = soft_target_update
+        else:
+            self.tgt_update_fn = hard_target_update
 
-    def update_net(self, buffer: ReplayBuffer) -> Tuple[float, ...]:
-        """update network."""
+    def get_action(self, obs: torch.Tensor) -> torch.Tensor:
+        """Get action from the actor network.
 
-        with torch.no_grad():
-            states, actions, rewards, undones = buffer.add_item
-            self.update_avg_std_for_normalization(
-                states=states.reshape((-1, self.state_dim)),
-                returns=self.get_cumulative_rewards(rewards=rewards,
-                                                    undones=undones).reshape(
-                                                        (-1, )),
-            )
-        obj_critics = 0.0
-        obj_actors = 0.0
+        Sample an action when given an observation, base on the current
+        epsilon value, either a greedy action or a random action will be
+        returned.
 
-        update_times = int(buffer.add_size * self.repeat_times)
-        assert update_times >= 1
-        for _ in range(update_times):
-            obj_critic, q_value = self.get_obj_critic(buffer, self.batch_size)
-            obj_critics += obj_critic.item()
-            obj_actors += q_value.mean().item()
-            self.optimizer_update(self.critic_optimizer, obj_critic)
-            self.soft_update(self.critic_target, self.critic_model,
-                             self.soft_update_tau)
-        return obj_critics / update_times, obj_actors / update_times
+        Args:
+            obs: current observation
 
-    def get_obj_critic_raw(
-            self, buffer: ReplayBuffer,
-            batch_size: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Calculate the loss of the network and predict Q values with.
-
-        **uniform sampling**.
-
-        :param buffer: the ReplayBuffer instance that stores the trajectories.
-        :param batch_size: the size of batch data for Stochastic Gradient Descent (SGD).
-        :return: the loss of the network and Q values.
+        Returns:
+            act (int): action
         """
-        with torch.no_grad():
-            states, actions, rewards, undones, next_ss = buffer.sample(
-                batch_size)  # next_ss: next states
-            next_qs = (self.critic_target(next_ss).max(
-                dim=1, keepdim=True)[0].squeeze(1))  # next q_values
-            q_labels = rewards + undones * self.gamma * next_qs
+        # Choose a random action with probability epsilon
+        if np.random.rand() <= self.eps_greedy:
+            action = np.random.choice(self.action_space.n, self.num_envs)
+        else:
+            action = self.predict(obs)
+        return action
 
-        q_values = self.critic_model(states).gather(1,
-                                                    actions.long()).squeeze(1)
-        obj_critic = self.criterion(q_values, q_labels)
-        return obj_critic, q_values
+    def predict(self, obs: torch.Tensor) -> Union[int, List[int]]:
+        """Predict an action when given an observation, a greedy action will be
+        returned.
 
-    def get_obj_critic_per(
-            self, buffer: ReplayBuffer,
-            batch_size: int) -> Tuple[torch.Tensor, torch.Tensor]:
-        """Calculate the loss of the network and predict Q values with.
+        Args:
+            obs (np.float32): shape of (batch_size, obs_dim) , current observation
 
-        **Prioritized Experience Replay (PER)**.
-
-        :param buffer: the ReplayBuffer instance that stores the trajectories.
-        :param batch_size: the size of batch data for Stochastic Gradient Descent (SGD).
-        :return: the loss of the network and Q values.
+        Returns:
+            act(int): action
         """
-        with torch.no_grad():
-            (
-                states,
-                actions,
-                rewards,
-                undones,
-                next_ss,
-                is_weights,
-                is_indices,
-            ) = buffer.sample_for_per(batch_size)
-            # is_weights, is_indices: important sampling `weights, indices` by Prioritized Experience Replay (PER)
+        if obs.ndim == 1:
+            # if obs is 1 dimensional, we need to expand it to have batch_size = 1
+            obs = np.expand_dims(obs, axis=0)
+        obs = torch.tensor(obs, dtype=torch.float, device=self.device)
+        action = self.critic_model(obs).argmax().item()
+        return action
 
-            next_qs = (self.cri_target(next_ss).max(dim=1,
-                                                    keepdim=True)[0].squeeze(1)
-                       )  # q values in next step
-            q_labels = rewards + undones * self.gamma * next_qs
+    def learn(
+        self,
+        obs: torch.Tensor,
+        action: torch.Tensor,
+        reward: torch.Tensor,
+        next_obs: torch.Tensor,
+        terminal: torch.Tensor,
+    ) -> dict[str, Union[float, int]]:
+        """DQN learner.
 
-        q_values = self.cri(states).gather(1, actions.long()).squeeze(1)
-        td_errors = self.criterion(
-            q_values, q_labels)  # or td_error = (q_value - q_label).abs()
-        obj_critic = (td_errors * is_weights).mean()
+        Args:
+            obs (torch.Tensor): _description_
+            action (torch.Tensor): _description_
+            reward (torch.Tensor): _description_
+            next_obs (torch.Tensor): _description_
+            terminal (torch.Tensor): _description_
 
-        buffer.td_error_update_for_per(is_indices.detach(), td_errors.detach())
-        return obj_critic, q_values
+        Returns:
+            dict[str, Any]: _description_
+        """
 
-    def get_cumulative_rewards(self, rewards: torch.Tensor,
-                               undones: torch.Tensor) -> torch.Tensor:
-        returns = torch.empty_like(rewards)
+        if self.global_update_step % self.update_target_step == 0:
+            self.tgt_update_fn(self.actor_model, self.actor_target)
 
-        masks = undones * self.gamma
-        horizon_len = rewards.shape[0]
+        action = action.to(self.device, dtype=torch.long)
+        # Prediction Q(s)
+        pred_value = self.actor_model(obs).gather(1, action)
+        # Target for Q regression
+        next_q_value = self.actor_target(next_obs).max(1, keepdim=True)[0]
+        # TD target
+        target = reward + (1 - terminal) * self.gamma * next_q_value
+        # TD loss
+        loss = F.mse_loss(pred_value, target)
+        # Set the gradients to zero
+        self.actor_optimizer.zero_grad()
+        loss.backward()
+        # Backward propagation to update parameters
+        self.actor_optimizer.step()
+        self.global_update_step += 1
 
-        last_state = self.last_state
-        next_value = (self.act_target(last_state).argmax(dim=1).detach()
-                      )  # actor is Q Network in DQN style
-        for t in range(horizon_len - 1, -1, -1):
-            returns[t] = next_value = rewards[t] + masks[t] * next_value
-        return returns
+        info = {
+            'qloss': loss.item(),
+            'learning_rate': self.learning_rate,
+            'predictQ': pred_value.mean().item(),
+        }
+        return info
+
+    # train an episode
+    def run_train_episode(self, train_steps: int):
+        episode_reward = 0
+        episode_step = 0
+        episode_loss = []
+        obs = self.envs.reset()
+        done = False
+        while not done:
+            episode_step += 1
+            action = self.get_action(obs)
+            next_obs, reward, done, _ = self.envs.step(action)
+            self.buffer.add(obs, action, reward, next_obs, done)
+            # train model
+            if self.buffer.size() > self.warmup_buffer_size:
+                # s,a,r,s',done
+                samples = self.buffer.sample_batch()
+
+                batch_obs = samples['obs']
+                batch_action = samples['action']
+                batch_reward = samples['reward']
+                batch_next_obs = samples['next_obs']
+                batch_terminal = samples['terminal']
+
+                train_loss = self.learn(
+                    batch_obs,
+                    batch_action,
+                    batch_reward,
+                    batch_next_obs,
+                    batch_terminal,
+                )
+                episode_loss.append(train_loss)
+            episode_reward += reward
+            obs = next_obs
+        return episode_reward, episode_step, np.mean(episode_loss)

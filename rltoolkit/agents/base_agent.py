@@ -38,9 +38,10 @@ class BaseAgent(ABC):
         self.render = config.render
 
         # environment parameters
-        self.num_envs = envs.num_envs if envs else 1
-        self.obs_sapce = envs.observation_space if envs else None
-        self.act_space = envs.action_space if envs else None
+        self.envs = envs
+        self.num_envs = envs.num_envs
+        self.obs_sapce = envs.observation_space
+        self.action_space = envs.action_space
 
         # training parameters
         self.gamma = config.gamma
@@ -51,12 +52,20 @@ class BaseAgent(ABC):
         self.clip_grad_norm = config.clip_grad_norm
         self.state_value_tau = config.state_value_tau
         self.soft_update_tau = config.soft_update_tau
-        self.epsilon_start = config.epsilon_start
-        self.epsilon_end = config.epsilon_end
+        self.eps_greedy_start = config.eps_greedy_start
+        self.eps_greedy_end = config.eps_greedy_end
+        self.eps_greedy = config.eps_greedy_start
         self.learning_rate = config.learning_rate
 
         # ReplayBuffer
         self.buffer = buffer
+        self.max_buffer_size = config.max_buffer_size
+        self.warmup_buffer_size = config.warmup_buffer_size
+
+        # Training Parameters
+        self.max_steps = config.max_steps
+        self.update_target_step = config.update_target_step
+        self.global_update_step = 0
 
         # Policy and Value Network
         self.actor_model = actor_model.to(self.device)
@@ -64,6 +73,9 @@ class BaseAgent(ABC):
         self.critic_model = (self.critic_model.to(self.device)
                              if critic_model else actor_model)
         self.critic_target = self.critic_model.copy().to(self.device)
+
+        # Soft Target Update Or Hard Target Update
+        self.is_soft_tgt_update = config.is_soft_tgt_update
 
         # Optimizer and Scheduler
         self.actor_optimizer = actor_optimizer
