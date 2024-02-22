@@ -1,4 +1,5 @@
 import os
+import time
 from abc import ABC, abstractmethod
 from argparse import Namespace
 from typing import Optional, Tuple, Union
@@ -6,32 +7,34 @@ from typing import Optional, Tuple, Union
 import torch
 import torch.nn as nn
 from rltoolkit.buffers import BaseBuffer
+from rltoolkit.utils import (ProgressBar, TensorboardLogger, WandbLogger,
+                             get_outdir)
 from torch.nn.utils import clip_grad_norm_
+from torch.optim import Optimizer
+from torch.optim.lr_scheduler import LRScheduler
+from torch.utils.tensorboard import SummaryWriter
 
 
 class BaseAgent(ABC):
-    """The basic agent of deep-rl-toolkit. It is an abstract class for all DRL
-    agents.
+    """The basic agent of deep-rl-toolkit.
 
-    net_dims: the middle layer dimension of MLP (MultiLayer Perceptron)
-    state_dim: the dimension of state (the number of state vector)
-    action_dim: the dimension of action (or the number of discrete action)
-    gpu_id: the gpu_id of the training device. Use CPU when cuda is not available.
-    args: the arguments for agent training. `args = Config()`
+    It is an abstract class for all DRL agents.
     """
 
     def __init__(
         self,
         config: Namespace,
         envs: Union[None],
+        buffer: BaseBuffer,
         actor_model: nn.Module,
         critic_model: Optional[nn.Module] = None,
-        optimizer: torch.optim.Optimizer = None,
-        scheduler: Optional[torch.optim.lr_scheduler._LRScheduler] = None,
-        device: Optional[Union[int, str, torch.device]] = None,
+        actor_optimizer: Optimizer = None,
+        critic_optimizer: Optional[Optimizer] = None,
+        actor_lr_scheduler: Optional[LRScheduler] = None,
+        critic_lr_scheduler: Optional[LRScheduler] = None,
+        device: Optional[Union[str, torch.device]] = None,
     ) -> None:
         self.device = device
-
         self.render = config.render
 
         # environment parameters
@@ -46,10 +49,14 @@ class BaseAgent(ABC):
         self.reward_scale = config.reward_scale
         self.if_off_policy = config.if_off_policy
         self.clip_grad_norm = config.clip_grad_norm
+        self.state_value_tau = config.state_value_tau
         self.soft_update_tau = config.soft_update_tau
         self.epsilon_start = config.epsilon_start
         self.epsilon_end = config.epsilon_end
         self.learning_rate = config.learning_rate
+
+        # ReplayBuffer
+        self.buffer = buffer
 
         # Policy and Value Network
         self.actor_model = actor_model.to(self.device)
@@ -59,21 +66,14 @@ class BaseAgent(ABC):
         self.critic_target = self.critic_model.copy().to(self.device)
 
         # Optimizer and Scheduler
-        self.actor_optimizer = torch.optim.AdamW(self.actor_model.parameters(),
-                                                 self.learning_rate)
-        self.critic_optimizer = (torch.optim.AdamW(
-            self.critic_model.parameters(), self.learning_rate)
-                                 if critic_model else self.actor_optimizer)
-        from types import MethodType  # built-in package of Python3
+        self.actor_optimizer = actor_optimizer
+        self.critic_optimizer = critic_optimizer
+        self.actor_scheduler = actor_lr_scheduler
+        self.critic_scheduler = critic_lr_scheduler
 
-        self.actor_optimizer.parameters = MethodType(get_optim_param,
-                                                     self.actor_optimizer)
-        self.critic_optimizer.parameters = MethodType(get_optim_param,
-                                                      self.critic_optimizer)
-
-        self.if_use_per = getattr(
-            config, 'if_use_per',
-            None)  # use PER (Prioritized Experience Replay)
+        # PER (Prioritized Experience Replay)
+        self.if_use_per = getattr(config, 'if_use_per', None)
+        # use PER (Prioritized Experience Replay)
         if self.if_use_per:
             self.criterion = torch.nn.SmoothL1Loss(reduction='none')
             self.get_obj_critic = self.get_obj_critic_per
@@ -81,7 +81,45 @@ class BaseAgent(ABC):
             self.criterion = torch.nn.SmoothL1Loss(reduction='mean')
             self.get_obj_critic = self.get_obj_critic_raw
 
-        # Save and Load
+        # Logs and Plots
+        # init the logger before other steps
+        timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
+        # text_log
+        log_name = os.path.join(config.project, config.env_name,
+                                config.algo_name,
+                                timestamp).replace(os.path.sep, '_')
+        log_path = os.path.join(config.work_dir, config.project,
+                                config.env_name, config.algo_name)
+        tensorboard_log_path = get_outdir(log_path, 'tensorboard_log_dir')
+        wandb_log_path = get_outdir(log_path, 'wandb_log_dir')
+        config.video_folder = get_outdir(log_path, 'video')
+
+        if config.logger == 'wandb':
+            wandb_log_path = get_outdir(log_path, 'wandb_log_dir')
+            self.logger = WandbLogger(
+                dir=wandb_log_path,
+                train_interval=config.train_log_interval,
+                test_interval=config.test_log_interval,
+                update_interval=config.train_log_interval,
+                save_interval=config.save_interval,
+                project=config.project,
+                name=log_name,
+                config=config,
+            )
+            self.use_wandb = True
+        self.writer = SummaryWriter(tensorboard_log_path)
+        self.writer.add_text('config', str(config))
+        if config.logger == 'tensorboard':
+            self.logger = TensorboardLogger(self.writer)
+            self.use_wandb = False
+        else:  # wandb
+            self.logger.load(self.writer)
+
+        # ProgressBar
+        self.progress_bar = ProgressBar(config.max_step)
+
+        # Model Save and Load
+        self.model_save_dir = get_outdir(log_path, 'model_dir')
         self.save_attr_names = {
             'actor_model',
             'actor_target',
@@ -173,9 +211,9 @@ class BaseAgent(ABC):
                         max_norm=self.clip_grad_norm)
         optimizer.step()
 
-    def optimizer_update_amp(
-            self, optimizer: torch.optim,
-            objective: torch.Tensor):  # automatic mixed precision
+    def optimizer_update_amp(self, optimizer: torch.optim,
+                             objective: torch.Tensor) -> None:
+        # automatic mixed precision
         """minimize the optimization objective via update the network
         parameters.
 
@@ -207,14 +245,36 @@ class BaseAgent(ABC):
         for tar, cur in zip(target_net.parameters(), current_net.parameters()):
             tar.data.copy_(cur.data * tau + tar.data * (1.0 - tau))
 
+    def update_avg_std_for_normalization(self, states: torch.Tensor,
+                                         returns: torch.Tensor) -> None:
+        tau = self.state_value_tau
+        if tau == 0:
+            return
+
+        state_avg = states.mean(dim=0, keepdim=True)
+        state_std = states.std(dim=0, keepdim=True)
+        self.actor_model.state_avg[:] = (self.actor_model.state_avg *
+                                         (1 - tau) + state_avg * tau)
+        self.actor_model.state_std[:] = (self.critic_model.state_std *
+                                         (1 - tau) + state_std * tau + 1e-4)
+        self.actor_model.state_avg[:] = self.actor_model.state_avg
+        self.critic_model.state_std[:] = self.actor_model.state_std
+
+        returns_avg = returns.mean(dim=0)
+        returns_std = returns.std(dim=0)
+        self.critic_model.value_avg[:] = (self.critic_model.value_avg *
+                                          (1 - tau) + returns_avg * tau)
+        self.critic_model.value_std[:] = (self.critic_model.value_std *
+                                          (1 - tau) + returns_std * tau + 1e-4)
+
     def save_or_load_agent(self, save_dir: str, if_save: bool) -> None:
         """save or load training files for Agent.
 
-        cwd: Current Working Directory. ElegantRL save training files in CWD.
+        save_dir: Current Working Directory.
         if_save: True: save files. False: load files.
         """
         assert self.save_attr_names.issuperset(
-            {'actor_model', 'actor_target', 'act_optimizer'})
+            {'actor_model', 'actor_target', 'actor_optimizer'})
 
         for attr_name in self.save_attr_names:
             file_path = f'{save_dir}/{attr_name}.pth'
@@ -223,6 +283,20 @@ class BaseAgent(ABC):
             elif os.path.isfile(file_path):
                 setattr(self, attr_name,
                         torch.load(file_path, map_location=self.device))
+
+    def log_train_infos(self, infos: dict, steps: int) -> None:
+        """
+        info: (dict) information to be visualized
+        n_steps: current step
+        """
+        self.logger.log_train_data(infos, steps)
+
+    def log_test_infos(self, infos: dict, steps: int) -> None:
+        """
+        info: (dict) information to be visualized
+        steps: current step
+        """
+        self.logger.log_test_data(infos, steps)
 
     @abstractmethod
     def train(self, steps):
