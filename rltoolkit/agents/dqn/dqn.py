@@ -115,7 +115,7 @@ class DQNAgent(BaseAgent):
         with torch.no_grad():
             next_q_value = self.actor_target(next_obs).max(1, keepdim=True)[0]
         # TD target
-        target = reward + (1 - terminal) * self.gamma * next_q_value
+        target = reward + (1 - terminal) * self.config.gamma * next_q_value
         # TD loss
         loss = F.mse_loss(pred_value, target)
         # Set the gradients to zero
@@ -134,7 +134,8 @@ class DQNAgent(BaseAgent):
 
     def train(self) -> None:
         obs, _ = self.envs.reset(seed=self.config.seed)
-        for global_step in range(self.max_train_steps):
+        self.text_logger.info('Start Training')
+        for global_step in range(self.config.max_train_steps):
             self.eps_greedy = self.eps_greedy_scheduler.step()
             actions = self.get_action(obs)
 
@@ -148,6 +149,9 @@ class DQNAgent(BaseAgent):
                             episodic_return=info['episode']['r'],
                             episodic_length=info['episode']['l'],
                         )
+                        self.text_logger.info(
+                            '[Train],  global_step: {}, episodic_return: {}'.
+                            format(global_step, info['episode']['r']))
                         self.log_train_infos(env_info, global_step)
 
             # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
@@ -161,9 +165,11 @@ class DQNAgent(BaseAgent):
             # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
             obs = next_obs
             # ALGO LOGIC: training.
-            if global_step > self.warmup_learn_steps:
-                if global_step % self.train_frequency == 0:
-                    data = self.buffer.sample(self.batch_size)
+            if global_step > self.config.warmup_learn_steps:
+                if global_step % self.config.train_frequency == 0:
+                    self.progress_bar.update(self.config.train_frequency)
+                    data = self.buffer.sample(self.config.batch_size)
+                    # Leaner: Update model parameters
                     train_infos = self.learn(
                         data.observations,
                         data.actions,
@@ -171,17 +177,24 @@ class DQNAgent(BaseAgent):
                         data.next_observations,
                         data.dones,
                     )
+                    # Log training information
                     train_fps = int(global_step /
                                     (time.time() - self.start_time))
                     train_infos['train_fps'] = train_fps
+                    self.text_logger.info(
+                        '[Train],  global_step: {}, train_fps: {}'.format(
+                            global_step, train_fps))
                     self.log_train_infos(train_infos, global_step)
 
-                if global_step % self.target_update_frequency == 0:
+                # ALGO LOGIC: update target network
+                if global_step % self.config.target_update_frequency == 0:
+                    self.text_logger.info('Update Target Model')
                     soft_target_update(
                         src_model=self.actor_target,
                         tgt_model=self.actor_model,
-                        tau=self.soft_update_tau,
+                        tau=self.config.soft_update_tau,
                     )
 
+            # Svae model
             if self.config.save_model:
                 self.save_model(self.model_save_dir)
