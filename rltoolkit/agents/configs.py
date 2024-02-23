@@ -1,4 +1,4 @@
-class DQNConfig:
+class BaseConfig:
     """Configuration class for the DQN algorithm.
 
     DQNConfig contains parameters used to instantiate a DQN algorithm.
@@ -44,7 +44,7 @@ class DQNConfig:
         # Environment settings
         seed: int = 123,
         env_name: str = 'CartPole-v1',
-        num_envs: int = 1,
+        num_envs: int = 10,
         capture_video: bool = True,
         # Buffer settings
         buffer_size: int = 10000,

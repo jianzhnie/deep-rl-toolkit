@@ -6,14 +6,14 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from rltoolkit.agents.base_agent import BaseAgent as AgentBase
+from rltoolkit.agents.base_agent import BaseAgent
 from rltoolkit.buffers import BaseBuffer
 from rltoolkit.utils import soft_target_update
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 
 
-class AgentDQN(AgentBase):
+class DQNAgent(BaseAgent):
     """Deep Q-Network algorithm.
 
     “Human-Level Control Through Deep Reinforcement Learning”. Mnih V. et al..
@@ -36,13 +36,14 @@ class AgentDQN(AgentBase):
     ) -> None:
         super().__init__(
             config,
-            envs,
-            buffer,
-            actor_model,
-            actor_optimizer,
-            actor_lr_scheduler,
-            eps_greedy_scheduler,
-            device,
+            envs=envs,
+            buffer=buffer,
+            actor_model=actor_model,
+            actor_optimizer=actor_optimizer,
+            critic_optimizer=critic_optimizer,
+            actor_lr_scheduler=actor_lr_scheduler,
+            eps_greedy_scheduler=eps_greedy_scheduler,
+            device=device,
         )
         self.start_time = time.time()
 
@@ -61,10 +62,13 @@ class AgentDQN(AgentBase):
         """
         # Choose a random action with probability epsilon
         if np.random.rand() <= self.eps_greedy:
-            action = np.random.choice(self.action_space.n, self.num_envs)
+            actions = np.array([
+                self.envs.single_action_space.sample()
+                for _ in range(self.envs.num_envs)
+            ])
         else:
-            action = self.predict(obs)
-        return action
+            actions = self.predict(obs)
+        return actions
 
     def predict(self, obs: torch.Tensor) -> Union[int, List[int]]:
         """Predict an action when given an observation, a greedy action will be
@@ -80,8 +84,9 @@ class AgentDQN(AgentBase):
             # if obs is 1 dimensional, we need to expand it to have batch_size = 1
             obs = np.expand_dims(obs, axis=0)
         obs = torch.tensor(obs, dtype=torch.float, device=self.device)
-        action = self.critic_model(obs).argmax().item()
-        return action
+        q_values = self.critic_model(obs)
+        actions = torch.argmax(q_values, dim=1).cpu().numpy()
+        return actions
 
     def learn(
         self,
@@ -129,8 +134,8 @@ class AgentDQN(AgentBase):
 
     def train(self) -> None:
         obs, _ = self.envs.reset(seed=self.config.seed)
-        for global_step in range(self.max_steps):
-            self.eps_greedy = self.eps_greedy_scheduler()
+        for global_step in range(self.max_train_steps):
+            self.eps_greedy = self.eps_greedy_scheduler.step()
             actions = self.get_action(obs)
 
             next_obs, rewards, terminations, truncations, infos = self.envs.step(
