@@ -1,69 +1,99 @@
 class DQNConfig:
-    """Configuration class for DQN algorithm.
+    """Configuration class for the DQN algorithm.
 
     DQNConfig contains parameters used to instantiate a DQN algorithm.
     These parameters define the algorithm's behavior, network architecture, and training settings.
 
-    Args:
-        env (str, optional): The environment name.
-        hidden_dim (int, optional): Dimension of the hidden layers in the neural network.
-        total_steps (int, optional): Total number of training steps.
-        memory_size (int, optional): Size of the replay buffer.
-        memory_warmup_size (int, optional): Number of episodes before the training starts.
-        batch_size (int, optional): Batch size used during training.
-        update_target_step (int, optional): Frequency of updating the target network.
-        learning_rate (float, optional): Learning rate of the optimizer.
-        exploration_start (float, optional): Initial value of epsilon for epsilon-greedy exploration.
-        min_exploration (float, optional): Minimum value of epsilon for epsilon-greedy exploration.
-        gamma (float, optional): Discount factor for future rewards.
-        eval_render (bool, optional): Whether to render the evaluation environment.
-        train_log_interval (int, optional): Logging interval during training.
-        test_log_interval (int, optional): Logging interval during evaluation.
-        log_dir (str, optional): Directory to save logs.
-        logger (str, optional): Logger to use for recording logs.
+    Attributes:
+        project_name (str, optional): Name of the project. Defaults to "Gym".
+        torch_deterministic (bool, optional): Whether to set torch's random seed for deterministic behavior. Defaults to True.
+        seed (int, optional): Seed for environment randomization. Defaults to 123.
+        env_name (str, optional): The environment name. Defaults to "CartPole-v0".
+        num_envs (int, optional): Number of parallel environments to run for collecting experiences. Defaults to 10.
+        capture_video (bool, optional): Flag indicating whether to capture videos of the environment during training. Defaults to True.
+        max_buffer_size (int, optional): Maximum size of the replay buffer. Defaults to 10000.
+        batch_size (int, optional): Size of the mini-batches sampled from the replay buffer during training. Defaults to 32.
+        eps_greedy_end (float, optional): Final value of epsilon for epsilon-greedy exploration. Defaults to 0.001.
+        eps_greedy_start (float, optional): Initial value of epsilon for epsilon-greedy exploration. Defaults to 1.0.
+        eps_greedy_scheduler (str, optional): Type of scheduler used for epsilon-greedy exploration. Defaults to "Linear".
+        gamma (float, optional): Discount factor for future rewards. Defaults to 0.99.
+        learning_rate (float, optional): Learning rate used by the optimizer. Defaults to 0.001.
+        lr_scheduler_method (str, optional): Method used for learning rate scheduling. Defaults to "linear".
+        max_train_steps (int, optional): Maximum number of training steps. Defaults to 12000.
+        warmup_learn_steps (int, optional): Number of steps before starting to update the model. Defaults to 1000.
+        train_frequency (int, optional): Frequency of training updates. Defaults to 200.
+        learner_update_times (int, optional): Number of times to update the learner network. Defaults to 5.
+        soft_update_tau (float, optional): Interpolation parameter for soft target updates. Defaults to 0.95.
+        update_target_frequency (int, optional): Frequency of updating the target network. Defaults to 500.
+        work_dir (str, optional): Directory for storing work-related files. Defaults to "work_dirs".
+        save_model (bool, optional): Flag indicating whether to save the trained model. Defaults to False.
+        model_dir (str, optional): Directory for saving the trained model. Defaults to "model_dir".
+        train_log_interval (int, optional): Logging interval during training. Defaults to 1.
+        test_log_interval (int, optional): Logging interval during evaluation. Defaults to 5.
+        log_dir (str, optional): Directory to save logs. Defaults to "log_dirs".
+        logger (str, optional): Logger to use for recording logs. Defaults to "wandb".
     """
-
-    model_type: str = 'dqn'
 
     def __init__(
         self,
-        env: str = 'CartPole-v0',
-        hidden_dim: int = 128,
-        total_steps: int = 12000,
-        memory_size: int = 10000,
-        memory_warmup_size: int = 1000,
+        # Common settings
+        project_name: str = 'Gym',
+        torch_deterministic: bool = True,
+        # Environment settings
+        seed: int = 123,
+        env_name: str = 'CartPole-v0',
+        num_envs: int = 10,
+        capture_video: bool = True,
+        # Buffer settings
+        max_buffer_size: int = 10000,
         batch_size: int = 32,
-        update_target_step: int = 100,
-        learning_rate: float = 0.001,
-        exploration_start: float = 1.0,
-        min_exploration: float = 0.1,
+        # Epsilon-Greedy Scheduler settings
+        eps_greedy_end: float = 0.001,
+        eps_greedy_start: float = 1.0,
+        eps_greedy_scheduler: str = 'linear',
+        # Training parameters
         gamma: float = 0.99,
-        eval_render: bool = False,
+        learning_rate: float = 0.001,
+        lr_scheduler_method: str = 'linear',
+        max_train_steps: int = 12000,
+        warmup_learn_steps: int = 1000,
+        train_frequency: int = 200,
+        learner_update_times: int = 5,
+        soft_update_tau: float = 0.95,
+        update_target_frequency: int = 500,
+        # Log and Model Save
+        work_dir: str = 'work_dirs',
+        save_model: bool = False,
+        model_dir: str = 'model_dir',
         train_log_interval: int = 1,
         test_log_interval: int = 5,
-        log_dir: str = 'work_dirs',
+        log_dir: str = 'log_dirs',
         logger: str = 'wandb',
     ) -> None:
-        # Environment parameters
-        self.env = env
-
-        # Network architecture parameters
-        self.hidden_dim = hidden_dim
-
-        # Training parameters
-        self.total_steps = total_steps
-        self.memory_size = memory_size
-        self.memory_warmup_size = memory_warmup_size
+        self.project_name = project_name
+        self.torch_deterministic = torch_deterministic
+        self.seed = seed
+        self.env_name = env_name
+        self.num_envs = num_envs
+        self.capture_video = capture_video
+        self.max_buffer_size = max_buffer_size
         self.batch_size = batch_size
-        self.update_target_step = update_target_step
-        self.learning_rate = learning_rate
-        self.exploration_start = exploration_start
-        self.min_exploration = min_exploration
+        self.eps_greedy_end = eps_greedy_end
+        self.eps_greedy_start = eps_greedy_start
+        self.eps_greedy_scheduler = eps_greedy_scheduler
         self.gamma = gamma
-        self.eval_render = eval_render
+        self.learning_rate = learning_rate
+        self.lr_scheduler_method = lr_scheduler_method
+        self.max_train_steps = max_train_steps
+        self.warmup_learn_steps = warmup_learn_steps
+        self.train_frequency = train_frequency
+        self.learner_update_times = learner_update_times
+        self.soft_update_tau = soft_update_tau
+        self.update_target_frequency = update_target_frequency
+        self.work_dir = work_dir
+        self.save_model = save_model
+        self.model_dir = model_dir
         self.train_log_interval = train_log_interval
         self.test_log_interval = test_log_interval
-
-        # Logging parameters
         self.log_dir = log_dir
         self.logger = logger

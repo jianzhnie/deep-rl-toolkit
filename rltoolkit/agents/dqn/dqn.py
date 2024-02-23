@@ -31,7 +31,7 @@ class AgentDQN(AgentBase):
         critic_optimizer: Optional[Optimizer] = None,
         actor_lr_scheduler: Optional[LRScheduler] = None,
         critic_lr_scheduler: Optional[LRScheduler] = None,
-        eps_greedy_scheduler: Optional[Union[str, List[float]]] = None,
+        eps_greedy_scheduler: Optional[LRScheduler] = None,
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
         super().__init__(
