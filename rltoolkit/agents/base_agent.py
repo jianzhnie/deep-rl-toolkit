@@ -17,15 +17,28 @@ from .configs import BaseConfig
 
 
 class BaseAgent:
-    """The basic agent of deep-rl-toolkit.
+    """The basic agent of deep-rl-toolkit. It is an abstract class for all DRL
+    agents.
 
-    It is an abstract class for all DRL agents.
+    Args:
+        config (BaseConfig): Configuration object for the agent.
+        envs (Union[None]): Environment object.
+        buffer (BaseBuffer): Replay buffer for experience replay.
+        actor_model (nn.Module): Actor model representing the policy network.
+        critic_model (Optional[nn.Module], optional): Critic model representing the value network. Defaults to None.
+        actor_optimizer (Optional[Optimizer], optional): Optimizer for actor model. Defaults to None.
+        critic_optimizer (Optional[Optimizer], optional): Optimizer for critic model. Defaults to None.
+        actor_lr_scheduler (Optional[_LRScheduler], optional): Learning rate scheduler for actor model. Defaults to None.
+        critic_lr_scheduler (Optional[_LRScheduler], optional): Learning rate scheduler for critic model. Defaults to None.
+        eps_greedy_scheduler (Optional[LinearDecayScheduler], optional): Epsilon-greedy scheduler. Defaults to None.
+        device (Optional[Union[str, torch.device]], optional): Device to run the agent on. Defaults to None.
     """
 
     def __init__(
         self,
         config: BaseConfig,
         envs: Union[None],
+        eval_envs: Union[None],
         buffer: BaseBuffer,
         actor_model: nn.Module,
         critic_model: Optional[nn.Module] = None,
@@ -38,14 +51,19 @@ class BaseAgent:
     ) -> None:
         self.config = config
         self.device = device
+        self.global_step = 0
+        self.eps_greedy = 1.0
 
-        # environment parameters
+        # Environment parameters
         self.envs = envs
+        self.eval_envs = eval_envs
 
         # ReplayBuffer
         self.buffer = buffer
+
         # Epsilon Greedy Scheduler
         self.eps_greedy_scheduler = eps_greedy_scheduler
+
         # Policy and Value Network
         self.actor_model = actor_model.to(self.device)
         self.actor_target = copy.deepcopy(self.actor_model).to(self.device)
@@ -53,7 +71,7 @@ class BaseAgent:
                              if critic_model else actor_model)
         self.critic_target = copy.deepcopy(self.critic_model).to(self.device)
 
-        # Optimizer and Lr Scheduler
+        # Optimizer and Learning Rate Scheduler
         self.learning_rate = config.learning_rate
         self.actor_optimizer = actor_optimizer
         self.critic_optimizer = critic_optimizer
@@ -61,24 +79,22 @@ class BaseAgent:
         self.critic_scheduler = critic_lr_scheduler
 
         # Logs and Visualizations
-        # init the logger before other steps
         timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
-        # text_log
         log_name = os.path.join(config.project, config.env_name,
                                 config.algo_name,
                                 timestamp).replace(os.path.sep, '_')
         work_dir = os.path.join(config.work_dir, config.project,
                                 config.env_name, config.algo_name)
-        tensorboard_log_path = get_outdir(work_dir, 'tensorboard_log')
-        text_log_path = get_outdir(work_dir, 'text_log')
-        text_log_file = os.path.join(text_log_path, log_name + '.log')
+        tensorboard_log_dir = get_outdir(work_dir, 'tensorboard_log')
+        text_log_dir = get_outdir(work_dir, 'text_log')
+        text_log_file = os.path.join(text_log_dir, log_name + '.log')
         self.text_logger = get_root_logger(log_file=text_log_file,
                                            log_level='INFO')
 
         if config.logger == 'wandb':
-            wandb_log_path = get_outdir(work_dir, 'wandb_log')
+            wandb_log_dir = get_outdir(work_dir, 'wandb_log')
             self.vis_logger = WandbLogger(
-                dir=wandb_log_path,
+                dir=wandb_log_dir,
                 train_interval=config.train_log_interval,
                 test_interval=config.test_log_interval,
                 update_interval=config.train_log_interval,
@@ -87,7 +103,7 @@ class BaseAgent:
                 name=log_name,
                 config=config,
             )
-        self.writer = SummaryWriter(tensorboard_log_path)
+        self.writer = SummaryWriter(tensorboard_log_dir)
         self.writer.add_text('config', str(config))
         if config.logger == 'tensorboard':
             self.vis_logger = TensorboardLogger(self.writer)
@@ -101,6 +117,9 @@ class BaseAgent:
         if self.config.save_model:
             self.model_save_dir = get_outdir(work_dir, 'model_dir')
 
+        # Video Save
+        self.video_save_dir = get_outdir(work_dir, 'video_dir')
+
         self.save_attr_names = {
             'actor_model',
             'actor_target',
@@ -111,12 +130,13 @@ class BaseAgent:
         }
 
     def save_model(self, save_dir: str, steps: int) -> None:
-        """save or load training files for Agent.
+        """Save the model.
 
-        save_dir: Current Working Directory.
-        if_save: True: save files. False: load files.
+        Args:
+            save_dir (str): Directory to save the model.
+            steps (int): Current training step.
         """
-        self.text_logger.info(f'Saving model to {save_dir}')
+        self.text_logger.info('Saving model to %s', save_dir)
         assert self.save_attr_names.issuperset(
             {'actor_model', 'actor_target', 'actor_optimizer'})
 
@@ -124,33 +144,45 @@ class BaseAgent:
             file_path = f'{save_dir}/{attr_name}-{steps}.pth'
             torch.save(getattr(self, attr_name), file_path)
 
-    def load_model(self, save_dir: str, step: int) -> None:
-        self.text_logger.info(f'Loading model from {save_dir}')
+    def load_model(self, save_dir: str, steps: int) -> None:
+        """Load the model.
+
+        Args:
+            save_dir (str): Directory to load the model from.
+            steps (int): Current training step.
+        """
+        self.text_logger.info('Loading model from %s', save_dir)
         assert self.save_attr_names.issuperset(
             {'actor_model', 'actor_target', 'actor_optimizer'})
 
         for attr_name in self.save_attr_names:
-            file_path = f'{save_dir}/{attr_name}.pth'
+            file_path = f'{save_dir}/{attr_name}-{steps}.pth'
             assert os.path.isfile(file_path)
             model_state = torch.load(file_path, map_location=self.device)
             setattr(self, attr_name, model_state)
 
     def log_train_infos(self, infos: dict, steps: int) -> None:
-        """
-        info: (dict) information to be visualized
-        n_steps: current step
+        """Log training information.
+
+        Args:
+            infos (dict): Information to be visualized.
+            steps (int): Current training step.
         """
         self.vis_logger.log_train_data(infos, steps)
 
     def log_test_infos(self, infos: dict, steps: int) -> None:
-        """
-        info: (dict) information to be visualized
-        steps: current step
+        """Log testing information.
+
+        Args:
+            infos (dict): Information to be visualized.
+            steps (int): Current training step.
         """
         self.vis_logger.log_test_data(infos, steps)
 
     def train(self):
+        """Train the agent."""
         raise NotImplementedError
 
-    def test(self):
+    def evaluate(self):
+        """Test the agent."""
         raise NotImplementedError

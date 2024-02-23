@@ -44,7 +44,7 @@ class BaseConfig:
         seed: int = 123,
         env_name: str = 'CartPole-v0',
         num_envs: int = 1,
-        capture_video: bool = True,
+        capture_video: bool = False,
         # Buffer settings
         buffer_size: int = 10000,
         batch_size: int = 128,
@@ -62,28 +62,35 @@ class BaseConfig:
         repeat_update_times: int = 5,
         soft_update_tau: float = 0.05,
         target_update_frequency: int = 500,
+        # Evaluation settings
+        eval_frequency: int = 1000,
+        eval_episodes: int = 10,
         # Log and Model Save
         work_dir: str = 'work_dirs',
-        save_model: bool = True,
+        save_model: bool = False,
         save_model_frequency: int = 10000,
         train_log_interval: int = 10,
         test_log_interval: int = 100,
         save_interval: int = 1,
-        logger: str = 'wandb',
+        logger: str = 'tensorboard',
     ) -> None:
+        # Common settings
         self.project = project
         self.algo_name = algo_name
         self.cuda = cuda
         self.torch_deterministic = torch_deterministic
+        # Environment parameters
         self.seed = seed
         self.env_name = env_name
         self.num_envs = num_envs
         self.capture_video = capture_video
         self.buffer_size = buffer_size
         self.batch_size = batch_size
+        # Epsilon-Greedy Scheduler settings
         self.eps_greedy_end = eps_greedy_end
         self.eps_greedy_start = eps_greedy_start
         self.eps_greedy_scheduler = eps_greedy_scheduler
+        # Training parameters
         self.gamma = gamma
         self.learning_rate = learning_rate
         self.lr_scheduler_method = lr_scheduler_method
@@ -93,6 +100,10 @@ class BaseConfig:
         self.repeat_update_times = repeat_update_times
         self.soft_update_tau = soft_update_tau
         self.target_update_frequency = target_update_frequency
+        # Evaluation settings
+        self.eval_frequency = eval_frequency
+        self.eval_episodes = eval_episodes
+        # Log and Model Save
         self.work_dir = work_dir
         self.save_model = save_model
         self.save_model_frequency = save_model_frequency
