@@ -1,3 +1,4 @@
+import time
 from argparse import Namespace
 from typing import List, Optional, Union
 
@@ -7,7 +8,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from rltoolkit.agents.base_agent import BaseAgent as AgentBase
 from rltoolkit.buffers import BaseBuffer
-from rltoolkit.utils import hard_target_update, soft_target_update
+from rltoolkit.utils import soft_target_update
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 
@@ -30,6 +31,7 @@ class AgentDQN(AgentBase):
         critic_optimizer: Optional[Optimizer] = None,
         actor_lr_scheduler: Optional[LRScheduler] = None,
         critic_lr_scheduler: Optional[LRScheduler] = None,
+        eps_greedy_scheduler: Optional[Union[str, List[float]]] = None,
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
         super().__init__(
@@ -39,12 +41,10 @@ class AgentDQN(AgentBase):
             actor_model,
             actor_optimizer,
             actor_lr_scheduler,
+            eps_greedy_scheduler,
             device,
         )
-        if self.is_soft_tgt_update:
-            self.tgt_update_fn = soft_target_update
-        else:
-            self.tgt_update_fn = hard_target_update
+        self.start_time = time.time()
 
     def get_action(self, obs: torch.Tensor) -> torch.Tensor:
         """Get action from the actor network.
@@ -103,15 +103,12 @@ class AgentDQN(AgentBase):
         Returns:
             dict[str, Any]: _description_
         """
-
-        if self.global_update_step % self.update_target_step == 0:
-            self.tgt_update_fn(self.actor_model, self.actor_target)
-
         action = action.to(self.device, dtype=torch.long)
         # Prediction Q(s)
         pred_value = self.actor_model(obs).gather(1, action)
         # Target for Q regression
-        next_q_value = self.actor_target(next_obs).max(1, keepdim=True)[0]
+        with torch.no_grad():
+            next_q_value = self.actor_target(next_obs).max(1, keepdim=True)[0]
         # TD target
         target = reward + (1 - terminal) * self.gamma * next_q_value
         # TD loss
@@ -121,46 +118,65 @@ class AgentDQN(AgentBase):
         loss.backward()
         # Backward propagation to update parameters
         self.actor_optimizer.step()
-        self.global_update_step += 1
 
         info = {
             'qloss': loss.item(),
+            'q_values': pred_value.mean().item(),
             'learning_rate': self.learning_rate,
-            'predictQ': pred_value.mean().item(),
+            'eps_greedy': self.eps_greedy,
         }
         return info
 
-    # train an episode
-    def run_train_episode(self, train_steps: int):
-        episode_reward = 0
-        episode_step = 0
-        episode_loss = []
-        obs = self.envs.reset()
-        done = False
-        while not done:
-            episode_step += 1
-            action = self.get_action(obs)
-            next_obs, reward, done, _ = self.envs.step(action)
-            self.buffer.add(obs, action, reward, next_obs, done)
-            # train model
-            if self.buffer.size() > self.warmup_buffer_size:
-                # s,a,r,s',done
-                samples = self.buffer.sample_batch()
+    def train(self) -> None:
+        obs, _ = self.envs.reset(seed=self.config.seed)
+        for global_step in range(self.max_steps):
+            self.eps_greedy = self.eps_greedy_scheduler()
+            actions = self.get_action(obs)
 
-                batch_obs = samples['obs']
-                batch_action = samples['action']
-                batch_reward = samples['reward']
-                batch_next_obs = samples['next_obs']
-                batch_terminal = samples['terminal']
+            next_obs, rewards, terminations, truncations, infos = self.envs.step(
+                actions)
+            # TRY NOT TO MODIFY: record rewards for plotting purposes
+            if 'final_info' in infos:
+                for info in infos['final_info']:
+                    if info and 'episode' in info:
+                        env_info = dict(
+                            episodic_return=info['episode']['r'],
+                            episodic_length=info['episode']['l'],
+                        )
+                        self.log_train_infos(env_info, global_step)
 
-                train_loss = self.learn(
-                    batch_obs,
-                    batch_action,
-                    batch_reward,
-                    batch_next_obs,
-                    batch_terminal,
-                )
-                episode_loss.append(train_loss)
-            episode_reward += reward
+            # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
+            real_next_obs = next_obs.copy()
+            for idx, trunc in enumerate(truncations):
+                if trunc:
+                    real_next_obs[idx] = infos['final_observation'][idx]
+            self.buffer.add(obs, real_next_obs, actions, rewards, terminations,
+                            infos)
+
+            # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
             obs = next_obs
-        return episode_reward, episode_step, np.mean(episode_loss)
+            # ALGO LOGIC: training.
+            if global_step > self.warmup_learn_steps:
+                if global_step % self.train_frequency == 0:
+                    data = self.buffer.sample(self.batch_size)
+                    train_infos = self.learn(
+                        data.observations,
+                        data.actions,
+                        data.rewards,
+                        data.next_observations,
+                        data.dones,
+                    )
+                    train_fps = int(global_step /
+                                    (time.time() - self.start_time))
+                    train_infos['train_fps'] = train_fps
+                    self.log_train_infos(train_infos, global_step)
+
+                if global_step % self.target_update_frequency == 0:
+                    soft_target_update(
+                        src_model=self.actor_target,
+                        tgt_model=self.actor_model,
+                        tau=self.soft_update_tau,
+                    )
+
+            if self.config.save_model:
+                self.save_model(self.model_save_dir)

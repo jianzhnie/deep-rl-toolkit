@@ -32,8 +32,10 @@ class BaseAgent(ABC):
         critic_optimizer: Optional[Optimizer] = None,
         actor_lr_scheduler: Optional[LRScheduler] = None,
         critic_lr_scheduler: Optional[LRScheduler] = None,
+        eps_greedy_scheduler: Optional[LRScheduler] = None,
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
+        self.config = config
         self.device = device
         self.render = config.render
 
@@ -45,27 +47,30 @@ class BaseAgent(ABC):
 
         # training parameters
         self.gamma = config.gamma
-        self.batch_size = config.batch_size
         self.repeat_times = config.repeat_times
         self.reward_scale = config.reward_scale
         self.if_off_policy = config.if_off_policy
         self.clip_grad_norm = config.clip_grad_norm
         self.state_value_tau = config.state_value_tau
         self.soft_update_tau = config.soft_update_tau
-        self.eps_greedy_start = config.eps_greedy_start
-        self.eps_greedy_end = config.eps_greedy_end
-        self.eps_greedy = config.eps_greedy_start
         self.learning_rate = config.learning_rate
+
+        # Epsilon-Greedy Scheduler
+        self.eps_greedy = config.eps_greedy_start
+        self.eps_greedy_end = config.eps_greedy_end
+        self.eps_greedy_start = config.eps_greedy_start
+        self.eps_greedy_scheduler = eps_greedy_scheduler
 
         # ReplayBuffer
         self.buffer = buffer
+        self.batch_size = config.batch_size
         self.max_buffer_size = config.max_buffer_size
-        self.warmup_buffer_size = config.warmup_buffer_size
 
         # Training Parameters
         self.max_steps = config.max_steps
-        self.update_target_step = config.update_target_step
-        self.global_update_step = 0
+        self.train_frequency = config.train_frequency
+        self.warmup_learn_steps = config.warmup_learn_steps
+        self.target_update_frequency = config.target_update_frequency
 
         # Policy and Value Network
         self.actor_model = actor_model.to(self.device)
@@ -73,9 +78,6 @@ class BaseAgent(ABC):
         self.critic_model = (self.critic_model.to(self.device)
                              if critic_model else actor_model)
         self.critic_target = self.critic_model.copy().to(self.device)
-
-        # Soft Target Update Or Hard Target Update
-        self.is_soft_tgt_update = config.is_soft_tgt_update
 
         # Optimizer and Scheduler
         self.actor_optimizer = actor_optimizer
@@ -279,7 +281,7 @@ class BaseAgent(ABC):
         self.critic_model.value_std[:] = (self.critic_model.value_std *
                                           (1 - tau) + returns_std * tau + 1e-4)
 
-    def save_or_load_agent(self, save_dir: str, if_save: bool) -> None:
+    def save_model(self, save_dir: str) -> None:
         """save or load training files for Agent.
 
         save_dir: Current Working Directory.
@@ -290,11 +292,17 @@ class BaseAgent(ABC):
 
         for attr_name in self.save_attr_names:
             file_path = f'{save_dir}/{attr_name}.pth'
-            if if_save:
-                torch.save(getattr(self, attr_name), file_path)
-            elif os.path.isfile(file_path):
-                setattr(self, attr_name,
-                        torch.load(file_path, map_location=self.device))
+            torch.save(getattr(self, attr_name), file_path)
+
+    def load_model(self, save_dir: str) -> None:
+        assert self.save_attr_names.issuperset(
+            {'actor_model', 'actor_target', 'actor_optimizer'})
+
+        for attr_name in self.save_attr_names:
+            file_path = f'{save_dir}/{attr_name}.pth'
+            assert os.path.isfile(file_path)
+            model_state = torch.load(file_path, map_location=self.device)
+            setattr(self, attr_name, model_state)
 
     def log_train_infos(self, infos: dict, steps: int) -> None:
         """
@@ -317,13 +325,3 @@ class BaseAgent(ABC):
     @abstractmethod
     def test(self, env_fn, steps):
         raise NotImplementedError
-
-
-def get_optim_param(optimizer: torch.optim) -> list:  # backup
-    params_list = []
-    for params_dict in optimizer.state_dict()['state'].values():
-        params_list.extend([
-            t for t in params_dict.values()
-            if isinstance(t, torch.torch.Tensor)
-        ])
-    return params_list
