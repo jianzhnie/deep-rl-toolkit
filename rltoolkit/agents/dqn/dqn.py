@@ -125,7 +125,7 @@ class DQNAgent(BaseAgent):
         self.actor_optimizer.step()
 
         info = {
-            'qloss': loss.item(),
+            'loss': loss.item(),
             'q_values': pred_value.mean().item(),
             'learning_rate': self.learning_rate,
             'eps_greedy': self.eps_greedy,
@@ -149,9 +149,6 @@ class DQNAgent(BaseAgent):
                             episodic_return=info['episode']['r'],
                             episodic_length=info['episode']['l'],
                         )
-                        self.text_logger.info(
-                            '[Train],  global_step: {}, episodic_return: {}'.
-                            format(global_step, info['episode']['r']))
                         self.log_train_infos(env_info, global_step)
 
             # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
@@ -182,8 +179,8 @@ class DQNAgent(BaseAgent):
                                     (time.time() - self.start_time))
                     train_infos['train_fps'] = train_fps
                     self.text_logger.info(
-                        '[Train],  global_step: {}, train_fps: {}'.format(
-                            global_step, train_fps))
+                        '[Train],  global_step: {}, train_fps: {}, loss: {:.2f}'
+                        .format(global_step, train_fps, train_infos['loss']))
                     self.log_train_infos(train_infos, global_step)
 
                 # ALGO LOGIC: update target network
@@ -196,5 +193,6 @@ class DQNAgent(BaseAgent):
                     )
 
             # Svae model
-            if self.config.save_model:
-                self.save_model(self.model_save_dir)
+            if (self.config.save_model
+                    and global_step % self.config.save_model_frequency == 0):
+                self.save_model(self.model_save_dir, global_step)

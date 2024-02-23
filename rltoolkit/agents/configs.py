@@ -30,7 +30,6 @@ class BaseConfig:
         model_dir (str, optional): Directory for saving the trained model. Defaults to "model_dir".
         train_log_interval (int, optional): Logging interval during training. Defaults to 1.
         test_log_interval (int, optional): Logging interval during evaluation. Defaults to 5.
-        log_dir (str, optional): Directory to save logs. Defaults to "log_dirs".
         logger (str, optional): Logger to use for recording logs. Defaults to "wandb".
     """
 
@@ -43,35 +42,34 @@ class BaseConfig:
         torch_deterministic: bool = True,
         # Environment settings
         seed: int = 123,
-        env_name: str = 'CartPole-v1',
-        num_envs: int = 10,
+        env_name: str = 'CartPole-v0',
+        num_envs: int = 1,
         capture_video: bool = True,
         # Buffer settings
         buffer_size: int = 10000,
-        batch_size: int = 32,
+        batch_size: int = 128,
         # Epsilon-Greedy Scheduler settings
-        eps_greedy_end: float = 0.001,
+        eps_greedy_end: float = 0.05,
         eps_greedy_start: float = 1.0,
         eps_greedy_scheduler: str = 'linear',
         # Training parameters
         gamma: float = 0.99,
-        learning_rate: float = 0.001,
+        learning_rate: float = 2.5e-4,
         lr_scheduler_method: str = 'linear',
-        max_train_steps: int = 12000,
-        warmup_learn_steps: int = 1000,
-        train_frequency: int = 200,
+        max_train_steps: int = 500000,
+        warmup_learn_steps: int = 10000,
+        train_frequency: int = 100,
         repeat_update_times: int = 5,
-        soft_update_tau: float = 0.95,
+        soft_update_tau: float = 0.05,
         target_update_frequency: int = 500,
         # Log and Model Save
         work_dir: str = 'work_dirs',
-        save_model: bool = False,
-        model_dir: str = 'model_dir',
-        train_log_interval: int = 1,
-        test_log_interval: int = 5,
+        save_model: bool = True,
+        save_model_frequency: int = 10000,
+        train_log_interval: int = 10,
+        test_log_interval: int = 100,
         save_interval: int = 1,
-        log_dir: str = 'log_dirs',
-        logger: str = 'tensorboard',
+        logger: str = 'wandb',
     ) -> None:
         self.project = project
         self.algo_name = algo_name
@@ -97,9 +95,8 @@ class BaseConfig:
         self.target_update_frequency = target_update_frequency
         self.work_dir = work_dir
         self.save_model = save_model
-        self.model_dir = model_dir
+        self.save_model_frequency = save_model_frequency
         self.train_log_interval = train_log_interval
         self.test_log_interval = test_log_interval
         self.save_interval = save_interval
-        self.log_dir = log_dir
         self.logger = logger

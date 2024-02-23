@@ -90,7 +90,7 @@ class BaseAgent:
         self.writer = SummaryWriter(tensorboard_log_path)
         self.writer.add_text('config', str(config))
         if config.logger == 'tensorboard':
-            self.logger = TensorboardLogger(self.writer)
+            self.vis_logger = TensorboardLogger(self.writer)
         else:  # wandb
             self.vis_logger.load(self.writer)
 
@@ -98,17 +98,19 @@ class BaseAgent:
         self.progress_bar = ProgressBar(config.max_train_steps)
 
         # Model Save and Load
-        self.model_save_dir = get_outdir(work_dir, 'model_dir')
+        if self.config.save_model:
+            self.model_save_dir = get_outdir(work_dir, 'model_dir')
+
         self.save_attr_names = {
             'actor_model',
             'actor_target',
-            'act_optimizer',
+            'actor_optimizer',
             'critic_model',
             'critic_target',
             'critic_optimizer',
         }
 
-    def save_model(self, save_dir: str) -> None:
+    def save_model(self, save_dir: str, steps: int) -> None:
         """save or load training files for Agent.
 
         save_dir: Current Working Directory.
@@ -119,10 +121,10 @@ class BaseAgent:
             {'actor_model', 'actor_target', 'actor_optimizer'})
 
         for attr_name in self.save_attr_names:
-            file_path = f'{save_dir}/{attr_name}.pth'
+            file_path = f'{save_dir}/{attr_name}-{steps}.pth'
             torch.save(getattr(self, attr_name), file_path)
 
-    def load_model(self, save_dir: str) -> None:
+    def load_model(self, save_dir: str, step: int) -> None:
         self.text_logger.info(f'Loading model from {save_dir}')
         assert self.save_attr_names.issuperset(
             {'actor_model', 'actor_target', 'actor_optimizer'})
@@ -138,14 +140,14 @@ class BaseAgent:
         info: (dict) information to be visualized
         n_steps: current step
         """
-        self.logger.log_train_data(infos, steps)
+        self.vis_logger.log_train_data(infos, steps)
 
     def log_test_infos(self, infos: dict, steps: int) -> None:
         """
         info: (dict) information to be visualized
         steps: current step
         """
-        self.logger.log_test_data(infos, steps)
+        self.vis_logger.log_test_data(infos, steps)
 
     def train(self):
         raise NotImplementedError
