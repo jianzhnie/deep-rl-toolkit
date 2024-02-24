@@ -7,8 +7,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from rltoolkit.agents.base_agent import BaseAgent
 from rltoolkit.agents.configs import BaseConfig
-from rltoolkit.buffers import BaseBuffer
-from rltoolkit.utils import soft_target_update
+from rltoolkit.agents.network import QNetwork
+from rltoolkit.buffers import BaseBuffer, OffPolicyBuffer
+from rltoolkit.utils import LinearDecayScheduler, soft_target_update
 from torch.optim import Optimizer
 from torch.optim.lr_scheduler import LRScheduler
 
@@ -48,6 +49,10 @@ class DQNAgent(BaseAgent):
         eps_greedy_scheduler: Optional[LRScheduler] = None,
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
+        actor_model = QNetwork(envs).to(device)
+        actor_optimizer = torch.optim.Adam(self.actor_model.parameters(),
+                                           lr=config.learning_rate)
+
         super().__init__(
             config,
             envs=envs,
@@ -60,6 +65,21 @@ class DQNAgent(BaseAgent):
             eps_greedy_scheduler=eps_greedy_scheduler,
             device=device,
         )
+
+        self.buffer = OffPolicyBuffer(
+            config.buffer_size,
+            envs.single_observation_space,
+            envs.single_action_space,
+            device=self.device,
+            optimize_memory_usage=config.optimize_memory_usage,
+            handle_timeout_termination=False,
+        )
+        self.eps_greedy_scheduler = LinearDecayScheduler(
+            config.eps_greedy_start,
+            config.eps_greedy_end,
+            max_steps=config.max_train_steps,
+        )
+
         self.start_time = time.time()
         self.num_updates = 0
         self.global_step = 0
@@ -222,6 +242,7 @@ class DQNAgent(BaseAgent):
                     )
                     self.log_test_infos(eval_infos, self.global_step)
 
+        self.global_step += 1
         # Save model
         if self.config.save_model:
             self.save_model(self.model_save_dir, self.global_step)

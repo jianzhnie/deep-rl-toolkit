@@ -36,13 +36,14 @@ class BaseConfig:
     def __init__(
         self,
         # Common settings
-        project: str = "Gym",
-        algo_name: str = "dqn",
-        cuda: bool = True,
+        project: str = 'Gym',
+        algo_name: str = 'dqn',
+        use_cuda: bool = True,
+        optimize_memory_usage: bool = False,
         torch_deterministic: bool = True,
         # Environment settings
         seed: int = 123,
-        env_name: str = "CartPole-v0",
+        env_name: str = 'CartPole-v0',
         num_envs: int = 10,
         capture_video: bool = False,
         # Buffer settings
@@ -51,12 +52,12 @@ class BaseConfig:
         # Epsilon-Greedy Scheduler settings
         eps_greedy_end: float = 0.05,
         eps_greedy_start: float = 1.0,
-        eps_greedy_scheduler: str = "linear",
+        eps_greedy_scheduler: str = 'linear',
         # Training parameters
         gamma: float = 0.99,
         learning_rate: float = 2.5e-4,
         max_grad_norm: float = 1.0,
-        lr_scheduler_method: str = "linear",
+        lr_scheduler_method: str = 'linear',
         max_train_steps: int = 10000,
         warmup_learn_steps: int = 100,
         train_frequency: int = 100,
@@ -67,18 +68,19 @@ class BaseConfig:
         eval_frequency: int = 1000,
         eval_episodes: int = 10,
         # Log and Model Save
-        work_dir: str = "work_dirs",
+        work_dir: str = 'work_dirs',
         save_model: bool = False,
         save_model_frequency: int = 10000,
         train_log_interval: int = 10,
         test_log_interval: int = 100,
         save_interval: int = 1,
-        logger: str = "tensorboard",
+        logger: str = 'tensorboard',
     ) -> None:
         # Common settings
         self.project = project
         self.algo_name = algo_name
-        self.cuda = cuda
+        self.use_cuda = use_cuda
+        self.optimize_memory_usage = optimize_memory_usage
         self.torch_deterministic = torch_deterministic
         # Environment parameters
         self.seed = seed
