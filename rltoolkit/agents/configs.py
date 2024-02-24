@@ -36,14 +36,14 @@ class BaseConfig:
     def __init__(
         self,
         # Common settings
-        project: str = 'Gym',
-        algo_name: str = 'dqn',
+        project: str = "Gym",
+        algo_name: str = "dqn",
         cuda: bool = True,
         torch_deterministic: bool = True,
         # Environment settings
         seed: int = 123,
-        env_name: str = 'CartPole-v0',
-        num_envs: int = 1,
+        env_name: str = "CartPole-v0",
+        num_envs: int = 10,
         capture_video: bool = False,
         # Buffer settings
         buffer_size: int = 10000,
@@ -51,13 +51,14 @@ class BaseConfig:
         # Epsilon-Greedy Scheduler settings
         eps_greedy_end: float = 0.05,
         eps_greedy_start: float = 1.0,
-        eps_greedy_scheduler: str = 'linear',
+        eps_greedy_scheduler: str = "linear",
         # Training parameters
         gamma: float = 0.99,
         learning_rate: float = 2.5e-4,
-        lr_scheduler_method: str = 'linear',
-        max_train_steps: int = 500000,
-        warmup_learn_steps: int = 10000,
+        max_grad_norm: float = 1.0,
+        lr_scheduler_method: str = "linear",
+        max_train_steps: int = 10000,
+        warmup_learn_steps: int = 100,
         train_frequency: int = 100,
         repeat_update_times: int = 5,
         soft_update_tau: float = 0.05,
@@ -66,13 +67,13 @@ class BaseConfig:
         eval_frequency: int = 1000,
         eval_episodes: int = 10,
         # Log and Model Save
-        work_dir: str = 'work_dirs',
+        work_dir: str = "work_dirs",
         save_model: bool = False,
         save_model_frequency: int = 10000,
         train_log_interval: int = 10,
         test_log_interval: int = 100,
         save_interval: int = 1,
-        logger: str = 'tensorboard',
+        logger: str = "tensorboard",
     ) -> None:
         # Common settings
         self.project = project
@@ -93,6 +94,7 @@ class BaseConfig:
         # Training parameters
         self.gamma = gamma
         self.learning_rate = learning_rate
+        self.max_grad_norm = max_grad_norm
         self.lr_scheduler_method = lr_scheduler_method
         self.max_train_steps = max_train_steps
         self.warmup_learn_steps = warmup_learn_steps
