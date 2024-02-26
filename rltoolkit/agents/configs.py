@@ -43,7 +43,7 @@ class BaseConfig:
         # Environment settings
         seed: int = 123,
         env_name: str = 'CartPole-v0',
-        num_envs: int = 1,
+        num_envs: int = 10,
         capture_video: bool = False,
         # Buffer settings
         buffer_size: int = 10000,
@@ -54,10 +54,10 @@ class BaseConfig:
         eps_greedy_scheduler: str = 'linear',
         # Training parameters
         gamma: float = 0.99,
-        learning_rate: float = 2.5e-4,
+        learning_rate: float = 1e-3,
         lr_scheduler_method: str = 'linear',
-        max_train_steps: int = 500000,
-        warmup_learn_steps: int = 10000,
+        max_time_steps: int = 10000,
+        warmup_learn_steps: int = 100,
         train_frequency: int = 100,
         repeat_update_times: int = 5,
         soft_update_tau: float = 0.05,
@@ -94,7 +94,7 @@ class BaseConfig:
         self.gamma = gamma
         self.learning_rate = learning_rate
         self.lr_scheduler_method = lr_scheduler_method
-        self.max_train_steps = max_train_steps
+        self.max_time_steps = max_time_steps
         self.warmup_learn_steps = warmup_learn_steps
         self.train_frequency = train_frequency
         self.repeat_update_times = repeat_update_times
