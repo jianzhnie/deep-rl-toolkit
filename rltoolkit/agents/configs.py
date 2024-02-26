@@ -38,7 +38,8 @@ class BaseConfig:
         # Common settings
         project: str = 'Gym',
         algo_name: str = 'dqn',
-        cuda: bool = True,
+        use_cuda: bool = True,
+        optimize_memory_usage: bool = False,
         torch_deterministic: bool = True,
         # Environment settings
         seed: int = 123,
@@ -54,7 +55,8 @@ class BaseConfig:
         eps_greedy_scheduler: str = 'linear',
         # Training parameters
         gamma: float = 0.99,
-        learning_rate: float = 1e-3,
+        learning_rate: float = 0.001,
+        max_grad_norm: float = 1.0,
         lr_scheduler_method: str = 'linear',
         max_time_steps: int = 10000,
         warmup_learn_steps: int = 100,
@@ -77,7 +79,8 @@ class BaseConfig:
         # Common settings
         self.project = project
         self.algo_name = algo_name
-        self.cuda = cuda
+        self.use_cuda = use_cuda
+        self.optimize_memory_usage = optimize_memory_usage
         self.torch_deterministic = torch_deterministic
         # Environment parameters
         self.seed = seed
@@ -93,6 +96,7 @@ class BaseConfig:
         # Training parameters
         self.gamma = gamma
         self.learning_rate = learning_rate
+        self.max_grad_norm = max_grad_norm
         self.lr_scheduler_method = lr_scheduler_method
         self.max_time_steps = max_time_steps
         self.warmup_learn_steps = warmup_learn_steps
