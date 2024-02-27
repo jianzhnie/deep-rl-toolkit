@@ -19,7 +19,7 @@ class BaseConfig:
         gamma (float, optional): Discount factor for future rewards. Defaults to 0.99.
         learning_rate (float, optional): Learning rate used by the optimizer. Defaults to 0.001.
         lr_scheduler_method (str, optional): Method used for learning rate scheduling. Defaults to "linear".
-        max_train_steps (int, optional): Maximum number of training steps. Defaults to 12000.
+        max_timesteps (int, optional): Maximum number of training steps. Defaults to 12000.
         warmup_learn_steps (int, optional): Number of steps before starting to update the model. Defaults to 1000.
         train_frequency (int, optional): Frequency of training updates. Defaults to 200.
         learner_update_times (int, optional): Number of times to update the learner network. Defaults to 5.
@@ -56,12 +56,13 @@ class BaseConfig:
         # Training parameters
         gamma: float = 0.99,
         learning_rate: float = 0.001,
+        min_learning_rate: float = 1e-5,
         max_grad_norm: float = 1.0,
         lr_scheduler_method: str = 'linear',
-        max_time_steps: int = 10000,
+        max_timesteps: int = 10000,
         warmup_learn_steps: int = 100,
         train_frequency: int = 100,
-        repeat_update_times: int = 5,
+        repeat_update_times: int = 1,
         soft_update_tau: float = 0.05,
         target_update_frequency: int = 500,
         # Evaluation settings
@@ -96,9 +97,10 @@ class BaseConfig:
         # Training parameters
         self.gamma = gamma
         self.learning_rate = learning_rate
+        self.min_learning_rate = min_learning_rate
         self.max_grad_norm = max_grad_norm
         self.lr_scheduler_method = lr_scheduler_method
-        self.max_time_steps = max_time_steps
+        self.max_timesteps = max_timesteps
         self.warmup_learn_steps = warmup_learn_steps
         self.train_frequency = train_frequency
         self.repeat_update_times = repeat_update_times

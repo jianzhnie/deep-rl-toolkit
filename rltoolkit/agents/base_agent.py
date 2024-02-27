@@ -1,16 +1,8 @@
-import copy
 import os
 import time
-from typing import Optional, Union
 
-import torch
-import torch.nn as nn
-from rltoolkit.buffers import BaseBuffer
-from rltoolkit.utils import (LinearDecayScheduler, ProgressBar,
-                             TensorboardLogger, WandbLogger, get_outdir,
-                             get_root_logger)
-from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LRScheduler
+from rltoolkit.utils import (ProgressBar, TensorboardLogger, WandbLogger,
+                             get_outdir, get_root_logger)
 from torch.utils.tensorboard import SummaryWriter
 
 from .configs import BaseConfig
@@ -34,50 +26,7 @@ class BaseAgent:
         device (Optional[Union[str, torch.device]], optional): Device to run the agent on. Defaults to None.
     """
 
-    def __init__(
-        self,
-        config: BaseConfig,
-        envs: Union[None],
-        eval_envs: Union[None],
-        buffer: BaseBuffer,
-        actor_model: nn.Module,
-        critic_model: Optional[nn.Module] = None,
-        actor_optimizer: Optional[Optimizer] = None,
-        critic_optimizer: Optional[Optimizer] = None,
-        actor_lr_scheduler: Optional[LRScheduler] = None,
-        critic_lr_scheduler: Optional[LRScheduler] = None,
-        eps_greedy_scheduler: Optional[LinearDecayScheduler] = None,
-        device: Optional[Union[str, torch.device]] = None,
-    ) -> None:
-        self.config = config
-        self.device = device
-        self.global_step = 0
-        self.eps_greedy = 1.0
-
-        # Environment parameters
-        self.envs = envs
-        self.eval_envs = eval_envs
-
-        # ReplayBuffer
-        self.buffer = buffer
-
-        # Epsilon Greedy Scheduler
-        self.eps_greedy_scheduler = eps_greedy_scheduler
-
-        # Policy and Value Network
-        self.actor_model = actor_model.to(self.device)
-        self.actor_target = copy.deepcopy(self.actor_model).to(self.device)
-        self.critic_model = (critic_model.to(self.device)
-                             if critic_model else actor_model)
-        self.critic_target = copy.deepcopy(self.critic_model).to(self.device)
-
-        # Optimizer and Learning Rate Scheduler
-        self.learning_rate = config.learning_rate
-        self.actor_optimizer = actor_optimizer
-        self.critic_optimizer = critic_optimizer
-        self.actor_scheduler = actor_lr_scheduler
-        self.critic_scheduler = critic_lr_scheduler
-
+    def __init__(self, config: BaseConfig) -> None:
         # Logs and Visualizations
         timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
         log_name = os.path.join(config.project, config.env_name,
@@ -111,55 +60,28 @@ class BaseAgent:
             self.vis_logger.load(self.writer)
 
         # ProgressBar
-        self.progress_bar = ProgressBar(config.max_train_steps)
-
-        # Model Save and Load
-        if self.config.save_model:
-            self.model_save_dir = get_outdir(work_dir, 'model_dir')
-
+        self.progress_bar = ProgressBar(config.max_timesteps)
         # Video Save
         self.video_save_dir = get_outdir(work_dir, 'video_dir')
+        self.model_save_dir = get_outdir(work_dir, 'model_dir')
 
-        self.save_attr_names = {
-            'actor_model',
-            'actor_target',
-            'actor_optimizer',
-            'critic_model',
-            'critic_target',
-            'critic_optimizer',
-        }
-
-    def save_model(self, save_dir: str, steps: int) -> None:
+    def save_model(self, save_dir: str) -> None:
         """Save the model.
 
         Args:
             save_dir (str): Directory to save the model.
             steps (int): Current training step.
         """
-        self.text_logger.info('Saving model to %s', save_dir)
-        assert self.save_attr_names.issuperset(
-            {'actor_model', 'actor_target', 'actor_optimizer'})
+        raise NotImplementedError
 
-        for attr_name in self.save_attr_names:
-            file_path = f'{save_dir}/{attr_name}-{steps}.pth'
-            torch.save(getattr(self, attr_name), file_path)
-
-    def load_model(self, save_dir: str, steps: int) -> None:
+    def load_model(self, save_dir: str) -> None:
         """Load the model.
 
         Args:
             save_dir (str): Directory to load the model from.
             steps (int): Current training step.
         """
-        self.text_logger.info('Loading model from %s', save_dir)
-        assert self.save_attr_names.issuperset(
-            {'actor_model', 'actor_target', 'actor_optimizer'})
-
-        for attr_name in self.save_attr_names:
-            file_path = f'{save_dir}/{attr_name}-{steps}.pth'
-            assert os.path.isfile(file_path)
-            model_state = torch.load(file_path, map_location=self.device)
-            setattr(self, attr_name, model_state)
+        raise NotImplementedError
 
     def log_train_infos(self, infos: dict, steps: int) -> None:
         """Log training information.

@@ -1,6 +1,8 @@
+import copy
 import time
 from typing import List, Optional, Union
 
+import gymnasium as gym
 import numpy as np
 import torch
 import torch.nn as nn
@@ -10,8 +12,7 @@ from rltoolkit.agents.configs import BaseConfig
 from rltoolkit.agents.network import QNetwork
 from rltoolkit.buffers import BaseBuffer, OffPolicyBuffer
 from rltoolkit.utils import LinearDecayScheduler, soft_target_update
-from torch.optim import Optimizer
-from torch.optim.lr_scheduler import LRScheduler
+from torch.optim.lr_scheduler import LinearLR, LRScheduler
 
 
 class DQNAgent(BaseAgent):
@@ -37,52 +38,51 @@ class DQNAgent(BaseAgent):
     def __init__(
         self,
         config: BaseConfig,
-        envs: Union[None],
-        eval_envs: Union[None],
-        buffer: BaseBuffer,
-        actor_model: nn.Module,
-        critic_model: Optional[nn.Module] = None,
-        actor_optimizer: Optimizer = None,
-        critic_optimizer: Optional[Optimizer] = None,
-        actor_lr_scheduler: Optional[LRScheduler] = None,
-        critic_lr_scheduler: Optional[LRScheduler] = None,
+        envs: Union[gym.Env],
+        buffer: BaseBuffer = None,
+        q_network: nn.Module = None,
         eps_greedy_scheduler: Optional[LRScheduler] = None,
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
-        actor_model = QNetwork(envs).to(device)
-        actor_optimizer = torch.optim.Adam(self.actor_model.parameters(),
-                                           lr=config.learning_rate)
-
-        super().__init__(
-            config,
-            envs=envs,
-            eval_envs=eval_envs,
-            buffer=buffer,
-            actor_model=actor_model,
-            actor_optimizer=actor_optimizer,
-            critic_optimizer=critic_optimizer,
-            actor_lr_scheduler=actor_lr_scheduler,
-            eps_greedy_scheduler=eps_greedy_scheduler,
-            device=device,
-        )
+        super().__init__(config)
+        self.config = config
+        self.envs = envs
+        self.device = device
+        self.eval_env = gym.make(config.env_name)
 
         self.buffer = OffPolicyBuffer(
             config.buffer_size,
             envs.single_observation_space,
             envs.single_action_space,
-            device=self.device,
-            optimize_memory_usage=config.optimize_memory_usage,
+            device,
+            n_envs=config.num_envs,
             handle_timeout_termination=False,
+        )
+        self.q_network = QNetwork(envs).to(device)
+        self.q_target = copy.deepcopy(self.q_network)
+        self.optimizer = torch.optim.Adam(self.q_network.parameters(),
+                                          lr=config.learning_rate)
+
+        self.optimizer = torch.optim.Adam(
+            params=self.q_network.parameters(),
+            lr=self.config.learning_rate,
+        )
+        self.lr_scheduler = LinearLR(
+            optimizer=self.optimizer,
+            start_factor=self.config.learning_rate,
+            end_factor=self.config.min_learning_rate,
+            total_iters=self.config.max_timesteps,
         )
         self.eps_greedy_scheduler = LinearDecayScheduler(
             config.eps_greedy_start,
             config.eps_greedy_end,
-            max_steps=config.max_train_steps,
+            max_steps=config.max_timesteps,
         )
 
         self.start_time = time.time()
         self.num_updates = 0
         self.global_step = 0
+        self.eps_greedy = 1.0
 
     def get_action(self, obs: torch.Tensor) -> torch.Tensor:
         """Get action from the actor network.
@@ -120,10 +120,10 @@ class DQNAgent(BaseAgent):
         """
         if obs.ndim == 1:
             # If obs is 1-dimensional, we need to expand it to have batch_size = 1
-            obs = obs.unsqueeze(0)
+            obs = np.expand_dims(obs, axis=0)
 
         obs = torch.Tensor(obs).to(self.device)
-        q_values = self.critic_model(obs)
+        q_values = self.q_network(obs)
         actions = torch.argmax(q_values, dim=1).cpu().numpy()
         return actions
 
@@ -139,7 +139,7 @@ class DQNAgent(BaseAgent):
             # Sample data from the replay buffer
             replay_data = self.buffer.sample(self.config.batch_size)
             # Prediction Q(s)
-            current_q_values = self.actor_model(replay_data.observations)
+            current_q_values = self.q_network(replay_data.observations)
             # Retrieve the q-values for the actions from the replay buffer
             current_q_values = torch.gather(current_q_values,
                                             dim=1,
@@ -147,8 +147,7 @@ class DQNAgent(BaseAgent):
 
             # Target for Q regression
             with torch.no_grad():
-                next_q_values = self.actor_target(
-                    replay_data.next_observations)
+                next_q_values = self.q_target(replay_data.next_observations)
                 # Follow greedy policy: use the one with the highest value
                 next_q_values, _ = next_q_values.max(dim=1)
                 # Avoid potential broadcast issue
@@ -162,13 +161,13 @@ class DQNAgent(BaseAgent):
             losses.append(loss.item())
 
             # Set the gradients to zero
-            self.actor_optimizer.zero_grad()
+            self.optimizer.zero_grad()
             loss.backward()
             # Clip gradient norm
-            torch.nn.utils.clip_grad_norm_(self.actor_model.parameters(),
+            torch.nn.utils.clip_grad_norm_(self.q_network.parameters(),
                                            self.config.max_grad_norm)
             # Backward propagation to update parameters
-            self.actor_optimizer.step()
+            self.optimizer.step()
 
         # Increase update counter
         self.num_updates += repeat_update_times
@@ -180,22 +179,11 @@ class DQNAgent(BaseAgent):
         """Train the agent."""
         obs, _ = self.envs.reset(seed=self.config.seed)
         self.text_logger.info('Start Training')
-        while self.global_step < self.config.max_train_steps:
+        while self.global_step < self.config.max_timesteps:
             self.eps_greedy = self.eps_greedy_scheduler.step()
             actions = self.get_action(obs)
-
             next_obs, rewards, terminations, truncations, infos = self.envs.step(
                 actions)
-            # Record rewards for plotting purposes
-            if 'final_info' in infos:
-                for info in infos['final_info']:
-                    if info and 'episode' in info:
-                        env_info = dict(
-                            episodic_return=info['episode']['r'],
-                            episodic_length=info['episode']['l'],
-                        )
-                        self.log_train_infos(env_info, self.global_step)
-
             # Save data to replay buffer; handle `final_observation`
             real_next_obs = next_obs.copy()
             for idx, trunc in enumerate(truncations):
@@ -207,21 +195,20 @@ class DQNAgent(BaseAgent):
             # Crucial step easy to overlook
             obs = next_obs
             # Training logic
-            if self.global_step > self.config.warmup_learn_steps:
+            if self.global_step >= self.config.warmup_learn_steps:
                 if self.global_step % self.config.train_frequency == 0:
-                    self.progress_bar.update(self.config.train_frequency)
                     # Learner: Update model parameters
                     step_info = self.learn(
                         repeat_update_times=self.config.repeat_update_times)
-                    step_info['learning_rate'] = self.learning_rate
+                    step_info['learning_rate'] = self.config.learning_rate
                     step_info['eps_greedy'] = self.eps_greedy
                     # Log training information
                     train_fps = int(self.global_step /
                                     (time.time() - self.start_time))
-                    log_message = (
-                        '[Train],  global_step: {}, train_fps: {}, loss: {:.2f}'
-                        .format(self.global_step, train_fps,
-                                step_info['loss']))
+                    log_message = ('[Train], global_step: {}, train_fps: {}, '
+                                   'loss: {:.2f}'.format(
+                                       self.global_step, train_fps,
+                                       step_info['loss']))
                     self.text_logger.info(log_message)
                     self.log_train_infos(step_info, self.global_step)
 
@@ -229,49 +216,47 @@ class DQNAgent(BaseAgent):
                 if self.global_step % self.config.target_update_frequency == 0:
                     self.text_logger.info('Update Target Model')
                     soft_target_update(
-                        src_model=self.actor_target,
-                        tgt_model=self.actor_model,
+                        src_model=self.q_network,
+                        tgt_model=self.q_target,
                         tau=self.config.soft_update_tau,
                     )
                 # Evaluate model
-                if self.global_step % self.config.eval_frequency:
+                if self.global_step % self.config.eval_frequency == 0:
                     eval_infos = self.evaluate(
-                        eval_envs=self.eval_envs,
-                        eval_episodes=self.config.eval_episodes,
-                        save_video_dir=self.video_save_dir,
-                    )
+                        eval_envs=self.eval_env,
+                        eval_episodes=self.config.eval_episodes)
                     self.log_test_infos(eval_infos, self.global_step)
 
-        self.global_step += 1
+            self.global_step += 1
+            self.progress_bar.update(1)
         # Save model
         if self.config.save_model:
-            self.save_model(self.model_save_dir, self.global_step)
+            self.save_model(self.model_save_dir)
 
     def evaluate(
         self,
-        eval_envs: Union[None],
+        eval_envs: Union[gym.Env],
         eval_episodes: int = 100,
-        save_video_dir: str = None,
     ) -> List[float]:
-        obs, _ = eval_envs.reset()
         episodic_returns = []
         episodic_steps = []
         for _ in range(eval_episodes):
-            actions = self.get_action(obs)
-            next_obs, _, _, _, infos = eval_envs.step(actions)
-            if 'final_info' in infos:
-                for info in infos['final_info']:
-                    if 'episode' not in info:
-                        continue
-                    env_info = dict(
-                        episodic_return=info['episode']['r'],
-                        episodic_length=info['episode']['l'],
-                    )
-                    self.log_test_infos(env_info, self.global_step)
-                    episodic_returns.append(info['episode']['r'])
-                    episodic_steps.append(info['episode']['l'])
-            obs = next_obs
-
+            episode_return = 0
+            episode_length = 0
+            terminal = False
+            obs, _ = eval_envs.reset()
+            while not terminal:
+                action = self.predict(obs)
+                action = action[0]
+                next_obs, reward, terminal, truction, info = eval_envs.step(
+                    action)
+                obs = next_obs
+                episode_return += reward
+                episode_length += 1
+                if terminal:
+                    eval_envs.close()
+            episodic_returns.append(episode_return)
+            episodic_steps.append(episode_length)
         mean_return = np.mean(episodic_returns)
         mean_step = np.mean(episodic_steps)
         return dict(mean_episodic_return=mean_return,

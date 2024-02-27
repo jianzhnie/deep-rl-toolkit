@@ -19,7 +19,7 @@ class DQNConfig:
         gamma (float, optional): Discount factor for future rewards. Defaults to 0.99.
         learning_rate (float, optional): Learning rate used by the optimizer. Defaults to 0.001.
         lr_scheduler_method (str, optional): Method used for learning rate scheduling. Defaults to "linear".
-        max_train_steps (int, optional): Maximum number of training steps. Defaults to 12000.
+        max_timesteps (int, optional): Maximum number of training steps. Defaults to 12000.
         warmup_learn_steps (int, optional): Number of steps before starting to update the model. Defaults to 1000.
         train_frequency (int, optional): Frequency of training updates. Defaults to 200.
         learner_update_times (int, optional): Number of times to update the learner network. Defaults to 5.
@@ -54,9 +54,10 @@ class DQNConfig:
         eps_greedy_scheduler: str = 'linear',
         # Training parameters
         gamma: float = 0.99,
-        learning_rate: float = 2.5e-4,
+        learning_rate: float = 1e-3,
+        min_learning_rate: float = 1e-5,
         lr_scheduler_method: str = 'linear',
-        max_train_steps: int = 500000,
+        max_timesteps: int = 500000,
         warmup_learn_steps: int = 1000,
         train_frequency: int = 100,
         repeat_update_times: int = 5,
@@ -86,8 +87,9 @@ class DQNConfig:
         self.eps_greedy_scheduler = eps_greedy_scheduler
         self.gamma = gamma
         self.learning_rate = learning_rate
+        self.min_learning_rate = min_learning_rate
         self.lr_scheduler_method = lr_scheduler_method
-        self.max_train_steps = max_train_steps
+        self.max_timesteps = max_timesteps
         self.warmup_learn_steps = warmup_learn_steps
         self.train_frequency = train_frequency
         self.repeat_update_times = repeat_update_times
