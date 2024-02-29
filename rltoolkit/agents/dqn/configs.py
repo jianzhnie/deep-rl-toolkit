@@ -8,7 +8,7 @@ class DQNConfig:
         project (str, optional): Name of the project. Defaults to "Gym".
         torch_deterministic (bool, optional): Whether to set torch's random seed for deterministic behavior. Defaults to True.
         seed (int, optional): Seed for environment randomization. Defaults to 123.
-        env_name (str, optional): The environment name. Defaults to "CartPole-v0".
+        env_id (str, optional): The environment name. Defaults to "CartPole-v0".
         num_envs (int, optional): Number of parallel environments to run for collecting experiences. Defaults to 10.
         capture_video (bool, optional): Flag indicating whether to capture videos of the environment during training. Defaults to True.
         buffer_size (int, optional): Maximum size of the replay buffer. Defaults to 10000.
@@ -42,7 +42,7 @@ class DQNConfig:
         torch_deterministic: bool = True,
         # Environment settings
         seed: int = 123,
-        env_name: str = 'CartPole-v1',
+        env_id: str = 'CartPole-v1',
         num_envs: int = 1,
         capture_video: bool = True,
         # Buffer settings
@@ -60,7 +60,7 @@ class DQNConfig:
         max_timesteps: int = 500000,
         warmup_learn_steps: int = 1000,
         train_frequency: int = 100,
-        repeat_update_times: int = 5,
+        gradient_steps: int = 5,
         soft_update_tau: float = 0.05,
         target_update_frequency: int = 500,
         # Log and Model Save
@@ -77,7 +77,7 @@ class DQNConfig:
         self.cuda = cuda
         self.torch_deterministic = torch_deterministic
         self.seed = seed
-        self.env_name = env_name
+        self.env_id = env_id
         self.num_envs = num_envs
         self.capture_video = capture_video
         self.buffer_size = buffer_size
@@ -92,7 +92,7 @@ class DQNConfig:
         self.max_timesteps = max_timesteps
         self.warmup_learn_steps = warmup_learn_steps
         self.train_frequency = train_frequency
-        self.repeat_update_times = repeat_update_times
+        self.gradient_steps = gradient_steps
         self.soft_update_tau = soft_update_tau
         self.target_update_frequency = target_update_frequency
         self.work_dir = work_dir

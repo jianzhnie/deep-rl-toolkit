@@ -1,3 +1,5 @@
+from typing import Tuple, Union
+
 import numpy as np
 import torch
 import torch.nn as nn
@@ -9,19 +11,24 @@ from .utils import build_mlp, layer_init_with_orthogonal
 # ALGO LOGIC: initialize agent here:
 class QNetwork(nn.Module):
 
-    def __init__(self, env):
+    def __init__(
+        self,
+        state_shape: Union[int, Tuple[int]],
+        action_shape: Union[int, Tuple[int]],
+    ):
         super().__init__()
+        input_dim = int(np.prod(state_shape))
+        action_dim = int(np.prod(action_shape))
         self.network = nn.Sequential(
-            nn.Linear(
-                np.array(env.single_observation_space.shape).prod(), 120),
+            nn.Linear(input_dim, 120),
             nn.ReLU(),
             nn.Linear(120, 84),
             nn.ReLU(),
-            nn.Linear(84, env.single_action_space.n),
+            nn.Linear(84, action_dim),
         )
 
-    def forward(self, x):
-        return self.network(x)
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        return self.network(obs)
 
 
 class QNetBase(nn.Module):  # nn.Module is a standard PyTorch Network
