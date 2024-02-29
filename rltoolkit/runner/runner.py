@@ -1,9 +1,9 @@
 import os
 import time
 
-import envpool
 import gymnasium as gym
 import numpy as np
+import tianshou
 import torch
 from rltoolkit.agents import DQNAgent
 from rltoolkit.buffers import OffPolicyBuffer
@@ -16,24 +16,26 @@ class Runner:
 
     def __init__(self, config) -> None:
         self.config = config
-        if config.num_envs > 1:
-            self.envs = envpool.make_gymnasium(config.env_id, num_envs=100)
-            self.test_envs = envpool.make_gymnasium(config.env_id,
-                                                    num_envs=100)
-        else:
-            self.envs = gym.make(config.env_id)
-            self.test_envs = gym.make(config.env_id)
-
+        self.train_envs = tianshou.env.SubprocVectorEnv(
+            [lambda: gym.make(config.env_id) for _ in range(config.num_envs)])
+        self.test_envs = tianshou.env.SubprocVectorEnv(
+            [lambda: gym.make(config.env_id) for _ in range(config.num_envs)])
+        env = gym.make(config.env_id)
         self.device = torch.device(
             'cuda' if torch.cuda.is_available() and config.use_cuda else 'cpu')
 
-        # agent
-        self.agent = DQNAgent(self.config, self.envs, self.device)
+        config.state_shape = env.observation_space.shape or env.observation_space.n
+        config.action_shape = env.action_space.shape or env.action_space.n
+        # should be N_FRAMES x H x W
+        print('Observations shape:', config.state_shape)
+        print('Actions shape:', config.action_shape)
 
+        # agent
+        self.agent = DQNAgent(self.config, self.train_envs, self.device)
         self.buffer = OffPolicyBuffer(
             config.buffer_size,
-            self.envs.single_observation_space,
-            self.envs.single_action_space,
+            env.observation_space,
+            env.action_space,
             self.device,
             n_envs=config.num_envs,
             handle_timeout_termination=False,
@@ -46,11 +48,11 @@ class Runner:
 
         # Logs and Visualizations
         timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
-        log_name = os.path.join(config.project, config.env_name,
+        log_name = os.path.join(config.project, config.env_id,
                                 config.algo_name,
                                 timestamp).replace(os.path.sep, '_')
-        work_dir = os.path.join(config.work_dir, config.project,
-                                config.env_name, config.algo_name)
+        work_dir = os.path.join(config.work_dir, config.project, config.env_id,
+                                config.algo_name)
         tensorboard_log_dir = get_outdir(work_dir, 'tensorboard_log')
         text_log_dir = get_outdir(work_dir, 'text_log')
         text_log_file = os.path.join(text_log_dir, log_name + '.log')
@@ -87,13 +89,15 @@ class Runner:
         episode_reward = 0
         episode_step = 0
         episode_loss = []
-        obs = self.envs.reset()
+        obs, _ = self.train_envs.reset()
         done = False
         while not done:
             episode_step += 1
             action = self.agent.sample(obs)
-            next_obs, reward, done, infos = self.envs.step(action)
-            self.buffer.add(obs, next_obs, action, reward, done, infos)
+            next_obs, reward, terminated, truncated, info = self.train_envs.step(
+                action)
+            done = np.logical_or(terminated, truncated)
+            self.buffer.add(obs, next_obs, action, reward, done, info)
             # train model
             if self.buffer.size() > self.config.wormup_learn_steps:
                 samples = self.buffer.sample(self.config.batch_size)
@@ -131,20 +135,16 @@ class Runner:
 
     def run(self) -> None:
         """Train the agent."""
-        obs, _ = self.envs.reset(seed=self.config.seed)
+        obs, _ = self.train_envs.reset(seed=self.config.seed)
         self.text_logger.info('Start Training')
         while self.global_step < self.config.max_timesteps:
             self.eps_greedy = self.agent.eps_greedy_scheduler.step()
-            actions = self.agent.get_action(obs)
-            next_obs, rewards, terminations, truncations, infos = self.envs.step(
+            actions = self.agent.get_action(obs, eps_greedy=self.eps_greedy)
+            actions = np.array(actions)
+            next_obs, rewards, terminals, truncations, infos = self.train_envs.step(
                 actions)
-            # Save data to replay buffer; handle `final_observation`
-            real_next_obs = next_obs.copy()
-            for idx, trunc in enumerate(truncations):
-                if trunc:
-                    real_next_obs[idx] = infos['final_observation'][idx]
-            self.buffer.add(obs, real_next_obs, actions, rewards, terminations,
-                            infos)
+            dones = np.logical_or(terminals, truncations)
+            self.buffer.add(obs, next_obs, actions, rewards, dones, infos)
             # Crucial step easy to overlook
             obs = next_obs
             # Training logic
@@ -181,45 +181,12 @@ class Runner:
                         tgt_model=self.agent.q_target,
                         tau=self.config.soft_update_tau,
                     )
-                # Evaluate model
-                if self.global_step % self.config.eval_frequency == 0:
-                    eval_infos = self.evaluate(
-                        eval_envs=self.test_envs,
-                        eval_episodes=self.config.eval_episodes,
-                    )
-                    self.log_test_infos(eval_infos, self.global_step)
-
             self.global_step += 1
             self.progress_bar.update(1)
 
         # Save model
         if self.config.save_model:
             self.agent.save_model(self.model_save_dir)
-
-    def evaluate(self, eval_episodes: int = 100):
-        episodic_returns = []
-        episodic_steps = []
-        for _ in range(eval_episodes):
-            episode_return = 0
-            episode_length = 0
-            terminal = False
-            obs, _ = self.test_envs.reset()
-            while not terminal:
-                action = self.agent.predict(obs)
-                action = action[0]
-                next_obs, reward, terminal, truction, info = self.test_envs.step(
-                    action)
-                obs = next_obs
-                episode_return += reward
-                episode_length += 1
-                if terminal:
-                    self.test_envs.close()
-            episodic_returns.append(episode_return)
-            episodic_steps.append(episode_length)
-        mean_return = np.mean(episodic_returns)
-        mean_step = np.mean(episodic_steps)
-        return dict(mean_episodic_return=mean_return,
-                    mean_episodic_step=mean_step)
 
     def log_train_infos(self, infos: dict, steps: int) -> None:
         """Log training information.
