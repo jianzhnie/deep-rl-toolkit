@@ -59,7 +59,7 @@ class DQNPolicy(BasePolicy):
         self.estimation_step = estimation_step
         self._target = target_update_freq > 0
         self.target_update_freq = target_update_freq
-        self._iter = 0
+        self.num_iters = 0
         if self._target:
             self.model_old = deepcopy(self.model)
             self.model_old.eval()
@@ -87,7 +87,8 @@ class DQNPolicy(BasePolicy):
         result = self.forward(batch, input='obs_next')
         if self._target:
             # target_Q = Q_old(s_, argmax(Q_new(s_, *)))
-            target_q = self(batch, model='model_old', input='obs_next').logits
+            target_q = self.forward(batch, model='model_old',
+                                    input='obs_next').logits
         else:
             target_q = result.logits
         if self.is_double:
@@ -169,11 +170,11 @@ class DQNPolicy(BasePolicy):
         return Batch(logits=logits, act=act, state=hidden)
 
     def learn(self, batch: Batch, **kwargs: Any) -> Dict[str, float]:
-        if self._target and self._iter % self.target_update_freq == 0:
+        if self._target and self.num_iters % self.target_update_freq == 0:
             self.sync_weight()
         self.optim.zero_grad()
         weight = batch.pop('weight', 1.0)
-        q = self(batch).logits
+        q = self.forward(batch).logits
         q = q[np.arange(len(q)), batch.act]
         returns = to_torch_as(batch.returns.flatten(), q)
         td_error = returns - q
@@ -188,7 +189,7 @@ class DQNPolicy(BasePolicy):
         batch.weight = td_error  # prio-buffer
         loss.backward()
         self.optim.step()
-        self._iter += 1
+        self.num_iters += 1
         return {'loss': loss.item()}
 
     def exploration_noise(
