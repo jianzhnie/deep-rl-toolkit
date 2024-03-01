@@ -11,12 +11,6 @@ from stable_baselines3.common.type_aliases import (ReplayBufferSamples,
 from stable_baselines3.common.utils import get_device
 from stable_baselines3.common.vec_env import VecNormalize
 
-try:
-    # Check memory used by replay buffer when possible
-    import psutil
-except ImportError:
-    psutil = None
-
 
 class BaseBuffer(ABC):
     """Base class that represent a buffer (rollout or replay)
