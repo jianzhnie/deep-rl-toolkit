@@ -26,7 +26,7 @@ class BaseBuffer(ABC):
     :param action_space: Action space
     :param device: PyTorch device
         to which the values will be converted
-    :param n_envs: Number of parallel environments
+    :param num_envs: Number of parallel environments
     """
 
     observation_space: spaces.Space
@@ -38,7 +38,7 @@ class BaseBuffer(ABC):
         observation_space: spaces.Space,
         action_space: spaces.Space,
         device: Union[torch.device, str] = 'auto',
-        n_envs: int = 1,
+        num_envs: int = 1,
     ):
         super().__init__()
         self.buffer_size = buffer_size
@@ -51,15 +51,15 @@ class BaseBuffer(ABC):
         self.curr_ptr = 0
         self.curr_size = 0
         self.device = get_device(device)
-        self.n_envs = n_envs
+        self.num_envs = num_envs
 
     @staticmethod
     def swap_and_flatten(arr: np.ndarray) -> np.ndarray:
-        """Swap and then flatten axes 0 (buffer_size) and 1 (n_envs) to convert
-        shape from [n_steps, n_envs, ...] (when ... is the shape of the
-        features)
+        """Swap and then flatten axes 0 (buffer_size) and 1 (num_envs) to
+        convert shape from [n_steps, num_envs, ...] (when ... is the shape of
+        the features)
 
-        to [n_steps * n_envs, ...] (which maintain the order)
+        to [n_steps * num_envs, ...] (which maintain the order)
 
         :param arr:
         :return:

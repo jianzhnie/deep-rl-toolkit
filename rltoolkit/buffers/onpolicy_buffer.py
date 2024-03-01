@@ -33,7 +33,7 @@ class RolloutBuffer(BaseBuffer):
     :param gae_lambda: Factor for trade-off of bias vs variance for Generalized Advantage Estimator
         Equivalent to classic advantage when set to 1.
     :param gamma: Discount factor
-    :param n_envs: Number of parallel environments
+    :param num_envs: Number of parallel environments
     """
 
     observations: np.ndarray
@@ -53,13 +53,13 @@ class RolloutBuffer(BaseBuffer):
         device: Union[torch.device, str] = 'auto',
         gae_lambda: float = 1,
         gamma: float = 0.99,
-        n_envs: int = 1,
+        num_envs: int = 1,
     ):
         super().__init__(buffer_size,
                          observation_space,
                          action_space,
                          device,
-                         n_envs=n_envs)
+                         num_envs=num_envs)
         self.gae_lambda = gae_lambda
         self.gamma = gamma
         self.generator_ready = False
@@ -67,20 +67,22 @@ class RolloutBuffer(BaseBuffer):
 
     def reset(self) -> None:
         self.observations = np.zeros(
-            (self.buffer_size, self.n_envs, *self.obs_shape), dtype=np.float32)
+            (self.buffer_size, self.num_envs, *self.obs_shape),
+            dtype=np.float32)
         self.actions = np.zeros(
-            (self.buffer_size, self.n_envs, self.action_dim), dtype=np.float32)
-        self.rewards = np.zeros((self.buffer_size, self.n_envs),
+            (self.buffer_size, self.num_envs, self.action_dim),
+            dtype=np.float32)
+        self.rewards = np.zeros((self.buffer_size, self.num_envs),
                                 dtype=np.float32)
-        self.returns = np.zeros((self.buffer_size, self.n_envs),
+        self.returns = np.zeros((self.buffer_size, self.num_envs),
                                 dtype=np.float32)
-        self.episode_starts = np.zeros((self.buffer_size, self.n_envs),
+        self.episode_starts = np.zeros((self.buffer_size, self.num_envs),
                                        dtype=np.float32)
-        self.values = np.zeros((self.buffer_size, self.n_envs),
+        self.values = np.zeros((self.buffer_size, self.num_envs),
                                dtype=np.float32)
-        self.log_probs = np.zeros((self.buffer_size, self.n_envs),
+        self.log_probs = np.zeros((self.buffer_size, self.num_envs),
                                   dtype=np.float32)
-        self.advantages = np.zeros((self.buffer_size, self.n_envs),
+        self.advantages = np.zeros((self.buffer_size, self.num_envs),
                                    dtype=np.float32)
         self.generator_ready = False
         super().reset()
@@ -151,10 +153,10 @@ class RolloutBuffer(BaseBuffer):
         # Reshape needed when using multiple envs with discrete observations
         # as numpy cannot broadcast (n_discrete,) to (n_discrete, 1)
         if isinstance(self.observation_space, spaces.Discrete):
-            obs = obs.reshape((self.n_envs, *self.obs_shape))
+            obs = obs.reshape((self.num_envs, *self.obs_shape))
 
         # Reshape to handle multi-dim and discrete action spaces, see GH #970 #1392
-        action = action.reshape((self.n_envs, self.action_dim))
+        action = action.reshape((self.num_envs, self.action_dim))
 
         self.observations[self.curr_ptr] = np.array(obs)
         self.actions[self.curr_ptr] = np.array(action)
@@ -171,7 +173,7 @@ class RolloutBuffer(BaseBuffer):
         batch_size: Optional[int] = None
     ) -> Generator[RolloutBufferSamples, None, None]:
         assert self.full, ''
-        indices = np.random.permutation(self.buffer_size * self.n_envs)
+        indices = np.random.permutation(self.buffer_size * self.num_envs)
         # Prepare the data
         if not self.generator_ready:
             _tensor_names = [
@@ -190,10 +192,10 @@ class RolloutBuffer(BaseBuffer):
 
         # Return everything, don't create minibatches
         if batch_size is None:
-            batch_size = self.buffer_size * self.n_envs
+            batch_size = self.buffer_size * self.num_envs
 
         start_idx = 0
-        while start_idx < self.buffer_size * self.n_envs:
+        while start_idx < self.buffer_size * self.num_envs:
             yield self._get_samples(indices[start_idx:start_idx + batch_size])
             start_idx += batch_size
 
