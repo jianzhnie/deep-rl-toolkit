@@ -26,7 +26,7 @@ def soft_target_update(src_model: nn.Module,
         tgt_model: PyTorch model (weights will be copied to)
         tau (float): interpolation parameter
     """
-    for src_model_param, tgt_model_param in zip(src_model.parameters(),
-                                                tgt_model.parameters()):
-        tgt_model_param.data.copy_(tau * src_model_param.data +
-                                   (1.0 - tau) * tgt_model_param.data)
+    for src_param, tgt_param in zip(src_model.parameters(),
+                                    tgt_model.parameters()):
+        tgt_param.data.copy_(tau * src_param.data +
+                             (1.0 - tau) * tgt_param.data)
