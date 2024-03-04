@@ -1,5 +1,6 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import logging
+import os
 
 import torch.distributed as dist
 
@@ -91,7 +92,7 @@ def print_log(msg, logger=None, level=logging.INFO):
             Some special loggers are:
 
             - "silent": no message will be printed.
-            - other str: the logger obtained with `get_root_logger(logger)`.
+            - other str: the logger obtained with `get_text_logger(logger)`.
             - None: The `print()` method will be used to print log messages.
         level (int): Logging level. Only available when `logger` is a Logger
             object or "root".
@@ -109,3 +110,38 @@ def print_log(msg, logger=None, level=logging.INFO):
         raise TypeError(
             'logger should be either a logging.Logger object, str, '
             f'"silent" or None, but got {type(logger)}')
+
+
+def get_text_logger(name: str = 'rltoolkit',
+                    log_file: str = None,
+                    log_level: int = logging.INFO) -> logging.Logger:
+    """Get root logger.
+
+    Args:
+        name (str, optional): Logger name. Defaults to "rltoolkit".
+        log_file (str, optional): File path of log. Defaults to None.
+        log_level (int, optional): The level of logger.
+            Defaults to logging.INFO.
+
+    Returns:
+        :obj:`logging.Logger`: The obtained logger
+    """
+    logger = get_logger(name=name, log_file=log_file, log_level=log_level)
+
+    return logger
+
+
+def get_outdir(path, *paths, inc=False):
+    outdir = os.path.join(path, *paths)
+    if not os.path.exists(outdir):
+        os.makedirs(outdir)
+    elif inc:
+        count = 1
+        outdir_inc = outdir + '-' + str(count)
+        while os.path.exists(outdir_inc):
+            count = count + 1
+            outdir_inc = outdir + '-' + str(count)
+            assert count < 100
+        outdir = outdir_inc
+        os.makedirs(outdir)
+    return outdir

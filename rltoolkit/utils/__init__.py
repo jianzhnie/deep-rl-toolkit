@@ -1,7 +1,7 @@
 """Utils package."""
 
 from .logger.base import BaseLogger, LazyLogger
-from .logger.logs import get_logger, get_outdir, get_root_logger
+from .logger.logging import get_outdir, get_text_logger
 from .logger.tensorboard import TensorboardLogger
 from .logger.wandb import WandbLogger
 from .lr_scheduler import (LinearDecayScheduler, MultiStepScheduler,
@@ -13,9 +13,8 @@ from .timer import Timer
 __all__ = [
     'BaseLogger',
     'LazyLogger',
-    'get_logger',
     'get_outdir',
-    'get_root_logger',
+    'get_text_logger',
     'TensorboardLogger',
     'WandbLogger',
     'LinearDecayScheduler',
