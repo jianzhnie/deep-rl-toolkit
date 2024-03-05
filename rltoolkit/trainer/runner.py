@@ -9,7 +9,7 @@ from rltoolkit.agents import DQNAgent
 from rltoolkit.agents.configs import BaseConfig
 from rltoolkit.buffers import OffPolicyBuffer
 from rltoolkit.utils import (ProgressBar, TensorboardLogger, WandbLogger,
-                             get_outdir, get_root_logger, soft_target_update)
+                             get_outdir, get_text_logger, soft_target_update)
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -57,7 +57,7 @@ class Runner:
         tensorboard_log_dir = get_outdir(work_dir, 'tensorboard_log')
         text_log_dir = get_outdir(work_dir, 'text_log')
         text_log_file = os.path.join(text_log_dir, log_name + '.log')
-        self.text_logger = get_root_logger(log_file=text_log_file,
+        self.text_logger = get_text_logger(log_file=text_log_file,
                                            log_level='INFO')
 
         if config.logger == 'wandb':
