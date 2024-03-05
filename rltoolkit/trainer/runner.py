@@ -38,7 +38,7 @@ class Runner:
             env.observation_space,
             env.action_space,
             self.device,
-            n_envs=config.num_envs,
+            num_envs=config.num_envs,
             handle_timeout_termination=False,
         )
 

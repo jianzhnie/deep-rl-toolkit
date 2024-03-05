@@ -262,8 +262,8 @@ class BasePolicy(nn.Module, ABC):
 
     def update(
         self,
-        sample_size: Union[int | None],
-        buffer: Union[ReplayBuffer | None],
+        sample_size: Union[int, None],
+        buffer: Union[ReplayBuffer, None],
         **kwargs: Any,
     ) -> Dict[str, Any]:
         """Update the policy network and replay buffer.

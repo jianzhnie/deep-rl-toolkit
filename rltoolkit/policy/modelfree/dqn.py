@@ -3,8 +3,9 @@ from typing import Any, Dict, Optional, Union
 
 import numpy as np
 import torch
-from tianshou.data import Batch, ReplayBuffer, to_numpy, to_torch_as
-from tianshou.policy import BasePolicy
+from rltoolkit.policy.base_policy import BasePolicy
+from rltoolkit.utils import to_numpy, to_torch_as
+from tianshou.data import Batch, ReplayBuffer
 
 
 class DQNPolicy(BasePolicy):

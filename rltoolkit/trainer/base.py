@@ -5,11 +5,12 @@ from typing import Any, Callable, DefaultDict, Dict, Optional, Tuple, Union
 
 import numpy as np
 import tqdm
-from tianshou.data import AsyncCollector, Collector, ReplayBuffer
-from tianshou.policy import BasePolicy
+from rltoolkit.buffers.collector import Collector
+from rltoolkit.policy.base_policy import BasePolicy
+from rltoolkit.utils import (BaseLogger, DummyTqdm, LazyLogger, MovAvg,
+                             deprecation, tqdm_config)
+from tianshou.data import AsyncCollector, ReplayBuffer
 from tianshou.trainer.utils import gather_info, test_episode
-from tianshou.utils import (BaseLogger, DummyTqdm, LazyLogger, MovAvg,
-                            deprecation, tqdm_config)
 
 
 class BaseTrainer(ABC):
@@ -219,7 +220,7 @@ class BaseTrainer(ABC):
         self.last_rew, self.last_len = 0.0, 0
         self.start_time = time.time()
         if self.train_collector is not None:
-            self.train_collector.reset_stat()
+            self.train_collector.reset_state_info()
 
             if self.train_collector.policy != self.policy:
                 self.test_in_train = False
@@ -230,7 +231,7 @@ class BaseTrainer(ABC):
             assert self.episode_per_test is not None
             assert not isinstance(self.test_collector,
                                   AsyncCollector)  # Issue 700
-            self.test_collector.reset_stat()
+            self.test_collector.reset_state_info()
             test_result = test_episode(
                 self.policy,
                 self.test_collector,

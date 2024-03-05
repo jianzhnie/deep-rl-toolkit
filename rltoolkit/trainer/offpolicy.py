@@ -1,10 +1,10 @@
 from typing import Any, Callable, Dict, Optional, Union
 
 import numpy as np
-from tianshou.data import Collector
-from tianshou.policy import BasePolicy
-from tianshou.trainer.base import BaseTrainer
-from tianshou.utils import BaseLogger, LazyLogger
+from rltoolkit.buffers.collector import Collector
+from rltoolkit.policy.base_policy import BasePolicy
+from rltoolkit.trainer.base import BaseTrainer
+from rltoolkit.utils import BaseLogger, LazyLogger
 
 
 class OffpolicyTrainer(BaseTrainer):
