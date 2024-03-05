@@ -25,6 +25,41 @@ class BatchData(NamedTuple):
 
 
 class Collector(object):
+    """Collector enables the policy to interact with different types of envs
+    with a unified interface, and stores the collected data into a replay
+    buffer for training RL algorithms.
+
+    :param policy: an instance of the :class:`~rltoolkit.policy.BasePolicy` class.
+    :param env: a ``gym.Env`` environment or an instance of the
+        :class:`~rltoolkit.env.BaseVectorEnv` class.
+    :param buffer: an instance of the :class:`~rltoolkit.data.ReplayBuffer` class.
+        If set to None, it will not store the data. Default to None.
+    :param function preprocess_fn: a function called before the data has been added to
+        the buffer, see issue #42 and :ref:`preprocess_fn`. Default to None.
+    :param bool exploration_noise: determine whether the action needs to be modified
+        with corresponding policy's exploration noise. If so, "policy.
+        exploration_noise(act, batch)" will be called automatically to add the
+        exploration noise into action. Default to False.
+
+    The "preprocess_fn" is a function called before the data has been added to the
+    buffer with batch format. It will receive only "obs" and "env_id" when the
+    collector resets the environment, and will receive the keys "obs_next", "rew",
+    "terminated", "truncated, "info", "policy" and "env_id" in a normal env step.
+    Alternatively, it may also accept the keys "obs_next", "rew", "done", "info",
+    "policy" and "env_id".
+    It returns either a dict or a :class:`~rltoolkit.data.Batch` with the modified
+    keys and values. Examples are in "test/base/test_collector.py".
+
+    .. note::
+
+        Please make sure the given environment has a time limitation if using n_episode
+        collect option.
+
+    .. note::
+
+        In past versions of rltoolkit, the replay buffer that was passed to `__init__`
+        was automatically reset. This is not done in the current implementation.
+    """
 
     def __init__(
         self,
@@ -39,11 +74,12 @@ class Collector(object):
             warnings.warn(
                 'Single environment detected, wrap to DummyVectorEnv.',
                 stacklevel=2,
-            )  # Fix: Added stacklevel argument with value of 2
+            )
+            # Fix: Added stacklevel argument with value of 2
             self.env = DummyVectorEnv([lambda: env])  # type: ignore
         else:
             self.env = env  # type: ignore
-        self.num_envs = len(self.env)
+        self.env_num = len(self.env)
         self.exploration_noise = exploration_noise
         self._assign_buffer(buffer)
         self.policy = policy
@@ -55,14 +91,14 @@ class Collector(object):
     def _assign_buffer(self, buffer: Optional[ReplayBuffer]) -> None:
         """Check if the buffer matches the constraint."""
         if buffer is None:
-            buffer = VectorReplayBuffer(self.num_envs, self.num_envs)
+            buffer = VectorReplayBuffer(self.env_num, self.env_num)
         elif isinstance(buffer, ReplayBufferManager):
-            assert buffer.buffer_num >= self.num_envs
+            assert buffer.buffer_num >= self.env_num
             if isinstance(buffer, CachedReplayBuffer):
-                assert buffer.cached_buffer_num >= self.num_envs
+                assert buffer.cached_buffer_num >= self.env_num
         else:  # ReplayBuffer or PrioritizedReplayBuffer
             assert buffer.maxsize > 0
-            if self.num_envs > 1:
+            if self.env_num > 1:
                 if isinstance(buffer, ReplayBuffer):
                     buffer_type = 'ReplayBuffer'
                     vector_type = 'VectorReplayBuffer'
@@ -71,8 +107,8 @@ class Collector(object):
                     vector_type = 'PrioritizedVectorReplayBuffer'
                 raise TypeError(
                     f'Cannot use {buffer_type}(size={buffer.maxsize}, ...) to collect '
-                    f'{self.num_envs} envs,\n\tplease use {vector_type}(total_size='
-                    f'{buffer.maxsize}, buffer_num={self.num_envs}, ...) instead.'
+                    f'{self.env_num} envs,\n\t please use {vector_type}'
+                    f'(total_size={buffer.maxsize}, buffer_num={self.env_num}, ...) instead.'
                 )
         self.buffer = buffer
 
@@ -105,9 +141,9 @@ class Collector(object):
         self.reset_env(gym_reset_kwargs)
         if reset_buffer:
             self.reset_buffer()
-        self.reset_stat()
+        self.reset_state_info()
 
-    def reset_stat(self) -> None:
+    def reset_state_info(self) -> None:
         """Reset the statistic variables."""
         self.collect_step, self.collect_episode, self.collect_time = 0, 0, 0.0
 
@@ -123,14 +159,13 @@ class Collector(object):
         if self.preprocess_fn:
             processed_data = self.preprocess_fn(obs=obs,
                                                 info=info,
-                                                env_id=np.arange(
-                                                    self.num_envs))
+                                                env_id=np.arange(self.env_num))
             obs = processed_data.get('obs', obs)
             info = processed_data.get('info', info)
         self.data.info = info
         self.data.obs = obs
 
-    def _reset_state(self, identifier: Union[int, List[int]]) -> None:
+    def _reset_hidden_state(self, identifier: Union[int, List[int]]) -> None:
         """Reset the hidden state: self.data.state[id]."""
         if hasattr(self.data.policy, 'hidden_state'):
             state = self.data.policy.hidden_state  # it is a reference
@@ -171,7 +206,7 @@ class Collector(object):
         """Collect a specified number of step or episode.
 
         To ensure unbiased sampling result with n_episode option, this function will
-        first collect ``n_episode - num_envs`` episodes, then for the last ``num_envs``
+        first collect ``n_episode - env_num`` episodes, then for the last ``env_num``
         episodes, they will be collected evenly from each env.
 
         :param int n_step: how many steps you want to collect.
@@ -208,17 +243,17 @@ class Collector(object):
                 f'Only one of n_step or n_episode is allowed in Collector.'
                 f'collect, got n_step={n_step}, n_episode={n_episode}.')
             assert n_step > 0
-            if not n_step % self.num_envs == 0:
+            if not n_step % self.env_num == 0:
                 warnings.warn(
-                    f'n_step={n_step} is not a multiple of #env ({self.num_envs}), '
+                    f'n_step={n_step} is not a multiple of #env ({self.env_num}), '
                     'which may cause extra transitions collected into the buffer.',
                     stacklevel=2,
                 )
-            ready_env_ids = np.arange(self.num_envs)
+            ready_env_ids = np.arange(self.env_num)
         elif n_episode is not None:
             assert n_episode > 0
-            ready_env_ids = np.arange(min(self.num_envs, n_episode))
-            self.data = self.data[:min(self.num_envs, n_episode)]
+            ready_env_ids = np.arange(min(self.env_num, n_episode))
+            self.data = self.data[:min(self.env_num, n_episode)]
         else:
             raise TypeError(
                 'Please specify at least one (either n_step or n_episode) '
@@ -260,9 +295,10 @@ class Collector(object):
                 # update state / act / policy into self.data
                 policy = result.get('policy', Batch())
                 assert isinstance(policy, Batch)
-                state = result.get('state', None)
-                if state is not None:
-                    policy.hidden_state = state  # save state into buffer
+                hidden_state = result.get('state', None)
+                if hidden_state is not None:
+                    # save state into buffer
+                    policy.hidden_state = hidden_state
                 act = to_numpy(result.act)
                 if self.exploration_noise:
                     act = self.policy.exploration_noise(act, self.data)
@@ -321,16 +357,16 @@ class Collector(object):
                 self._reset_env_with_ids(env_ind_local, env_ind_global,
                                          gym_reset_kwargs)
                 for i in env_ind_local:
-                    self._reset_state(i)
+                    self._reset_hidden_state(i)
 
                 # remove surplus env id from ready_env_ids
                 # to avoid bias in selecting environments
                 if n_episode:
-                    surplus_num_envs = len(ready_env_ids) - (n_episode -
-                                                             episode_count)
-                    if surplus_num_envs > 0:
+                    surplus_env_num = len(ready_env_ids) - (n_episode -
+                                                            episode_count)
+                    if surplus_env_num > 0:
                         mask = np.ones_like(ready_env_ids, dtype=bool)
-                        mask[env_ind_local[:surplus_num_envs]] = False
+                        mask[env_ind_local[:surplus_env_num]] = False
                         ready_env_ids = ready_env_ids[mask]
                         self.data = self.data[mask]
 
@@ -386,8 +422,8 @@ class Collector(object):
 class AsyncCollector(Collector):
     """Async Collector handles async vector environment.
 
-    The arguments are exactly the same as :class:`~tianshou.data.Collector`,
-    please refer to :class:`~tianshou.data.Collector` for more detailed
+    The arguments are exactly the same as :class:`~rltoolkit.data.Collector`,
+    please refer to :class:`~rltoolkit.data.Collector` for more detailed
     explanation.
     """
 
@@ -415,7 +451,7 @@ class AsyncCollector(Collector):
     def reset_env(self,
                   gym_reset_kwargs: Optional[Dict[str, Any]] = None) -> None:
         super().reset_env(gym_reset_kwargs)
-        self._ready_env_ids = np.arange(self.num_envs)
+        self._ready_env_ids = np.arange(self.env_num)
 
     def collect(
         self,
@@ -487,7 +523,7 @@ class AsyncCollector(Collector):
         while True:
             whole_data = self.data
             self.data = self.data[ready_env_ids]
-            assert len(whole_data) == self.num_envs  # major difference
+            assert len(whole_data) == self.env_num  # major difference
             # restore the state: if the last state is None, it won't store
             last_state = self.data.policy.pop('hidden_state', None)
 
@@ -527,8 +563,7 @@ class AsyncCollector(Collector):
                 whole_data.act[ready_env_ids] = self.data.act
                 whole_data.policy[ready_env_ids] = self.data.policy
             except ValueError:
-                _alloc_by_keys_diff(whole_data, self.data, self.num_envs,
-                                    False)
+                _alloc_by_keys_diff(whole_data, self.data, self.env_num, False)
                 whole_data[ready_env_ids] = self.data  # lots of overhead
 
             # get bounded and remapped actions first (not saved into buffer)
@@ -601,7 +636,7 @@ class AsyncCollector(Collector):
                 self._reset_env_with_ids(env_ind_local, env_ind_global,
                                          gym_reset_kwargs)
                 for i in env_ind_local:
-                    self._reset_state(i)
+                    self._reset_hidden_state(i)
 
             try:
                 whole_data.obs[ready_env_ids] = self.data.obs_next
@@ -609,8 +644,7 @@ class AsyncCollector(Collector):
                 whole_data.done[ready_env_ids] = self.data.done
                 whole_data.info[ready_env_ids] = self.data.info
             except ValueError:
-                _alloc_by_keys_diff(whole_data, self.data, self.num_envs,
-                                    False)
+                _alloc_by_keys_diff(whole_data, self.data, self.env_num, False)
                 self.data.obs = self.data.obs_next
                 whole_data[ready_env_ids] = self.data  # lots of overhead
             self.data = whole_data
