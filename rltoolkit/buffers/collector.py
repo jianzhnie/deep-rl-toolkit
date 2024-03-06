@@ -5,7 +5,7 @@ from typing import Any, Callable, Dict, List, NamedTuple, Optional, Union
 import gymnasium as gym
 import numpy as np
 import torch
-from rltoolkit.policy.base_policy import BasePolicy
+from rltoolkit.policy import BasePolicy
 from tianshou.data import (Batch, CachedReplayBuffer, ReplayBuffer,
                            ReplayBufferManager, VectorReplayBuffer, to_numpy)
 from tianshou.data.batch import _alloc_by_keys_diff
@@ -270,7 +270,7 @@ class Collector(object):
         while True:
             assert len(self.data) == len(ready_env_ids)
             # restore the state: if the last state is None, it won't store
-            last_state = self.data.policy.pop('hidden_state', None)
+            last_hidden_state = self.data.policy.pop('hidden_state', None)
 
             # get the next action
             if random:
@@ -289,9 +289,9 @@ class Collector(object):
                 if no_grad:
                     with torch.no_grad():  # faster than retain_grad version
                         # self.data.obs will be used by agent to get result
-                        result = self.policy(self.data, last_state)
+                        result = self.policy(self.data, last_hidden_state)
                 else:
-                    result = self.policy(self.data, last_state)
+                    result = self.policy(self.data, last_hidden_state)
                 # update state / act / policy into self.data
                 policy = result.get('policy', Batch())
                 assert isinstance(policy, Batch)
@@ -407,15 +407,15 @@ class Collector(object):
             rew_mean = rew_std = len_mean = len_std = 0
 
         return {
-            'n/ep': episode_count,
-            'n/st': step_count,
-            'rews': rews,
-            'lens': lens,
-            'idxs': idxs,
-            'rew': rew_mean,
-            'len': len_mean,
-            'rew_std': rew_std,
-            'len_std': len_std,
+            'num_episode': episode_count,
+            'num_step': step_count,
+            'eoisode_reward': rews,
+            'episode_length': lens,
+            'episode_idxs': idxs,
+            'reward_mean': rew_mean,
+            'length_mean': len_mean,
+            'reward_std': rew_std,
+            'length_std': len_std,
         }
 
 
@@ -525,7 +525,7 @@ class AsyncCollector(Collector):
             self.data = self.data[ready_env_ids]
             assert len(whole_data) == self.env_num  # major difference
             # restore the state: if the last state is None, it won't store
-            last_state = self.data.policy.pop('hidden_state', None)
+            last_hidden_state = self.data.policy.pop('hidden_state', None)
 
             # get the next action
             if random:
@@ -544,9 +544,9 @@ class AsyncCollector(Collector):
                 if no_grad:
                     with torch.no_grad():  # faster than retain_grad version
                         # self.data.obs will be used by agent to get result
-                        result = self.policy(self.data, last_state)
+                        result = self.policy(self.data, last_hidden_state)
                 else:
-                    result = self.policy(self.data, last_state)
+                    result = self.policy(self.data, last_hidden_state)
                 # update state / act / policy into self.data
                 policy = result.get('policy', Batch())
                 assert isinstance(policy, Batch)
@@ -672,13 +672,13 @@ class AsyncCollector(Collector):
             rew_mean = rew_std = len_mean = len_std = 0
 
         return {
-            'n/ep': episode_count,
-            'n/st': step_count,
-            'rews': rews,
-            'lens': lens,
-            'idxs': idxs,
-            'rew': rew_mean,
-            'len': len_mean,
-            'rew_std': rew_std,
-            'len_std': len_std,
+            'num_episode': episode_count,
+            'num_step': step_count,
+            'episode_reward': rews,
+            'episode_length': lens,
+            'episode_idxs': idxs,
+            'reward_mean': rew_mean,
+            'length_mean': len_mean,
+            'reward_std': rew_std,
+            'length_std': len_std,
         }

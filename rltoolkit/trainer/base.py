@@ -5,8 +5,8 @@ from typing import Any, Callable, DefaultDict, Dict, Optional, Tuple, Union
 
 import numpy as np
 import tqdm
-from rltoolkit.buffers.collector import Collector
-from rltoolkit.policy.base_policy import BasePolicy
+from rltoolkit.buffers import Collector
+from rltoolkit.policy import BasePolicy
 from rltoolkit.utils import (BaseLogger, DummyTqdm, LazyLogger, MovAvg,
                              deprecation, tqdm_config)
 from tianshou.data import AsyncCollector, ReplayBuffer
@@ -244,8 +244,8 @@ class BaseTrainer(ABC):
             )
             self.best_epoch = self.start_epoch
             self.best_reward, self.best_reward_std = (
-                test_result['rew'],
-                test_result['rew_std'],
+                test_result['reward_mean'],
+                test_result['reward_std'],
             )
         if self.save_best_fn:
             self.save_best_fn(self.policy)
@@ -292,14 +292,14 @@ class BaseTrainer(ABC):
                 result: Dict[str, Any] = dict()
                 if self.train_collector is not None:
                     data, result, self.stop_fn_flag = self.train_step()
-                    t.update(result['n/st'])
+                    t.update(result['num_step'])
                     if self.stop_fn_flag:
                         t.set_postfix(**data)
                         break
                 else:
                     assert self.buffer, 'No train_collector or buffer specified'
-                    result['n/ep'] = len(self.buffer)
-                    result['n/st'] = int(self.gradient_step)
+                    result['num_episode'] = len(self.buffer)
+                    result['num_step'] = int(self.gradient_step)
                     t.update()
 
                 self.policy_update_fn(data, result)
@@ -326,10 +326,10 @@ class BaseTrainer(ABC):
             epoch_stat['gradient_step'] = self.gradient_step
             epoch_stat.update({
                 'env_step': self.env_step,
-                'rew': self.last_rew,
-                'len': int(self.last_len),
-                'n/ep': int(result['n/ep']),
-                'n/st': int(result['n/st']),
+                'reward_mean': self.last_rew,
+                'length_mean': int(self.last_len),
+                'num_episode': int(result['num_episode']),
+                'num_step': int(result['num_step']),
             })
             info = gather_info(
                 self.start_time,
@@ -357,24 +357,25 @@ class BaseTrainer(ABC):
             self.env_step,
             self.reward_metric,
         )
-        rew, rew_std = test_result['rew'], test_result['rew_std']
-        if self.best_epoch < 0 or self.best_reward < rew:
+        reward_mean, reward_std = test_result['reward_mean'], test_result[
+            'reward_std']
+        if self.best_epoch < 0 or self.best_reward < reward_mean:
             self.best_epoch = self.epoch
-            self.best_reward = float(rew)
-            self.best_reward_std = rew_std
+            self.best_reward = float(reward_mean)
+            self.best_reward_std = reward_std
             if self.save_best_fn:
                 self.save_best_fn(self.policy)
         if self.verbose:
             print(
-                f'Epoch #{self.epoch}: test_reward: {rew:.6f} ± {rew_std:.6f},'
+                f'Epoch #{self.epoch}: test_reward: {reward_mean:.6f} ± {reward_std:.6f},'
                 f' best_reward: {self.best_reward:.6f} ± '
                 f'{self.best_reward_std:.6f} in #{self.best_epoch}',
                 flush=True,
             )
         if not self.is_run:
             test_stat = {
-                'test_reward': rew,
-                'test_reward_std': rew_std,
+                'test_reward_mean': reward_mean,
+                'test_reward_std': reward_std,
                 'best_reward': self.best_reward,
                 'best_reward_std': self.best_reward_std,
                 'best_epoch': self.best_epoch,
@@ -395,23 +396,25 @@ class BaseTrainer(ABC):
             self.train_fn(self.epoch, self.env_step)
         result = self.train_collector.collect(
             n_step=self.step_per_collect, n_episode=self.episode_per_collect)
-        if result['n/ep'] > 0 and self.reward_metric:
-            rew = self.reward_metric(result['rews'])
+        if result['num_episode'] > 0 and self.reward_metric:
+            rew = self.reward_metric(result['episode_reward'])
             result.update(rews=rew, rew=rew.mean(), rew_std=rew.std())
-        self.env_step += int(result['n/st'])
+        self.env_step += int(result['num_step'])
         self.logger.log_train_data(result, self.env_step)
-        self.last_rew = result['rew'] if result['n/ep'] > 0 else self.last_rew
-        self.last_len = result['len'] if result['n/ep'] > 0 else self.last_len
+        self.last_rew = (result['reward_mean']
+                         if result['num_episode'] > 0 else self.last_rew)
+        self.last_len = (result['length_mean']
+                         if result['num_episode'] > 0 else self.last_len)
         data = {
             'env_step': str(self.env_step),
-            'rew': f'{self.last_rew:.2f}',
-            'len': str(int(self.last_len)),
-            'n/ep': str(int(result['n/ep'])),
-            'n/st': str(int(result['n/st'])),
+            'reward_mean': f'{self.last_rew:.2f}',
+            'length_mean': str(int(self.last_len)),
+            'num_episode': str(int(result['num_episode'])),
+            'num_step': str(int(result['num_step'])),
         }
-        if result['n/ep'] > 0:
-            if self.test_in_train and self.stop_fn and self.stop_fn(
-                    result['rew']):
+        if result['num_episode'] > 0:
+            if (self.test_in_train and self.stop_fn
+                    and self.stop_fn(result['reward_mean'])):
                 assert self.test_collector is not None
                 test_result = test_episode(
                     self.policy,
@@ -422,10 +425,10 @@ class BaseTrainer(ABC):
                     self.logger,
                     self.env_step,
                 )
-                if self.stop_fn(test_result['rew']):
+                if self.stop_fn(test_result['reward_mean']):
                     stop_fn_flag = True
-                    self.best_reward = test_result['rew']
-                    self.best_reward_std = test_result['rew_std']
+                    self.best_reward = test_result['reward_mean']
+                    self.best_reward_std = test_result['reward_std']
                 else:
                     self.policy.train()
 
@@ -457,9 +460,8 @@ class BaseTrainer(ABC):
         """
         try:
             self.is_run = True
-            deque(
-                self,
-                maxlen=0)  # feed the entire iterator into a zero-length deque
+            deque(self, maxlen=0)
+            # feed the entire iterator into a zero-length deque
             info = gather_info(
                 self.start_time,
                 self.train_collector,

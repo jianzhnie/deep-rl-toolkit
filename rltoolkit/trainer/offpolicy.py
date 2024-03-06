@@ -1,9 +1,9 @@
 from typing import Any, Callable, Dict, Optional, Union
 
 import numpy as np
-from rltoolkit.buffers.collector import Collector
-from rltoolkit.policy.base_policy import BasePolicy
-from rltoolkit.trainer.base import BaseTrainer
+from rltoolkit.buffers import Collector
+from rltoolkit.policy import BasePolicy
+from rltoolkit.trainer import BaseTrainer
 from rltoolkit.utils import BaseLogger, LazyLogger
 
 
@@ -118,7 +118,7 @@ class OffpolicyTrainer(BaseTrainer):
                          result: Dict[str, Any]) -> None:
         """Perform off-policy updates."""
         assert self.train_collector is not None
-        for _ in range(round(self.update_per_step * result['n/st'])):
+        for _ in range(round(self.update_per_step * result['num_step'])):
             self.gradient_step += 1
             losses = self.policy.update(self.batch_size,
                                         self.train_collector.buffer)

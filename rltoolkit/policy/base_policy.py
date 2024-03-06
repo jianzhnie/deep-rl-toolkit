@@ -1,19 +1,30 @@
 import logging
 from abc import ABC, abstractmethod
-from typing import Any, Callable, Dict, Optional, Union
+from typing import Any, Callable, Dict, NamedTuple, Optional, Union
 
 import gymnasium as gym
 import numpy as np
 import torch
 from gymnasium.spaces import Box, Discrete, MultiBinary, MultiDiscrete
 from numba import njit
-from rltoolkit.utils import soft_target_update
-from rltoolkit.utils.data_utils import to_numpy, to_torch_as
+from rltoolkit.utils import soft_target_update, to_numpy, to_torch_as
 from tianshou.data import Batch, ReplayBuffer
 from torch import nn
 from torch.optim.lr_scheduler import LRScheduler
 
 logger = logging.getLogger(__name__)
+
+
+class BatchData(NamedTuple):
+    obs: Union[Batch, torch.Tensor, np.array]
+    obs_next: Union[Batch, torch.Tensor, np.array]
+    act: Union[Batch, torch.Tensor, np.array]
+    rew: Union[Batch, torch.Tensor, np.array]
+    terminated: Union[Batch, torch.Tensor, np.array]
+    truncated: Union[Batch, torch.Tensor, np.array]
+    done: Union[Batch, torch.Tensor, np.array]
+    info: Union[Batch, dict, None]
+    policy: Union[Batch, torch.Tensor, np.array]
 
 
 class BasePolicy(nn.Module, ABC):
@@ -23,7 +34,7 @@ class BasePolicy(nn.Module, ABC):
         observation_space: Optional[gym.Space] = None,
         action_space: Optional[gym.Space] = None,
         action_scaling: bool = False,
-        action_bound_method: str = 'clip',
+        action_bound_method: str = None,
         lr_scheduler: Optional[Union[LRScheduler, None]] = None,
     ) -> None:
         super().__init__()
@@ -60,7 +71,7 @@ class BasePolicy(nn.Module, ABC):
     #  have a method to add noise to action.
     #  So we add the default behavior here. It's a little messy, maybe one can
     #  find a better way to do this.
-    def exploration_noise(self, act: np.ndarray) -> np.ndarray:
+    def exploration_noise(self, act: np.ndarray, batch: Batch) -> np.ndarray:
         """Modify the action from policy.forward with exploration noise.
 
         NOTE: currently does not add any noise! Needs to be overridden by subclasses
