@@ -1,6 +1,7 @@
 import argparse
 import os
 import sys
+from argparse import Namespace
 
 import gymnasium as gym
 import numpy as np
@@ -8,21 +9,20 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 sys.path.append('../../')
-from rltoolkit.buffers.collector import Collector
-from rltoolkit.policy.modelfree.dqn import DQNPolicy
-from rltoolkit.trainer.offpolicy import OffpolicyTrainer
+from rltoolkit.buffers import Collector
+from rltoolkit.policy import DQNPolicy
+from rltoolkit.trainer import OffpolicyTrainer
+from rltoolkit.utils import TensorboardLogger
 from tianshou.data import VectorReplayBuffer
 from tianshou.env import DummyVectorEnv
-from tianshou.utils import TensorboardLogger
 from tianshou.utils.net.common import Net
 
 
-def get_args():
+def get_args() -> Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument('--task', type=str, default='CartPole-v1')
     parser.add_argument('--algo-name', type=str, default='dqn')
     parser.add_argument('--seed', type=int, default=0)
-    parser.add_argument('--scale-obs', type=int, default=0)
     parser.add_argument('--eps-test', type=float, default=0.005)
     parser.add_argument('--eps-train', type=float, default=1.0)
     parser.add_argument('--eps-train-final', type=float, default=0.05)
