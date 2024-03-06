@@ -85,9 +85,8 @@ class BasePolicy(nn.Module, ABC):
         """
         return act
 
-    def soft_update(self, src: nn.Module, tgt: nn.Module, tau: float) -> None:
-        """Softly update the parameters of target module towards the parameters
-        of source module."""
+    def sync_weight(self, src: nn.Module, tgt: nn.Module, tau: float) -> None:
+        """Synchronize the weight for the target network."""
         soft_target_update(src_model=src, tgt_model=tgt, tau=tau)
 
     def compute_action(

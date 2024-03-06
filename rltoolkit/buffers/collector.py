@@ -168,7 +168,8 @@ class Collector(object):
     def _reset_hidden_state(self, identifier: Union[int, List[int]]) -> None:
         """Reset the hidden state: self.data.state[id]."""
         if hasattr(self.data.policy, 'hidden_state'):
-            state = self.data.policy.hidden_state  # it is a reference
+            state = self.data.policy.hidden_state
+            # it is a reference
             if isinstance(state, torch.Tensor):
                 state[identifier].zero_()
             elif isinstance(state, np.ndarray):
@@ -227,15 +228,15 @@ class Collector(object):
 
         :return: A dict including the following keys
 
-            * ``n/ep`` collected number of episodes.
-            * ``n/st`` collected number of steps.
-            * ``rews`` array of episode reward over collected episodes.
-            * ``lens`` array of episode length over collected episodes.
-            * ``idxs`` array of episode start index in buffer over collected episodes.
-            * ``rew`` mean of episodic rewards.
-            * ``len`` mean of episodic lengths.
-            * ``rew_std`` standard error of episodic rewards.
-            * ``len_std`` standard error of episodic lengths.
+            * ``num_episode`` collected number of episodes.
+            * ``num_step`` collected number of steps.
+            * ``episode_reward`` array of episode reward over collected episodes.
+            * ``episode_length`` array of episode length over collected episodes.
+            * ``episode_idxs`` array of episode start index in buffer over collected episodes.
+            * ``reward_mean`` mean of episodic rewards.
+            * ``length_mean`` mean of episodic lengths.
+            * ``reward_std`` standard error of episodic rewards.
+            * ``length_std`` standard error of episodic lengths.
         """
         assert not self.env.is_async, 'Please use AsyncCollector if using async venv.'
         if n_step is not None:
@@ -407,15 +408,15 @@ class Collector(object):
             rew_mean = rew_std = len_mean = len_std = 0
 
         return {
-            'num_episode': episode_count,
-            'num_step': step_count,
-            'eoisode_reward': rews,
-            'episode_length': lens,
-            'episode_idxs': idxs,
-            'reward_mean': rew_mean,
-            'length_mean': len_mean,
-            'reward_std': rew_std,
-            'length_std': len_std,
+            'num_episode': episode_count,  # int
+            'num_step': step_count,  # int
+            'eoisode_reward': rews,  # np.array, shape: (num_episode,)
+            'episode_length': lens,  # np.array, shape: (num_episode,)
+            'episode_idxs': idxs,  # np.array, shape: (num_episode,)
+            'reward_mean': rew_mean,  # float
+            'length_mean': len_mean,  # float
+            'reward_std': rew_std,  # float
+            'length_std': len_std,  # float
         }
 
 
@@ -487,15 +488,15 @@ class AsyncCollector(Collector):
 
         :return: A dict including the following keys
 
-            * ``n/ep`` collected number of episodes.
-            * ``n/st`` collected number of steps.
-            * ``rews`` array of episode reward over collected episodes.
-            * ``lens`` array of episode length over collected episodes.
-            * ``idxs`` array of episode start index in buffer over collected episodes.
-            * ``rew`` mean of episodic rewards.
-            * ``len`` mean of episodic lengths.
-            * ``rew_std`` standard error of episodic rewards.
-            * ``len_std`` standard error of episodic lengths.
+            * ``num_episode`` collected number of episodes.
+            * ``num_step`` collected number of steps.
+            * ``episode_reward`` array of episode reward over collected episodes.
+            * ``episode_length`` array of episode length over collected episodes.
+            * ``episode_idxs`` array of episode start index in buffer over collected episodes.
+            * ``reward_mean`` mean of episodic rewards.
+            * ``length_mean`` mean of episodic lengths.
+            * ``reward_std`` standard error of episodic rewards.
+            * ``length_std`` standard error of episodic lengths.
         """
         # collect at least n_step or n_episode
         if n_step is not None:

@@ -23,6 +23,9 @@ class DQNPolicy(BasePolicy):
     :param int estimation_step: the number of steps to look ahead. Default to 1.
     :param int target_update_freq: the target network update frequency (0 if
         you do not use the target network). Default to 0.
+    :param float target_update_tau: the soft update coefficient for the target, in
+        [0, 1]. Default to 1.0, which means hard update. If it is set to a value
+        between 0 and 1, it will be a soft update.
     :param bool reward_normalization: normalize the reward to Normal(0, 1).
         Default to False.
     :param bool is_double: use double dqn. Default to True.
@@ -45,6 +48,7 @@ class DQNPolicy(BasePolicy):
         discount_factor: float = 0.99,
         estimation_step: int = 1,
         target_update_freq: int = 0,
+        target_update_tau: float = 1.0,
         reward_normalization: bool = False,
         is_double: bool = True,
         clip_loss_grad: bool = False,
@@ -60,10 +64,12 @@ class DQNPolicy(BasePolicy):
         self.estimation_step = estimation_step
         self._target = target_update_freq > 0
         self.target_update_freq = target_update_freq
+        assert 0.0 < target_update_tau <= 1.0, 'target_update_tau should be in (0, 1]'
+        self.target_update_tau = target_update_tau
         self.num_iters = 0
         if self._target:
-            self.model_old = deepcopy(self.model)
-            self.model_old.eval()
+            self.target_model = deepcopy(self.model)
+            self.target_model.eval()
         self.reward_normalization = reward_normalization
         self.is_double = is_double
         self.clip_loss_grad = clip_loss_grad
@@ -78,17 +84,14 @@ class DQNPolicy(BasePolicy):
         self.model.train(mode)
         return self
 
-    def sync_weight(self) -> None:
-        """Synchronize the weight for the target network."""
-        self.model_old.load_state_dict(self.model.state_dict())
-
     def comput_target_qvalues(self, buffer: ReplayBuffer,
                               indices: np.ndarray) -> torch.Tensor:
         batch = buffer[indices]  # batch.obs_next: s_{t+n}
         result = self.forward(batch, input='obs_next')
         if self._target:
             # target_Q = Q_old(s_, argmax(Q_new(s_, *)))
-            target_q = self.forward(batch, model='model_old',
+            target_q = self.forward(batch,
+                                    model='target_model',
                                     input='obs_next').logits
         else:
             target_q = result.logits
@@ -172,7 +175,11 @@ class DQNPolicy(BasePolicy):
 
     def learn(self, batch: Batch, **kwargs: Any) -> Dict[str, float]:
         if self._target and self.num_iters % self.target_update_freq == 0:
-            self.sync_weight()
+            self.sync_weight(
+                src=self.model,
+                tgt=self.target_model,
+                tau=self.target_update_tau,
+            )
         self.optim.zero_grad()
         weight = batch.pop('weight', 1.0)
         q = self.forward(batch).logits
