@@ -75,7 +75,7 @@ class OffpolicyTrainer(BaseTrainer):
         step_per_collect: int,
         episode_per_test: int,
         batch_size: int,
-        update_per_step: Union[int, float] = 1,
+        update_per_step: int = 1,
         train_fn: Optional[Callable[[int, int], None]] = None,
         test_fn: Optional[Callable[[int, Optional[int]], None]] = None,
         stop_fn: Optional[Callable[[float], bool]] = None,
@@ -118,7 +118,7 @@ class OffpolicyTrainer(BaseTrainer):
                          result: Dict[str, Any]) -> None:
         """Perform off-policy updates."""
         assert self.train_collector is not None
-        for _ in range(round(self.update_per_step * result['num_step'])):
+        for _ in range(self.update_per_step):
             self.gradient_step += 1
             losses = self.policy.update(self.batch_size,
                                         self.train_collector.buffer)

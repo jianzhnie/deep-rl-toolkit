@@ -286,27 +286,27 @@ class BaseTrainer(ABC):
         # perform n step_per_epoch
         with progress(total=self.step_per_epoch,
                       desc=f'Epoch #{self.epoch}',
-                      **tqdm_config) as t:
-            while t.n < t.total and not self.stop_fn_flag:
+                      **tqdm_config) as pbar:
+            while pbar.n < pbar.total and not self.stop_fn_flag:
                 data: Dict[str, Any] = dict()
                 result: Dict[str, Any] = dict()
                 if self.train_collector is not None:
                     data, result, self.stop_fn_flag = self.train_step()
-                    t.update(result['num_step'])
+                    pbar.update(result['num_step'])
                     if self.stop_fn_flag:
-                        t.set_postfix(**data)
+                        pbar.set_postfix(**data)
                         break
                 else:
                     assert self.buffer, 'No train_collector or buffer specified'
                     result['num_episode'] = len(self.buffer)
                     result['num_step'] = int(self.gradient_step)
-                    t.update()
+                    pbar.update()
 
                 self.policy_update_fn(data, result)
-                t.set_postfix(**data)
+                pbar.set_postfix(**data)
 
-            if t.n <= t.total and not self.stop_fn_flag:
-                t.update()
+            if pbar.n <= pbar.total and not self.stop_fn_flag:
+                pbar.update()
 
         # for offline RL
         if self.train_collector is None:

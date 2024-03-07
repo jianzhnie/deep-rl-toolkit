@@ -87,7 +87,7 @@ class DQNPolicy(BasePolicy):
     def comput_target_qvalues(self, buffer: ReplayBuffer,
                               indices: np.ndarray) -> torch.Tensor:
         batch = buffer[indices]  # batch.obs_next: s_{t+n}
-        result = self.forward(batch, input='obs_next')
+        result: Batch = self.forward(batch, input='obs_next')
         if self._target:
             # target_Q = Q_old(s_, argmax(Q_new(s_, *)))
             target_q = self.forward(batch,
@@ -167,10 +167,10 @@ class DQNPolicy(BasePolicy):
         obs = batch[input]
         obs_next = obs.obs if hasattr(obs, 'obs') else obs
         logits, hidden = model(obs_next, state=state, info=batch.info)
-        q = self.compute_q_value(logits, getattr(obs, 'mask', None))
+        q_value = self.compute_q_value(logits, getattr(obs, 'mask', None))
         if not hasattr(self, 'max_action_num'):
-            self.max_action_num = q.shape[1]
-        act = to_numpy(q.max(dim=1)[1])
+            self.max_action_num = q_value.shape[1]
+        act = to_numpy(q_value.max(dim=1)[1])
         return Batch(logits=logits, act=act, state=hidden)
 
     def learn(self, batch: Batch, **kwargs: Any) -> Dict[str, float]:
@@ -182,13 +182,13 @@ class DQNPolicy(BasePolicy):
             )
         self.optim.zero_grad()
         weight = batch.pop('weight', 1.0)
-        q = self.forward(batch).logits
-        q = q[np.arange(len(q)), batch.act]
-        returns = to_torch_as(batch.returns.flatten(), q)
-        td_error = returns - q
+        q_value = self.forward(batch).logits
+        q_value = q_value[np.arange(len(q_value)), batch.act]
+        returns = to_torch_as(batch.returns.flatten(), q_value)
+        td_error = returns - q_value
 
         if self.clip_loss_grad:
-            y = q.reshape(-1, 1)
+            y = q_value.reshape(-1, 1)
             t = returns.reshape(-1, 1)
             loss = torch.nn.functional.huber_loss(y, t, reduction='mean')
         else:
