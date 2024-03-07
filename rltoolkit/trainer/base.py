@@ -7,10 +7,10 @@ import numpy as np
 import tqdm
 from rltoolkit.buffers import Collector
 from rltoolkit.policy import BasePolicy
+from rltoolkit.trainer.utils import gather_info, test_episode
 from rltoolkit.utils import (BaseLogger, DummyTqdm, LazyLogger, MovAvg,
                              deprecation, tqdm_config)
 from tianshou.data import AsyncCollector, ReplayBuffer
-from tianshou.trainer.utils import gather_info, test_episode
 
 
 class BaseTrainer(ABC):
@@ -407,10 +407,10 @@ class BaseTrainer(ABC):
                          if result['num_episode'] > 0 else self.last_len)
         data = {
             'env_step': str(self.env_step),
+            'num_step': str(int(result['num_step'])),
+            'num_episode': str(int(result['num_episode'])),
             'reward_mean': f'{self.last_rew:.2f}',
             'length_mean': str(int(self.last_len)),
-            'num_episode': str(int(result['num_episode'])),
-            'num_step': str(int(result['num_step'])),
         }
         if result['num_episode'] > 0:
             if (self.test_in_train and self.stop_fn

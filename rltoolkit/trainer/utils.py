@@ -25,8 +25,10 @@ def test_episode(
         test_fn(epoch, global_step)
     result = collector.collect(n_episode=n_episode)
     if reward_metric:
-        rew = reward_metric(result['rews'])
-        result.update(rews=rew, rew=rew.mean(), rew_std=rew.std())
+        episode_reward = reward_metric(result['episode_reward'])
+        result.update(rews=episode_reward,
+                      rew=episode_reward.mean(),
+                      rew_std=episode_reward.std())
     if logger and global_step is not None:
         logger.log_test_data(result, global_step)
     return result

@@ -118,7 +118,9 @@ class OffpolicyTrainer(BaseTrainer):
                          result: Dict[str, Any]) -> None:
         """Perform off-policy updates."""
         assert self.train_collector is not None
-        for _ in range(self.update_per_step):
+        repeat_gradient_steps = round(self.update_per_step *
+                                      result['num_step'])
+        for _ in range(repeat_gradient_steps):
             self.gradient_step += 1
             losses = self.policy.update(self.batch_size,
                                         self.train_collector.buffer)
