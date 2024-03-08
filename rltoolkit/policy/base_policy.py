@@ -55,13 +55,12 @@ class BasePolicy(nn.Module, ABC):
             self.action_type = 'discrete'
         elif isinstance(action_space, Box):
             self.action_type = 'continuous'
-        else:
-            raise ValueError(f'Unsupported action space: {action_space}.')
         self.agent_id = 0
         self.updating = False
         self.action_scaling = action_scaling
         self.action_bound_method = action_bound_method
         self.lr_scheduler = lr_scheduler
+        self._compile()
 
     def set_agent_id(self, agent_id: int) -> None:
         """Set self.agent_id = agent_id, for MARL."""

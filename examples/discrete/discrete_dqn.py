@@ -26,16 +26,16 @@ def get_args() -> Namespace:
     parser.add_argument('--eps-test', type=float, default=0.005)
     parser.add_argument('--eps-train', type=float, default=1.0)
     parser.add_argument('--eps-train-final', type=float, default=0.05)
-    parser.add_argument('--buffer-size', type=int, default=100000)
+    parser.add_argument('--buffer-size', type=int, default=20000)
     parser.add_argument('--lr', type=float, default=0.001)
     parser.add_argument('--gamma', type=float, default=0.99)
     parser.add_argument('--n-step', type=int, default=3)
     parser.add_argument('--target-update-freq', type=int, default=500)
     parser.add_argument('--target-update-tau', type=float, default=1.0)
-    parser.add_argument('--epoch', type=int, default=30)
+    parser.add_argument('--epoch', type=int, default=20)
     parser.add_argument('--step-per-epoch', type=int, default=10000)
-    parser.add_argument('--step-per-collect', type=int, default=500)
-    parser.add_argument('--update-per-step', type=float, default=0.01)
+    parser.add_argument('--step-per-collect', type=int, default=10)
+    parser.add_argument('--update-per-step', type=float, default=0.1)
     parser.add_argument('--batch-size', type=int, default=64)
     parser.add_argument('--train-num', type=int, default=10)
     parser.add_argument('--test-num', type=int, default=100)
@@ -84,7 +84,7 @@ def main() -> None:
     net = Net(
         state_shape=state_shape,
         action_shape=action_shape,
-        hidden_sizes=[128, 64],
+        hidden_sizes=[128, 128, 128],
         device=args.device,
     ).to(args.device)
     optim = torch.optim.Adam(net.parameters(), lr=args.lr)

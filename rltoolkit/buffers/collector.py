@@ -410,7 +410,7 @@ class Collector(object):
         return {
             'num_episode': episode_count,  # int
             'num_step': step_count,  # int
-            'eoisode_reward': rews,  # np.array, shape: (num_episode,)
+            'episode_reward': rews,  # np.array, shape: (num_episode,)
             'episode_length': lens,  # np.array, shape: (num_episode,)
             'episode_idxs': idxs,  # np.array, shape: (num_episode,)
             'reward_mean': rew_mean,  # float
