@@ -7,7 +7,7 @@ import tianshou
 import torch
 from rltoolkit.agents import DQNAgent
 from rltoolkit.agents.configs import BaseConfig
-from rltoolkit.buffers import OffPolicyBuffer
+from rltoolkit.data import OffPolicyBuffer
 from rltoolkit.utils import (ProgressBar, TensorboardLogger, WandbLogger,
                              get_outdir, get_text_logger, soft_target_update)
 from torch.utils.tensorboard import SummaryWriter

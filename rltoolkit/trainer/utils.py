@@ -2,7 +2,7 @@ import time
 from typing import Any, Callable, Dict, Optional, Union
 
 import numpy as np
-from rltoolkit.buffers import Collector
+from rltoolkit.data import Collector
 from rltoolkit.policy.base_policy import BasePolicy
 from rltoolkit.utils import BaseLogger
 

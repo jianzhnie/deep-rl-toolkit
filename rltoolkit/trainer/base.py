@@ -5,7 +5,7 @@ from typing import Any, Callable, DefaultDict, Dict, Optional, Tuple, Union
 
 import numpy as np
 import tqdm
-from rltoolkit.buffers import Collector
+from rltoolkit.data import Collector
 from rltoolkit.policy import BasePolicy
 from rltoolkit.trainer.utils import gather_info, test_episode
 from rltoolkit.utils import (BaseLogger, DummyTqdm, LazyLogger, MovAvg,
