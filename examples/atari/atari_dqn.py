@@ -11,7 +11,7 @@ from atari_network import DQN
 from torch.utils.tensorboard import SummaryWriter
 
 sys.path.append('../../')
-from rltoolkit.buffers import Collector
+from rltoolkit.data import Collector
 from rltoolkit.envs.atari_wrappers import wrap_deepmind
 from rltoolkit.policy import DQNPolicy
 from rltoolkit.trainer import offpolicy_trainer
@@ -36,7 +36,8 @@ def make_atari_env(env_id, seed, train_num, test_num, **kwargs):
         if kwargs.get('scale', 0):
             warnings.warn(
                 'EnvPool does not include ScaledFloatFrame wrapper, '
-                "please set `x = x / 255.0` inside CNN network's forward function."
+                "please set `x = x / 255.0` inside CNN network's forward function.",
+                stacklevel=2,
             )
         # parameters convertion
         train_envs = env = envpool.make_gymnasium(
@@ -56,8 +57,11 @@ def make_atari_env(env_id, seed, train_num, test_num, **kwargs):
             stack_num=kwargs.get('frame_stack', 4),
         )
     else:
-        warnings.warn('Recommend using envpool (pip install envpool) '
-                      'to run Atari games more efficiently.')
+        warnings.warn(
+            'Recommend using envpool (pip install envpool) '
+            'to run Atari games more efficiently.',
+            stacklevel=2,
+        )
         env = wrap_deepmind(env_id, **kwargs)
         train_envs = ShmemVectorEnv([
             lambda: wrap_deepmind(
@@ -122,7 +126,7 @@ def get_args():
     return parser.parse_args()
 
 
-def test_dqn(args=get_args()):
+def test_dqn(args):
     env, train_envs, test_envs = make_atari_env(
         args.env_id,
         args.seed,
@@ -250,8 +254,8 @@ def test_dqn(args=get_args()):
             test_collector.reset()
             result = test_collector.collect(n_episode=args.test_num,
                                             render=args.render)
-        rew = result['rews'].mean()
-        print(f"Mean reward (over {result['n/ep']} episodes): {rew}")
+        rew = result['episode_reward'].mean()
+        print(f"Mean reward (over {result['num_episode']} episodes): {rew}")
 
     if args.watch:
         watch()
@@ -285,4 +289,5 @@ def test_dqn(args=get_args()):
 
 
 if __name__ == '__main__':
-    test_dqn(get_args())
+    args = get_args()
+    test_dqn(args)

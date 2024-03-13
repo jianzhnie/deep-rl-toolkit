@@ -9,7 +9,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 sys.path.append('../../')
-from rltoolkit.buffers import Collector
+from rltoolkit.data import Collector
 from rltoolkit.policy import DQNPolicy
 from rltoolkit.trainer import OffpolicyTrainer
 from rltoolkit.utils import TensorboardLogger
@@ -44,6 +44,10 @@ def get_args() -> Namespace:
     parser.add_argument('--device',
                         type=str,
                         default='cuda' if torch.cuda.is_available() else 'cpu')
+    parser.add_argument('--gpu',
+                        type=int,
+                        default=8,
+                        help='GPU device ID for training')
     parser.add_argument('--resume-path', type=str, default=None)
     parser.add_argument(
         '--logger',

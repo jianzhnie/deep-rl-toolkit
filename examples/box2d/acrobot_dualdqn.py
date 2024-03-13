@@ -9,7 +9,7 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 sys.path.append('../../')
-from rltoolkit.buffers import Collector
+from rltoolkit.data import Collector
 from rltoolkit.policy import DQNPolicy
 from rltoolkit.trainer import offpolicy_trainer
 from rltoolkit.utils import TensorboardLogger

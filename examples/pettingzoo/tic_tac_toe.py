@@ -11,7 +11,6 @@ git+https://github.com/thu-ml/tianshou
 
 import os
 import sys
-from typing import Optional, Tuple
 
 import gymnasium
 import numpy as np
@@ -19,22 +18,13 @@ import torch
 from pettingzoo.classic import tictactoe_v3
 
 sys.path.append('../../')
-from rltoolkit.buffers import Collector
-from rltoolkit.policy import (BasePolicy, DQNPolicy, MultiAgentPolicyManager,
-                              RandomPolicy)
+from rltoolkit.data import Collector
+from rltoolkit.policy import DQNPolicy, MultiAgentPolicyManager, RandomPolicy
 from rltoolkit.trainer import offpolicy_trainer
 from tianshou.data import VectorReplayBuffer
 from tianshou.env import DummyVectorEnv
 from tianshou.env.pettingzoo_env import PettingZooEnv
 from tianshou.utils.net.common import Net
-
-
-def _get_agents(
-    agent_learn: Optional[BasePolicy] = None,
-    agent_opponent: Optional[BasePolicy] = None,
-    optim: Optional[torch.optim.Optimizer] = None,
-) -> Tuple[BasePolicy, torch.optim.Optimizer, list]:
-    return policy, optim, env.agents
 
 
 def _get_env():
@@ -66,6 +56,8 @@ if __name__ == '__main__':
         device='cuda' if torch.cuda.is_available() else 'cpu',
     ).to('cuda' if torch.cuda.is_available() else 'cpu')
     optim = torch.optim.Adam(net.parameters(), lr=1e-4)
+
+    # ======== Step 2: Agent setup =========
     agent_learn = DQNPolicy(
         model=net,
         optim=optim,
@@ -78,9 +70,6 @@ if __name__ == '__main__':
 
     agents = [agent_opponent, agent_learn]
     policy = MultiAgentPolicyManager(agents, env)
-
-    # ======== Step 2: Agent setup =========
-    policy, optim, agents = _get_agents()
 
     # ======== Step 3: Collector setup =========
     train_collector = Collector(
