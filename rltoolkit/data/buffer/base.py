@@ -64,7 +64,7 @@ class ReplayBuffer:
 
     def __init__(
         self,
-        size: int,
+        maxsize: int,
         stack_num: int = 1,
         ignore_obs_next: bool = False,
         save_only_last_obs: bool = False,
@@ -79,10 +79,10 @@ class ReplayBuffer:
             'sample_avail': sample_avail,
         }
         super().__init__()
-        self.maxsize = int(size)
+        self.maxsize = int(maxsize)
         assert stack_num > 0, 'stack_num should be greater than 0'
         self.stack_num = stack_num
-        self._indices = np.arange(size)
+        self._indices = np.arange(maxsize)
         self._save_obs_next = not ignore_obs_next
         self._save_only_last_obs = save_only_last_obs
         self._sample_avail = sample_avail
@@ -92,7 +92,7 @@ class ReplayBuffer:
 
     def __len__(self) -> int:
         """Return len(self)."""
-        return self._size
+        return self.curr_size
 
     def __repr__(self) -> str:
         """Return str(self)."""
@@ -163,13 +163,13 @@ class ReplayBuffer:
             obs_next=obs_next,
         )
         buf.set_batch(batch)
-        buf._size = size
+        buf.curr_size = size
         return buf
 
     def reset(self, keep_statistics: bool = False) -> None:
         """Clear all the data in replay buffer and episode statistics."""
         self.last_index = np.array([0])
-        self._index = self._size = 0
+        self.curr_ptr = self.curr_size = 0
         if not keep_statistics:
             self._ep_rew, self._ep_len, self._ep_idx = 0.0, 0, 0
 
@@ -182,18 +182,18 @@ class ReplayBuffer:
 
     def unfinished_index(self) -> np.ndarray:
         """Return the index of unfinished episode."""
-        last = (self._index - 1) % self._size if self._size else 0
-        return np.array([last] if not self.done[last] and self._size else [],
-                        int)
+        last = (self.curr_ptr - 1) % self.curr_size if self.curr_size else 0
+        return np.array(
+            [last] if not self.done[last] and self.curr_size else [], int)
 
     def prev(self, index: Union[int, np.ndarray]) -> np.ndarray:
         """Return the index of previous transition.
 
         The index won't be modified if it is the beginning of an episode.
         """
-        index = (index - 1) % self._size
+        index = (index - 1) % self.curr_size
         end_flag = self.done[index] | (index == self.last_index[0])
-        return (index + end_flag) % self._size
+        return (index + end_flag) % self.curr_size
 
     def next(self, index: Union[int, np.ndarray]) -> np.ndarray:
         """Return the index of next transition.
@@ -201,7 +201,7 @@ class ReplayBuffer:
         The index won't be modified if it is the end of an episode.
         """
         end_flag = self.done[index] | (index == self.last_index[0])
-        return (index + (1 - end_flag)) % self._size
+        return (index + (1 - end_flag)) % self.curr_size
 
     def update(self, buffer: 'ReplayBuffer') -> np.ndarray:
         """Move the data from the given buffer to current buffer.
@@ -217,14 +217,13 @@ class ReplayBuffer:
             return np.array([], int)
         to_indices = []
         for _ in range(len(from_indices)):
-            to_indices.append(self._index)
-            self.last_index[0] = self._index
-            self._index = (self._index + 1) % self.maxsize
-            self._size = min(self._size + 1, self.maxsize)
+            to_indices.append(self.curr_ptr)
+            self.last_index[0] = self.curr_ptr
+            self.curr_ptr = (self.curr_ptr + 1) % self.maxsize
+            self.curr_size = min(self.curr_size + 1, self.maxsize)
         to_indices = np.array(to_indices)
         if self._meta.is_empty():
-            self._meta = _create_value(  # type: ignore
-                buffer._meta, self.maxsize, stack=False)
+            self._meta = _create_value(buffer._meta, self.maxsize, stack=False)
         self._meta[to_indices] = buffer._meta[from_indices]
         return to_indices
 
@@ -236,16 +235,16 @@ class ReplayBuffer:
         Return (index_to_be_modified, episode_reward, episode_length,
         episode_start_index).
         """
-        self.last_index[0] = ptr = self._index
-        self._size = min(self._size + 1, self.maxsize)
-        self._index = (self._index + 1) % self.maxsize
+        self.last_index[0] = ptr = self.curr_ptr
+        self.curr_size = min(self.curr_size + 1, self.maxsize)
+        self.curr_ptr = (self.curr_ptr + 1) % self.maxsize
 
         self._ep_rew += rew
         self._ep_len += 1
 
         if done:
             result = ptr, self._ep_rew, self._ep_len, self._ep_idx
-            self._ep_rew, self._ep_len, self._ep_idx = 0.0, 0, self._index
+            self._ep_rew, self._ep_len, self._ep_idx = 0.0, 0, self.curr_ptr
             return result
         else:
             return ptr, self._ep_rew * 0.0, 0, self._ep_idx
@@ -271,7 +270,7 @@ class ReplayBuffer:
         new_batch = Batch()
         for key in set(self._input_keys).intersection(batch.keys()):
             new_batch.__dict__[key] = batch[key]
-        batch = new_batch
+        batch: BatchData = new_batch
         batch.__dict__['done'] = np.logical_or(batch.terminated,
                                                batch.truncated)
         assert set(['obs', 'act', 'rew', 'terminated', 'truncated',
@@ -317,20 +316,21 @@ class ReplayBuffer:
         """
         if self.stack_num == 1 or not self._sample_avail:  # most often case
             if batch_size > 0:
-                return np.random.choice(self._size, batch_size)
+                return np.random.choice(self.curr_size, batch_size)
             elif batch_size == 0:  # construct current available indices
                 return np.concatenate([
-                    np.arange(self._index, self._size),
-                    np.arange(self._index)
+                    np.arange(self.curr_ptr, self.curr_size),
+                    np.arange(self.curr_ptr)
                 ])
             else:
                 return np.array([], int)
         else:
             if batch_size < 0:
                 return np.array([], int)
-            all_indices = prev_indices = np.concatenate(
-                [np.arange(self._index, self._size),
-                 np.arange(self._index)])
+            all_indices = prev_indices = np.concatenate([
+                np.arange(self.curr_ptr, self.curr_size),
+                np.arange(self.curr_ptr)
+            ])
             for _ in range(self.stack_num - 2):
                 prev_indices = self.prev(prev_indices)
             all_indices = all_indices[prev_indices != self.prev(prev_indices)]
