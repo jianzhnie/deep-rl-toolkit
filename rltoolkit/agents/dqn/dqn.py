@@ -35,7 +35,9 @@ class DQNAgent(BaseAgent):
         self.config = config
         if isinstance(envs, gym.Env) and not hasattr(envs, '__len__'):
             warnings.warn(
-                'Single environment detected, wrap to DummyVectorEnv.')
+                'Single environment detected, wrap to DummyVectorEnv.',
+                stacklevel=2,
+            )
             self.envs = DummyVectorEnv([lambda: envs])  # type: ignore
         else:
             self.envs = envs  # type: ignore
@@ -44,10 +46,8 @@ class DQNAgent(BaseAgent):
         self.device = device
         self.gradient_steps: int = config.gradient_steps
 
-        self.q_network = QNetwork(
-            state_shape=config.state_shape,
-            action_shape=config.action_shape,
-        ).to(device)
+        self.q_network = QNetwork(state_shape=config.state_shape,
+                                  action_shape=config.action_shape).to(device)
         self.q_target = copy.deepcopy(self.q_network)
 
         self.optimizer = torch.optim.Adam(params=self.q_network.parameters(),
@@ -109,7 +109,8 @@ class DQNAgent(BaseAgent):
             obs = np.expand_dims(obs, axis=0)
 
         obs = torch.Tensor(obs).to(self.device)
-        q_values = self.q_network(obs)
+        q_values = self.q_network(
+            obs)  # Ensure self.q_network is a callable object
         actions = torch.argmax(q_values, dim=1).cpu().numpy()
         return actions
 
