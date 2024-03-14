@@ -1,12 +1,21 @@
-from .batch import Batch
-from .buffer import (BaseBuffer, CachedReplayBuffer, HERReplayBuffer,
-                     HERReplayBufferManager, OffPolicyBuffer,
-                     PrioritizedReplayBuffer, PrioritizedReplayBufferManager,
-                     ReplayBuffer, ReplayBufferManager, RolloutBuffer,
-                     VectorReplayBuffer)
-from .collector import AsyncCollector, Collector
-from .utils import (SegmentTree, from_hdf5, get_action_dim, get_obs_shape,
-                    to_hdf5, to_numpy, to_torch, to_torch_as)
+from rltoolkit.data.batch import Batch
+from rltoolkit.data.buffer.base import ReplayBuffer
+from rltoolkit.data.buffer.base_buffer import BaseBuffer
+from rltoolkit.data.buffer.cached import CachedReplayBuffer
+from rltoolkit.data.buffer.her import HERReplayBuffer
+from rltoolkit.data.buffer.manager import (HERReplayBufferManager,
+                                           PrioritizedReplayBufferManager,
+                                           ReplayBufferManager)
+from rltoolkit.data.buffer.offpolicy_buffer import OffPolicyBuffer
+from rltoolkit.data.buffer.onpolicy_buffer import RolloutBuffer
+from rltoolkit.data.buffer.prio import PrioritizedReplayBuffer
+from rltoolkit.data.buffer.vecbuf import (HERVectorReplayBuffer,
+                                          PrioritizedVectorReplayBuffer,
+                                          VectorReplayBuffer)
+from rltoolkit.data.collector import AsyncCollector, Collector
+from rltoolkit.data.utils.converter import to_numpy, to_torch, to_torch_as
+from rltoolkit.data.utils.preprocessing import get_action_dim, get_obs_shape
+from rltoolkit.data.utils.segtree import SegmentTree
 
 __all__ = [
     'Batch',
@@ -29,7 +38,7 @@ __all__ = [
     'to_numpy',
     'to_torch',
     'to_torch_as',
-    'to_hdf5',
-    'from_hdf5',
     'SegmentTree',
+    'HERVectorReplayBuffer',
+    'PrioritizedVectorReplayBuffer',
 ]

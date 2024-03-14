@@ -37,7 +37,7 @@ class ReplayBufferManager(ReplayBuffer):
         self._offset = np.array(offset)
         self._extend_offset = np.array(offset + [size])
         self._lengths = np.zeros_like(offset)
-        super().__init__(size=size, **kwargs)
+        super().__init__(maxsize=size, **kwargs)
         self._compile()
         self._meta: Batch
 
