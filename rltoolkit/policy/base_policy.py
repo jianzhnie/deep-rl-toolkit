@@ -7,8 +7,8 @@ import numpy as np
 import torch
 from gymnasium.spaces import Box, Discrete, MultiBinary, MultiDiscrete
 from numba import njit
-from rltoolkit.utils import soft_target_update, to_numpy, to_torch_as
-from tianshou.data import Batch, ReplayBuffer
+from rltoolkit.data import Batch, ReplayBuffer, to_numpy, to_torch_as
+from rltoolkit.utils import soft_target_update
 from torch import nn
 from torch.optim.lr_scheduler import LRScheduler
 
@@ -121,7 +121,7 @@ class BasePolicy(nn.Module, ABC):
     ) -> Batch:
         """Compute action over the given batch data.
 
-        :return: A :class:`~tianshou.data.Batch` which MUST have the following keys:
+        :return: A :class:`~rltoolkit.data.Batch` which MUST have the following keys:
 
             * ``act`` an numpy.ndarray or a torch.Tensor, the action over \
                 given batch data.
@@ -158,7 +158,7 @@ class BasePolicy(nn.Module, ABC):
                                     np.ndarray]) -> Union[Batch, np.ndarray]:
         """Map raw network output to action range in gym's env.action_space.
 
-        This function is called in :meth:`~tianshou.data.Collector.collect` and only
+        This function is called in :meth:`~rltoolkit.data.Collector.collect` and only
         affects action sending to env. Remapped action will not be stored in buffer
         and thus can be viewed as a part of env (a black box action transformation).
 
@@ -194,7 +194,7 @@ class BasePolicy(nn.Module, ABC):
     ) -> np.ndarray:
         """Inverse operation to :meth:`~tianshou.policy.BasePolicy.map_action`.
 
-        This function is called in :meth:`~tianshou.data.Collector.collect` for
+        This function is called in :meth:`~rltoolkit.data.Collector.collect` for
         random initial steps. It scales [action_space.low, action_space.high] to
         the value ranges of policy.forward.
 

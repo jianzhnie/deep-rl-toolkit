@@ -2,10 +2,9 @@ from typing import List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from numba import njit
-from rltoolkit.data import (HERReplayBuffer, PrioritizedReplayBuffer,
+from rltoolkit.data import (Batch, HERReplayBuffer, PrioritizedReplayBuffer,
                             ReplayBuffer)
-from tianshou.data import Batch
-from tianshou.data.batch import _alloc_by_keys_diff, _create_value
+from rltoolkit.data.batch import _alloc_by_keys_diff, _create_value
 
 
 class ReplayBufferManager(ReplayBuffer):
@@ -19,7 +18,7 @@ class ReplayBufferManager(ReplayBuffer):
 
     .. seealso::
 
-        Please refer to :class:`~tianshou.data.ReplayBuffer` for other APIs' usage.
+        Please refer to :class:`~rltoolkit.data.ReplayBuffer` for other APIs' usage.
     """
 
     def __init__(
@@ -212,7 +211,7 @@ class PrioritizedReplayBufferManager(PrioritizedReplayBuffer,
 
     .. seealso::
 
-        Please refer to :class:`~tianshou.data.ReplayBuffer` for other APIs' usage.
+        Please refer to :class:`~rltoolkit.data.ReplayBuffer` for other APIs' usage.
     """
 
     def __init__(self, buffer_list: Sequence[PrioritizedReplayBuffer]) -> None:
@@ -234,7 +233,7 @@ class HERReplayBufferManager(ReplayBufferManager):
 
     .. seealso::
 
-        Please refer to :class:`~tianshou.data.ReplayBuffer` for other APIs' usage.
+        Please refer to :class:`~rltoolkit.data.ReplayBuffer` for other APIs' usage.
     """
 
     def __init__(self, buffer_list: List[HERReplayBuffer]) -> None:

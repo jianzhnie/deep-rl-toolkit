@@ -1,8 +1,7 @@
 from typing import Any, Callable, List, Optional, Tuple, Union
 
 import numpy as np
-from rltoolkit.data import ReplayBuffer
-from tianshou.data import Batch
+from rltoolkit.data import Batch, ReplayBuffer
 
 
 class HERReplayBuffer(ReplayBuffer):
@@ -24,7 +23,7 @@ class HERReplayBuffer(ReplayBuffer):
 
     .. seealso::
 
-        Please refer to :class:`~tianshou.data.ReplayBuffer` for other APIs' usage.
+        Please refer to :class:`~rltoolkit.data.ReplayBuffer` for other APIs' usage.
     """
 
     def __init__(

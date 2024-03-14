@@ -5,10 +5,10 @@ from typing import Any, Callable, Dict, List, NamedTuple, Optional, Union
 import gymnasium as gym
 import numpy as np
 import torch
+from rltoolkit.data import (Batch, CachedReplayBuffer, ReplayBuffer,
+                            ReplayBufferManager, VectorReplayBuffer, to_numpy)
+from rltoolkit.data.batch import _alloc_by_keys_diff
 from rltoolkit.policy import BasePolicy
-from tianshou.data import (Batch, CachedReplayBuffer, ReplayBuffer,
-                           ReplayBufferManager, VectorReplayBuffer, to_numpy)
-from tianshou.data.batch import _alloc_by_keys_diff
 from tianshou.env import BaseVectorEnv, DummyVectorEnv
 
 

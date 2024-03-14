@@ -1,5 +1,4 @@
 import pickle
-import random
 from copy import deepcopy
 from numbers import Number
 from typing import Any, Dict, Optional, Union, no_type_check
@@ -7,7 +6,7 @@ from typing import Any, Dict, Optional, Union, no_type_check
 import h5py
 import numpy as np
 import torch
-from tianshou.data.batch import Batch, _parse_value
+from rltoolkit.data.batch import Batch, _parse_value
 
 
 @no_type_check
@@ -60,7 +59,8 @@ def to_torch(
         raise TypeError(f'object {x} cannot be converted to torch.')
 
 
-def to_torch_as(x: Any, y: torch.Tensor) -> torch.Tensor:
+@no_type_check
+def to_torch_as(x: Any, y: torch.Tensor) -> Union[Batch, torch.Tensor]:
     """Return an object without np.ndarray.
 
     Same as ``to_torch(x, dtype=y.dtype, device=y.device)``.
@@ -153,11 +153,3 @@ def from_hdf5(x: h5py.Group,
         for k, v in x.items():
             y[k] = from_hdf5(v, device)
         return Batch(y) if data_type == 'Batch' else y
-
-
-def set_seed(seed) -> None:
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    np.random.seed(seed)
-    random.seed(seed)

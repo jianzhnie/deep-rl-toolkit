@@ -2,9 +2,9 @@ from typing import Any, Dict, List, Optional, Type, Union
 
 import numpy as np
 import torch
+from rltoolkit.data import Batch, ReplayBuffer, to_torch, to_torch_as
 from rltoolkit.policy import BasePolicy
 from rltoolkit.utils import RunningMeanStd
-from tianshou.data import Batch, ReplayBuffer, to_torch, to_torch_as
 
 
 class PGPolicy(BasePolicy):
@@ -95,7 +95,7 @@ class PGPolicy(BasePolicy):
     ) -> Batch:
         """Compute action over the given batch data.
 
-        :return: A :class:`~tianshou.data.Batch` which has 4 keys:
+        :return: A :class:`~rltoolkit.data.Batch` which has 4 keys:
 
             * ``act`` the action.
             * ``logits`` the network's raw output.

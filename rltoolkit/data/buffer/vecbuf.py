@@ -18,11 +18,11 @@ class VectorReplayBuffer(ReplayBufferManager):
         configuration.
 
     Other input arguments (stack_num/ignore_obs_next/save_only_last_obs/sample_avail)
-    are the same as :class:`~tianshou.data.ReplayBuffer`.
+    are the same as :class:`~rltoolkit.data.ReplayBuffer`.
 
     .. seealso::
 
-        Please refer to :class:`~tianshou.data.ReplayBuffer` for other APIs' usage.
+        Please refer to :class:`~rltoolkit.data.ReplayBuffer` for other APIs' usage.
     """
 
     def __init__(self, total_size: int, buffer_num: int,
@@ -45,11 +45,11 @@ class PrioritizedVectorReplayBuffer(PrioritizedReplayBufferManager):
         under the same configuration.
 
     Other input arguments (alpha/beta/stack_num/ignore_obs_next/save_only_last_obs/
-    sample_avail) are the same as :class:`~tianshou.data.PrioritizedReplayBuffer`.
+    sample_avail) are the same as :class:`~rltoolkit.data.PrioritizedReplayBuffer`.
 
     .. seealso::
 
-        Please refer to :class:`~tianshou.data.ReplayBuffer` for other APIs' usage.
+        Please refer to :class:`~rltoolkit.data.ReplayBuffer` for other APIs' usage.
     """
 
     def __init__(self, total_size: int, buffer_num: int,
@@ -76,10 +76,10 @@ class HERVectorReplayBuffer(HERReplayBufferManager):
     :param int buffer_num: the number of HERReplayBuffer it uses, which are
         under the same configuration.
 
-    Other input arguments are the same as :class:`~tianshou.data.HERReplayBuffer`.
+    Other input arguments are the same as :class:`~rltoolkit.data.HERReplayBuffer`.
 
     .. seealso::
-        Please refer to :class:`~tianshou.data.ReplayBuffer` for other APIs' usage.
+        Please refer to :class:`~rltoolkit.data.ReplayBuffer` for other APIs' usage.
     """
 
     def __init__(self, total_size: int, buffer_num: int,

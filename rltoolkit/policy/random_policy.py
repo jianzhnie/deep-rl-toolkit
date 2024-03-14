@@ -1,8 +1,8 @@
 from typing import Any, Dict, Optional, Union
 
 import numpy as np
+from rltoolkit.data import Batch
 from rltoolkit.policy import BasePolicy
-from tianshou.data import Batch
 
 
 class RandomPolicy(BasePolicy):
@@ -24,7 +24,7 @@ class RandomPolicy(BasePolicy):
         ``batch.obs.mask == np.array([[False, True, False]])`` means with batch
         size 1, action "1" is available but action "0" and "2" are unavailable.
 
-        :return: A :class:`~tianshou.data.Batch` with "act" key, containing
+        :return: A :class:`~rltoolkit.data.Batch` with "act" key, containing
             the random action.
 
         .. seealso::

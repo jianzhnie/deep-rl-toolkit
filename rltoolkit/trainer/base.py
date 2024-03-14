@@ -5,12 +5,11 @@ from typing import Any, Callable, DefaultDict, Dict, Optional, Tuple, Union
 
 import numpy as np
 import tqdm
-from rltoolkit.data import Collector
+from rltoolkit.data import AsyncCollector, Collector, ReplayBuffer
 from rltoolkit.policy import BasePolicy
 from rltoolkit.trainer.utils import gather_info, test_episode
 from rltoolkit.utils import (BaseLogger, DummyTqdm, LazyLogger, MovAvg,
                              deprecation, tqdm_config)
-from tianshou.data import AsyncCollector, ReplayBuffer
 
 
 class BaseTrainer(ABC):

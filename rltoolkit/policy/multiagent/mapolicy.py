@@ -1,8 +1,8 @@
 from typing import Any, Dict, List, Optional, Tuple, Union
 
 import numpy as np
+from rltoolkit.data import Batch, ReplayBuffer
 from rltoolkit.policy import BasePolicy
-from tianshou.data import Batch, ReplayBuffer
 
 try:
     from tianshou.env.pettingzoo_env import PettingZooEnv

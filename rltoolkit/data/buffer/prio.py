@@ -2,8 +2,7 @@ from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
-from rltoolkit.data import ReplayBuffer
-from tianshou.data import Batch, SegmentTree, to_numpy
+from rltoolkit.data import Batch, ReplayBuffer, SegmentTree, to_numpy
 
 
 class PrioritizedReplayBuffer(ReplayBuffer):
@@ -16,7 +15,7 @@ class PrioritizedReplayBuffer(ReplayBuffer):
 
     .. seealso::
 
-        Please refer to :class:`~tianshou.data.ReplayBuffer` for other APIs' usage.
+        Please refer to :class:`~rltoolkit.data.ReplayBuffer` for other APIs' usage.
     """
 
     def __init__(

@@ -3,9 +3,8 @@ from typing import Any, Dict, Optional, Union
 
 import numpy as np
 import torch
+from rltoolkit.data import Batch, ReplayBuffer, to_numpy, to_torch_as
 from rltoolkit.policy.base_policy import BasePolicy
-from rltoolkit.utils import to_numpy, to_torch_as
-from tianshou.data import Batch, ReplayBuffer
 
 
 class DQNPolicy(BasePolicy):
@@ -152,7 +151,7 @@ class DQNPolicy(BasePolicy):
                 ...
             )
 
-        :return: A :class:`~tianshou.data.Batch` which has 3 keys:
+        :return: A :class:`~rltoolkit.data.Batch` which has 3 keys:
 
             * ``act`` the action.
             * ``logits`` the network's raw output.
