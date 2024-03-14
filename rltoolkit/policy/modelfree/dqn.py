@@ -3,7 +3,8 @@ from typing import Any, Dict, Optional, Union
 
 import numpy as np
 import torch
-from rltoolkit.data import Batch, ReplayBuffer, to_numpy, to_torch_as
+from rltoolkit.data import Batch, ReplayBuffer
+from rltoolkit.data.utils import to_numpy, to_torch_as
 from rltoolkit.policy.base_policy import BasePolicy
 
 

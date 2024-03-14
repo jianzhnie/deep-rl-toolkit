@@ -3,9 +3,9 @@ from typing import Any, Dict, List, NamedTuple, Optional, Tuple, Union
 import h5py
 import numpy as np
 import torch
-from rltoolkit.data import Batch
-from rltoolkit.data.batch import _alloc_by_keys_diff, _create_value
-from rltoolkit.data.utils.converter import from_hdf5, to_hdf5
+
+from ..batch import Batch, _alloc_by_keys_diff, _create_value
+from ..utils.converter import from_hdf5, to_hdf5
 
 
 class BatchData(NamedTuple):

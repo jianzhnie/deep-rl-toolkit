@@ -2,7 +2,10 @@ from typing import Any, List, Optional, Tuple, Union
 
 import numpy as np
 import torch
-from rltoolkit.data import Batch, ReplayBuffer, SegmentTree, to_numpy
+
+from ..batch import Batch
+from ..utils import SegmentTree, to_numpy
+from .base import ReplayBuffer
 
 
 class PrioritizedReplayBuffer(ReplayBuffer):

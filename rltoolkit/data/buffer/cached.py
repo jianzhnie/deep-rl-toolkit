@@ -1,7 +1,10 @@
 from typing import List, Optional, Tuple, Union
 
 import numpy as np
-from rltoolkit.data import Batch, ReplayBuffer, ReplayBufferManager
+
+from ..batch import Batch
+from .base import ReplayBuffer
+from .manager import ReplayBufferManager
 
 
 class CachedReplayBuffer(ReplayBufferManager):

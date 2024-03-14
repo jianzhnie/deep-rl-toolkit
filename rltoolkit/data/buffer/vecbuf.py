@@ -1,10 +1,12 @@
 from typing import Any
 
 import numpy as np
-from rltoolkit.data import (HERReplayBuffer, HERReplayBufferManager,
-                            PrioritizedReplayBuffer,
-                            PrioritizedReplayBufferManager, ReplayBuffer,
-                            ReplayBufferManager)
+
+from .base import ReplayBuffer
+from .her import HERReplayBuffer
+from .manager import (HERReplayBufferManager, PrioritizedReplayBufferManager,
+                      ReplayBufferManager)
+from .prio import PrioritizedReplayBuffer
 
 
 class VectorReplayBuffer(ReplayBufferManager):

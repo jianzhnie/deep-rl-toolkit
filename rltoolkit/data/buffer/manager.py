@@ -2,9 +2,11 @@ from typing import List, Optional, Sequence, Tuple, Union
 
 import numpy as np
 from numba import njit
-from rltoolkit.data import (Batch, HERReplayBuffer, PrioritizedReplayBuffer,
-                            ReplayBuffer)
-from rltoolkit.data.batch import _alloc_by_keys_diff, _create_value
+
+from ..batch import Batch, _alloc_by_keys_diff, _create_value
+from .base import ReplayBuffer
+from .her import HERReplayBuffer
+from .prio import PrioritizedReplayBuffer
 
 
 class ReplayBufferManager(ReplayBuffer):

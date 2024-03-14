@@ -3,7 +3,8 @@ from typing import Any, Dict, Optional
 import numpy as np
 import torch
 from rltoolkit.data import Batch, ReplayBuffer
-from rltoolkit.policy import DQNPolicy
+
+from .dqn import DQNPolicy
 
 
 class C51Policy(DQNPolicy):

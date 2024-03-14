@@ -7,7 +7,8 @@ import numpy as np
 import torch
 from gymnasium.spaces import Box, Discrete, MultiBinary, MultiDiscrete
 from numba import njit
-from rltoolkit.data import Batch, ReplayBuffer, to_numpy, to_torch_as
+from rltoolkit.data import Batch, ReplayBuffer
+from rltoolkit.data.utils import to_numpy, to_torch_as
 from rltoolkit.utils import soft_target_update
 from torch import nn
 from torch.optim.lr_scheduler import LRScheduler
