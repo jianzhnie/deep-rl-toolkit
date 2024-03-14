@@ -88,6 +88,8 @@ class ReplayBuffer:
         self._sample_avail = sample_avail
         self._meta: Batch = Batch()
         self._ep_rew: Union[float, np.ndarray]
+        self.curr_ptr = 0
+        self.curr_size = 0
         self.reset()
 
     def __len__(self) -> int:
