@@ -2,7 +2,8 @@ from typing import Any, Dict, Optional, Tuple, Union
 
 import numpy as np
 import torch
-from rltoolkit.data import Batch, ReplayBuffer, to_torch
+from rltoolkit.data import Batch, ReplayBuffer
+from rltoolkit.data.utils import to_torch
 from rltoolkit.policy.modelfree.sac import SACPolicy
 from torch.distributions import Categorical
 

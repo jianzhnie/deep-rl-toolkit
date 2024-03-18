@@ -3,8 +3,9 @@ from typing import Any, Dict, List, Optional, Type
 import numpy as np
 import torch
 import torch.nn.functional as F
-from rltoolkit.data import Batch, ReplayBuffer, to_torch_as
-from rltoolkit.policy import PGPolicy
+from rltoolkit.data import Batch, ReplayBuffer
+from rltoolkit.data.utils import to_torch_as
+from rltoolkit.policy.modelfree.pg import PGPolicy
 from rltoolkit.utils.net.common import ActorCritic
 from torch import nn
 

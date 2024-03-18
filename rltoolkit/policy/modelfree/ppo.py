@@ -2,7 +2,8 @@ from typing import Any, Dict, List, Optional, Type
 
 import numpy as np
 import torch
-from rltoolkit.data import Batch, ReplayBuffer, to_torch_as
+from rltoolkit.data import Batch, ReplayBuffer
+from rltoolkit.data.utils import to_torch_as
 from rltoolkit.policy.modelfree.a2c import A2CPolicy
 from rltoolkit.utils.net.common import ActorCritic
 from torch import nn
