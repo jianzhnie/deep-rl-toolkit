@@ -1,5 +1,6 @@
 """Utils package."""
 
+from .exploration import GaussianNoise, OUNoise
 from .logger.base import BaseLogger, LazyLogger
 from .logger.logging import get_outdir, get_text_logger
 from .logger.tensorboard import TensorboardLogger
@@ -31,4 +32,6 @@ __all__ = [
     'RunningMeanStd',
     'MovAvg',
     'deprecation',
+    'GaussianNoise',
+    'OUNoise',
 ]

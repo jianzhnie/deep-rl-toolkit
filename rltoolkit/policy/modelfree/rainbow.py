@@ -2,7 +2,7 @@ from typing import Any, Dict
 
 from rltoolkit.data import Batch
 from rltoolkit.policy import C51Policy
-from tianshou.utils.net.discrete import sample_noise
+from rltoolkit.utils.net.discrete import sample_noise
 
 
 class RainbowPolicy(C51Policy):
