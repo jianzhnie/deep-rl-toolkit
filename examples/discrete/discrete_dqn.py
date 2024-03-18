@@ -9,11 +9,10 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 sys.path.append('../../')
-from rltoolkit.data import Collector
+from rltoolkit.data import Collector, VectorReplayBuffer
 from rltoolkit.policy import DQNPolicy
 from rltoolkit.trainer import OffpolicyTrainer
 from rltoolkit.utils import TensorboardLogger
-from tianshou.data import VectorReplayBuffer
 from tianshou.env import SubprocVectorEnv
 from tianshou.utils.net.common import Net
 

@@ -6,26 +6,21 @@ import sys
 
 import numpy as np
 import torch
-from atari_network import DQN
-from torch.utils.tensorboard import SummaryWriter
+from atari_dqn import make_atari_env
+from atari_network import C51
 
 sys.path.append('../../')
-from atari_env_utils import make_atari_env
 from rltoolkit.data import Collector, VectorReplayBuffer
-from rltoolkit.policy import DQNPolicy
+from rltoolkit.policy import C51Policy
 from rltoolkit.trainer import offpolicy_trainer
 from rltoolkit.utils import TensorboardLogger, WandbLogger
-
-try:
-    import envpool
-except ImportError:
-    envpool = None
+from torch.utils.tensorboard import SummaryWriter
 
 
-def get_args():
+def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument('--env_id', type=str, default='PongNoFrameskip-v4')
-    parser.add_argument('--algo-name', type=str, default='dqn')
+    parser.add_argument('--algo-name', type=str, default='c51')
     parser.add_argument('--seed', type=int, default=0)
     parser.add_argument('--scale-obs', type=int, default=0)
     parser.add_argument('--eps-test', type=float, default=0.005)
@@ -34,6 +29,9 @@ def get_args():
     parser.add_argument('--buffer-size', type=int, default=100000)
     parser.add_argument('--lr', type=float, default=0.0001)
     parser.add_argument('--gamma', type=float, default=0.99)
+    parser.add_argument('--num-atoms', type=int, default=51)
+    parser.add_argument('--v-min', type=float, default=-10.0)
+    parser.add_argument('--v-max', type=float, default=10.0)
     parser.add_argument('--n-step', type=int, default=3)
     parser.add_argument('--target-update-freq', type=int, default=500)
     parser.add_argument('--target-update-tau', type=float, default=1.0)
@@ -69,13 +67,13 @@ def get_args():
     return parser.parse_args()
 
 
-def test_dqn(args):
+def test_c51(args):
     env, train_envs, test_envs = make_atari_env(
         args.env_id,
         args.seed,
         args.train_num,
         args.test_num,
-        normalize_obs=args.scale_obs,
+        scale=args.scale_obs,
         frame_stack=args.frames_stack,
     )
     args.state_shape = env.observation_space.shape or env.observation_space.n
@@ -87,18 +85,21 @@ def test_dqn(args):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     # define model
-    net = DQN(*args.state_shape, args.action_shape,
+    net = C51(*args.state_shape, args.action_shape, args.num_atoms,
               args.device).to(args.device)
     optim = torch.optim.Adam(net.parameters(), lr=args.lr)
     # define policy
-    policy = DQNPolicy(
+    policy = C51Policy(
         net,
         optim,
         args.gamma,
+        args.num_atoms,
+        args.v_min,
+        args.v_max,
         args.n_step,
         target_update_freq=args.target_update_freq,
         target_update_tau=args.target_update_tau,
-    )
+    ).to(args.device)
     # load a previous policy
     if args.resume_path:
         policy.load_state_dict(
@@ -166,12 +167,6 @@ def test_dqn(args):
     def test_fn(epoch, env_step):
         policy.set_eps(args.eps_test)
 
-    def save_checkpoint_fn(epoch, env_step, gradient_step):
-        # see also: https://pytorch.org/tutorials/beginner/saving_loading_models.html
-        ckpt_path = os.path.join(log_path, f'checkpoint_{epoch}.pth')
-        torch.save({'model': policy.state_dict()}, ckpt_path)
-        return ckpt_path
-
     # watch agent's performance
     def watch():
         print('Setup test envs ...')
@@ -200,8 +195,8 @@ def test_dqn(args):
             test_collector.reset()
             result = test_collector.collect(n_episode=args.test_num,
                                             render=args.render)
-        rew = result['episode_reward'].mean()
-        print(f"Mean reward (over {result['num_episode']} episodes): {rew}")
+        rew = result['rews'].mean()
+        print(f"Mean reward (over {result['n/ep']} episodes): {rew}")
 
     if args.watch:
         watch()
@@ -226,8 +221,6 @@ def test_dqn(args):
         logger=logger,
         update_per_step=args.update_per_step,
         test_in_train=False,
-        resume_from_log=args.resume_id is not None,
-        save_checkpoint_fn=save_checkpoint_fn,
     )
 
     pprint.pprint(result)
@@ -235,5 +228,4 @@ def test_dqn(args):
 
 
 if __name__ == '__main__':
-    args = get_args()
-    test_dqn(args)
+    test_c51(get_args())
