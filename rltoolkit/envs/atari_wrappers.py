@@ -401,7 +401,7 @@ class ScaledFloatFrame(gym.ObservationWrapper):
         return (observation - self.bias) / self.scale
 
 
-class WarpFrame(gym.ObservationWrapper):
+class WarpFrame(gym.ObservationWrapper[np.ndarray, int, np.ndarray]):
     """Warp frames to 84x84 as done in the Nature paper and later work.
 
     :param env: Environment to wrap

@@ -2,19 +2,17 @@ import argparse
 import datetime
 import os
 import pprint
-import sys
 
 import numpy as np
 import torch
-from atari_network import DQN
-from torch.utils.tensorboard import SummaryWriter
-
-sys.path.append('../../')
 from atari_env_utils import make_atari_env
-from rltoolkit.data import Collector, VectorReplayBuffer
-from rltoolkit.policy import DQNPolicy
+from atari_network import Rainbow
+from rltoolkit.data import (Collector, PrioritizedVectorReplayBuffer,
+                            VectorReplayBuffer)
+from rltoolkit.policy import RainbowPolicy
 from rltoolkit.trainer import offpolicy_trainer
 from rltoolkit.utils import TensorboardLogger, WandbLogger
+from torch.utils.tensorboard import SummaryWriter
 
 
 def get_args():
@@ -27,8 +25,20 @@ def get_args():
     parser.add_argument('--eps-train', type=float, default=1.0)
     parser.add_argument('--eps-train-final', type=float, default=0.05)
     parser.add_argument('--buffer-size', type=int, default=100000)
-    parser.add_argument('--lr', type=float, default=0.0001)
+    parser.add_argument('--lr', type=float, default=0.0000625)
     parser.add_argument('--gamma', type=float, default=0.99)
+    parser.add_argument('--num-atoms', type=int, default=51)
+    parser.add_argument('--v-min', type=float, default=-10.0)
+    parser.add_argument('--v-max', type=float, default=10.0)
+    parser.add_argument('--noisy-std', type=float, default=0.1)
+    parser.add_argument('--no-dueling', action='store_true', default=False)
+    parser.add_argument('--no-noisy', action='store_true', default=False)
+    parser.add_argument('--no-priority', action='store_true', default=False)
+    parser.add_argument('--alpha', type=float, default=0.5)
+    parser.add_argument('--beta', type=float, default=0.4)
+    parser.add_argument('--beta-final', type=float, default=1.0)
+    parser.add_argument('--beta-anneal-step', type=int, default=5000000)
+    parser.add_argument('--no-weight-norm', action='store_true', default=False)
     parser.add_argument('--n-step', type=int, default=3)
     parser.add_argument('--target-update-freq', type=int, default=500)
     parser.add_argument('--target-update-tau', type=float, default=1.0)
@@ -64,7 +74,7 @@ def get_args():
     return parser.parse_args()
 
 
-def test_dqn(args):
+def test_rainbow(args):
     env, train_envs, test_envs = make_atari_env(
         args.env_id,
         args.seed,
@@ -82,18 +92,28 @@ def test_dqn(args):
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     # define model
-    net = DQN(*args.state_shape, args.action_shape,
-              args.device).to(args.device)
+    net = Rainbow(
+        *args.state_shape,
+        args.action_shape,
+        args.num_atoms,
+        args.noisy_std,
+        args.device,
+        is_dueling=not args.no_dueling,
+        is_noisy=not args.no_noisy,
+    )
     optim = torch.optim.Adam(net.parameters(), lr=args.lr)
     # define policy
-    policy = DQNPolicy(
+    policy = RainbowPolicy(
         net,
         optim,
         args.gamma,
+        args.num_atoms,
+        args.v_min,
+        args.v_max,
         args.n_step,
         target_update_freq=args.target_update_freq,
         target_update_tau=args.target_update_tau,
-    )
+    ).to(args.device)
     # load a previous policy
     if args.resume_path:
         policy.load_state_dict(
@@ -101,13 +121,25 @@ def test_dqn(args):
         print('Loaded agent from: ', args.resume_path)
     # replay buffer: `save_last_obs` and `stack_num` can be removed together
     # when you have enough RAM
-    buffer = VectorReplayBuffer(
-        args.buffer_size,
-        buffer_num=len(train_envs),
-        ignore_obs_next=True,
-        save_only_last_obs=True,
-        stack_num=args.frames_stack,
-    )
+    if args.no_priority:
+        buffer = VectorReplayBuffer(
+            args.buffer_size,
+            buffer_num=len(train_envs),
+            ignore_obs_next=True,
+            save_only_last_obs=True,
+            stack_num=args.frames_stack,
+        )
+    else:
+        buffer = PrioritizedVectorReplayBuffer(
+            args.buffer_size,
+            buffer_num=len(train_envs),
+            ignore_obs_next=True,
+            save_only_last_obs=True,
+            stack_num=args.frames_stack,
+            alpha=args.alpha,
+            beta=args.beta,
+            weight_norm=not args.no_weight_norm,
+        )
     # collector
     train_collector = Collector(policy,
                                 train_envs,
@@ -157,6 +189,15 @@ def test_dqn(args):
         policy.set_eps(eps)
         if env_step % 1000 == 0:
             logger.write('train/env_step', env_step, {'train/eps': eps})
+        if not args.no_priority:
+            if env_step <= args.beta_anneal_step:
+                beta = args.beta - env_step / args.beta_anneal_step * (
+                    args.beta - args.beta_final)
+            else:
+                beta = args.beta_final
+            buffer.set_beta(beta)
+            if env_step % 1000 == 0:
+                logger.write('train/env_step', env_step, {'train/beta': beta})
 
     def test_fn(epoch, env_step):
         policy.set_eps(args.eps_test)
@@ -175,12 +216,14 @@ def test_dqn(args):
         test_envs.seed(args.seed)
         if args.save_buffer_name:
             print(f'Generate buffer with size {args.buffer_size}')
-            buffer = VectorReplayBuffer(
+            buffer = PrioritizedVectorReplayBuffer(
                 args.buffer_size,
                 buffer_num=len(test_envs),
                 ignore_obs_next=True,
                 save_only_last_obs=True,
                 stack_num=args.frames_stack,
+                alpha=args.alpha,
+                beta=args.beta,
             )
             collector = Collector(policy,
                                   test_envs,
@@ -230,5 +273,4 @@ def test_dqn(args):
 
 
 if __name__ == '__main__':
-    args = get_args()
-    test_dqn(args)
+    test_rainbow(get_args())
