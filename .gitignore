@@ -162,4 +162,5 @@ work_dirs/
 work_dir/
 log/
 logs/
+wandb/
 *.tar
