@@ -7,9 +7,8 @@ from typing import Any, Callable, List, Optional, Tuple, Union
 
 import gymnasium as gym
 import numpy as np
-from tianshou.env.utils import gym_new_venv_step_type
-
-from .base import CloudpickleWrapper, EnvWorker
+from rltoolkit.envs.utils import CloudpickleWrapper, gym_new_venv_step_type
+from rltoolkit.envs.worker.base import EnvWorker
 
 _NP_TO_CT = {
     np.bool_: ctypes.c_bool,

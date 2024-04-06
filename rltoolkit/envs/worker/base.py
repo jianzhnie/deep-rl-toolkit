@@ -1,24 +1,10 @@
 from abc import ABC, abstractmethod
 from typing import Any, Callable, List, Optional, Tuple, Union
 
-import cloudpickle
 import gymnasium as gym
 import numpy as np
+from rltoolkit.envs.utils import gym_new_venv_step_type
 from rltoolkit.utils import deprecation
-from tianshou.env.utils import gym_new_venv_step_type
-
-
-class CloudpickleWrapper(object):
-    """A cloudpickle wrapper used in SubprocVectorEnv."""
-
-    def __init__(self, data: Any) -> None:
-        self.data = data
-
-    def __getstate__(self) -> str:
-        return cloudpickle.dumps(self.data)
-
-    def __setstate__(self, data: str) -> None:
-        self.data = cloudpickle.loads(data)
 
 
 class EnvWorker(ABC):
