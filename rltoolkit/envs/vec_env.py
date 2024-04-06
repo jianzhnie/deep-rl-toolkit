@@ -56,13 +56,13 @@ class BaseVectorEnv:
     :param env_fns: a list of callable envs, ``env_fns[i]()`` generates the i-th env.
     :param worker_fn: a callable worker, ``worker_fn(env_fns[i])`` generates a
         worker which contains the i-th env.
-    :param wait_num: use in asynchronous simulation if the time cost of
+    :param int wait_num: use in asynchronous simulation if the time cost of
         ``env.step`` varies with time and synchronously waiting for all
         environments to finish a step is time-wasting. In that case, we can
         return when ``wait_num`` environments finish a step and keep on
         simulation in these environments. If ``None``, asynchronous simulation
         is disabled; else, ``1 <= wait_num <= env_num``.
-    :param timeout: use in asynchronous simulation same as above, in each
+    :param float timeout: use in asynchronous simulation same as above, in each
         vectorized step it only deal with those environments spending time
         within ``timeout`` seconds.
     """
@@ -277,7 +277,7 @@ class BaseVectorEnv:
             if action is not None:
                 self._assert_id(id)
                 assert len(action) == len(id)
-                for act, env_id in zip(action, id, strict=True):
+                for act, env_id in zip(action, id):
                     self.workers[env_id].send(act)
                     self.waiting_conn.append(self.workers[env_id])
                     self.waiting_id.append(env_id)
@@ -299,7 +299,7 @@ class BaseVectorEnv:
                 result.append(env_return)
                 self.ready_id.append(env_id)
         obs_list, rew_list, term_list, trunc_list, info_list = tuple(
-            zip(*result, strict=True))
+            zip(*result))
         try:
             obs_stack = np.stack(obs_list)
         except ValueError:  # different len(obs)

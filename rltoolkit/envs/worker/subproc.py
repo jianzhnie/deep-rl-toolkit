@@ -1,9 +1,10 @@
 import ctypes
+import multiprocessing
 import time
 from collections import OrderedDict
-from multiprocessing import Array, Pipe, connection
-from multiprocessing.context import Process
-from typing import Any, Callable, List, Optional, Tuple, Union
+from multiprocessing import Pipe, connection
+from multiprocessing.context import BaseContext
+from typing import Any, Callable, List, Literal, Optional, Tuple, Union
 
 import gymnasium as gym
 import numpy as np
@@ -26,36 +27,54 @@ _NP_TO_CT = {
 
 
 class ShArray:
-    """Wrapper of multiprocessing Array."""
+    """Wrapper of multiprocessing Array.
 
-    def __init__(self, dtype: np.generic, shape: Tuple[int]) -> None:
-        self.arr = Array(_NP_TO_CT[dtype.type],
-                         int(np.prod(shape)))  # type: ignore
+    Example usage:
+
+    ::
+
+        import numpy as np
+        import multiprocessing as mp
+        from tianshou.env.worker.subproc import ShArray
+        ctx = mp.get_context('fork')  # set an explicit context
+        arr = ShArray(np.dtype(np.float32), (2, 3), ctx)
+        arr.save(np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32))
+        print(arr.get())
+    """
+
+    def __init__(
+        self,
+        dtype: np.generic,
+        shape: Tuple[int],
+        ctx: Optional[BaseContext] = None,
+    ) -> None:
+        if ctx is None:
+            ctx = multiprocessing.get_context()
+        self.arr = ctx.Array(_NP_TO_CT[dtype.type], int(np.prod(shape)))
         self.dtype = dtype
         self.shape = shape
 
     def save(self, ndarray: np.ndarray) -> None:
         assert isinstance(ndarray, np.ndarray)
         dst = self.arr.get_obj()
-        dst_np = np.frombuffer(dst, dtype=self.dtype).reshape(
-            self.shape)  # type: ignore
+        dst_np = np.frombuffer(dst, dtype=self.dtype).reshape(self.shape)
         np.copyto(dst_np, ndarray)
 
     def get(self) -> np.ndarray:
         obj = self.arr.get_obj()
-        return np.frombuffer(obj, dtype=self.dtype).reshape(
-            self.shape)  # type: ignore
+        return np.frombuffer(obj, dtype=self.dtype).reshape(self.shape)
 
 
-def _setup_buf(space: gym.Space) -> Union[dict, tuple, ShArray]:
+def _setup_buf(space: gym.Space,
+               ctx: BaseContext) -> Union[dict, tuple, ShArray]:
     if isinstance(space, gym.spaces.Dict):
         assert isinstance(space.spaces, OrderedDict)
-        return {k: _setup_buf(v) for k, v in space.spaces.items()}
+        return {k: _setup_buf(v, ctx) for k, v in space.spaces.items()}
     elif isinstance(space, gym.spaces.Tuple):
         assert isinstance(space.spaces, tuple)
-        return tuple([_setup_buf(t) for t in space.spaces])
+        return tuple([_setup_buf(t, ctx) for t in space.spaces])
     else:
-        return ShArray(space.dtype, space.shape)  # type: ignore
+        return ShArray(space.dtype, space.shape, ctx)  # type: ignore
 
 
 def _encode_obs(obs: Union[dict, tuple, np.ndarray],
@@ -126,25 +145,31 @@ def _worker(
 class SubprocEnvWorker(EnvWorker):
     """Subprocess worker used in SubprocVectorEnv and ShmemVectorEnv."""
 
-    def __init__(self,
-                 env_fn: Callable[[], gym.Env],
-                 share_memory: bool = False) -> None:
+    def __init__(
+        self,
+        env_fn: Callable[[], gym.Env],
+        share_memory: bool = False,
+        context: Optional[Union[BaseContext, Literal['fork', 'spawn']]] = None,
+    ) -> None:
         self.parent_remote, self.child_remote = Pipe()
         self.share_memory = share_memory
         self.buffer: Optional[Union[dict, tuple, ShArray]] = None
+        if not isinstance(context, BaseContext):
+            context = multiprocessing.get_context(context)
+        assert hasattr(context, 'Process')  # for mypy
         if self.share_memory:
             dummy = env_fn()
             obs_space = dummy.observation_space
             dummy.close()
             del dummy
-            self.buffer = _setup_buf(obs_space)
+            self.buffer = _setup_buf(obs_space, context)
         args = (
             self.parent_remote,
             self.child_remote,
             CloudpickleWrapper(env_fn),
             self.buffer,
         )
-        self.process = Process(target=_worker, args=args, daemon=True)
+        self.process = context.Process(target=_worker, args=args, daemon=True)
         self.process.start()
         self.child_remote.close()
         super().__init__(env_fn)

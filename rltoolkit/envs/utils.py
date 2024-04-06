@@ -3,7 +3,7 @@ from typing import Any, Tuple, Union
 import cloudpickle
 import gymnasium as gym
 import numpy as np
-from rltoolkit.envs.pettingzooo_env import PettingZooEnv
+from rltoolkit.envs.pettingzoo_env import PettingZooEnv
 
 ENV_TYPE = Union[gym.Env, 'gym.Env', PettingZooEnv]
 
