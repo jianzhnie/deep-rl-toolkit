@@ -35,7 +35,7 @@ class ShArray:
 
         import numpy as np
         import multiprocessing as mp
-        from tianshou.env.worker.subproc import ShArray
+        from rltoolkit.envs.worker.subproc import ShArray
         ctx = mp.get_context('fork')  # set an explicit context
         arr = ShArray(np.dtype(np.float32), (2, 3), ctx)
         arr.save(np.array([[1, 2, 3], [4, 5, 6]], dtype=np.float32))

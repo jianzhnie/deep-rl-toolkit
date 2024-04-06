@@ -6,8 +6,8 @@ import gymnasium as gym
 import numpy as np
 import torch
 from rltoolkit.data.batch import _alloc_by_keys_diff
+from rltoolkit.envs import BaseVectorEnv, DummyVectorEnv
 from rltoolkit.policy import BasePolicy
-from tianshou.env import BaseVectorEnv, DummyVectorEnv
 
 from .batch import Batch
 from .buffer import (CachedReplayBuffer, ReplayBuffer, ReplayBufferManager,

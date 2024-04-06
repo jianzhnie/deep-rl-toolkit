@@ -5,7 +5,7 @@ from rltoolkit.data import Batch, ReplayBuffer
 from rltoolkit.policy import BasePolicy
 
 try:
-    from tianshou.env.pettingzoo_env import PettingZooEnv
+    from rltoolkit.envs.pettingzoo_env import PettingZooEnv
 except ImportError:
     PettingZooEnv = None  # type: ignore
 

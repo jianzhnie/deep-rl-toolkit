@@ -10,7 +10,7 @@ from rltoolkit.utils import BaseLogger, LazyLogger
 class OffpolicyTrainer(BaseTrainer):
     """Create an iterator wrapper for off-policy training procedure.
 
-    :param policy: an instance of the :class:`~tianshou.policy.BasePolicy` class.
+    :param policy: an instance of the :class:`~rltoolkit.policy.BasePolicy` class.
     :param Collector train_collector: the collector used for training.
     :param Collector test_collector: the collector used for testing. If it's None,
         then no testing will be performed.
@@ -133,7 +133,7 @@ def offpolicy_trainer(
 
     It is identical to ``OffpolicyTrainer(...).run()``.
 
-    :return: See :func:`~tianshou.trainer.gather_info`.
+    :return: See :func:`~rltoolkit.trainer.gather_info`.
     """
     return OffpolicyTrainer(*args, **kwargs).run()
 

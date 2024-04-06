@@ -21,7 +21,7 @@ class PettingZooEnv(AECEnv, ABC):
     """The interface for petting zoo environments.
 
     Multi-agent environments must be wrapped as
-    :class:`~tianshou.env.PettingZooEnv`. Here is the usage:
+    :class:`~rltoolkit.envs.PettingZooEnv`. Here is the usage:
     ::
 
         env = PettingZooEnv(...)
