@@ -1,11 +1,11 @@
 """Env package."""
-
 from rltoolkit.envs.gym_wrappers import (ContinuousToDiscrete,
                                          MultiDiscreteToDiscrete,
                                          TruncatedAsTerminated)
 from rltoolkit.envs.vec_env import (BaseVectorEnv, DummyVectorEnv,
                                     RayVectorEnv, ShmemVectorEnv,
                                     SubprocVectorEnv)
+from rltoolkit.envs.venv_wrappers import VectorEnvNormObs, VectorEnvWrapper
 
 try:
     from rltoolkit.envs.pettingzoo_env import PettingZooEnv
