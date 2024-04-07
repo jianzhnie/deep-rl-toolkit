@@ -5,9 +5,8 @@ import torch
 import torch.nn.functional as F
 from rltoolkit.data.batch import Batch
 from rltoolkit.data.utils import to_torch
+from rltoolkit.utils.net.common import MLP
 from torch import nn
-
-from .common import MLP
 
 __all__ = [
     'Actor',

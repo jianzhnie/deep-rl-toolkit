@@ -1,3 +1,6 @@
+"""Data package."""
+# isort:skip_file
+
 from rltoolkit.data.batch import Batch
 from rltoolkit.data.buffer.base import ReplayBuffer
 from rltoolkit.data.buffer.base_buffer import BaseBuffer

@@ -8,10 +8,9 @@ import torch
 from rltoolkit.data.batch import Batch, _alloc_by_keys_diff
 from rltoolkit.data.buffer import (CachedReplayBuffer, ReplayBuffer,
                                    ReplayBufferManager, VectorReplayBuffer)
+from rltoolkit.data.utils import to_numpy
 from rltoolkit.envs import BaseVectorEnv, DummyVectorEnv
 from rltoolkit.policy.base_policy import BasePolicy
-
-from .utils import to_numpy
 
 
 class BatchData(NamedTuple):
