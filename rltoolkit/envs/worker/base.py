@@ -3,8 +3,9 @@ from typing import Any, Callable, List, Optional, Tuple, Union
 
 import gymnasium as gym
 import numpy as np
-from rltoolkit.envs.utils import gym_new_venv_step_type
 from rltoolkit.utils import deprecation
+
+from ..utils import gym_new_venv_step_type
 
 
 class EnvWorker(ABC):

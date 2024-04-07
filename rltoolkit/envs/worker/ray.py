@@ -2,8 +2,9 @@ from typing import Any, Callable, List, Optional
 
 import gymnasium as gym
 import numpy as np
-from rltoolkit.envs.utils import gym_new_venv_step_type
-from rltoolkit.envs.worker.base import EnvWorker
+
+from ..utils import gym_new_venv_step_type
+from .base import EnvWorker
 
 try:
     import ray

@@ -43,6 +43,18 @@ def _parse_reset_result(reset_result):
     return reset_result, {}, contains_info
 
 
+def get_wrapper_by_cls(env, cls):
+    """Returns the gym env wrapper of the given class, or None."""
+    currentenv = env
+    while True:
+        if isinstance(currentenv, cls):
+            return currentenv
+        elif isinstance(currentenv, gym.Wrapper):
+            currentenv = currentenv.env
+        else:
+            return None
+
+
 class ClipRewardEnv(gym.RewardWrapper):
     """clips the reward to {+1, 0, -1} by its sign.
 

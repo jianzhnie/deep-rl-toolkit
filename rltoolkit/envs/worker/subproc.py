@@ -8,8 +8,9 @@ from typing import Any, Callable, List, Literal, Optional, Tuple, Union
 
 import gymnasium as gym
 import numpy as np
-from rltoolkit.envs.utils import CloudpickleWrapper, gym_new_venv_step_type
-from rltoolkit.envs.worker.base import EnvWorker
+
+from ..utils import CloudpickleWrapper, gym_new_venv_step_type
+from .base import EnvWorker
 
 _NP_TO_CT = {
     np.bool_: ctypes.c_bool,

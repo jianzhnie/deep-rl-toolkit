@@ -1,7 +1,7 @@
 from typing import Any, Dict
 
 from rltoolkit.data import Batch
-from rltoolkit.policy import C51Policy
+from rltoolkit.policy.modelfree.c51 import C51Policy
 from rltoolkit.utils.net.discrete import sample_noise
 
 

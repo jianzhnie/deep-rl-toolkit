@@ -3,9 +3,9 @@ from typing import (Any, Callable, List, Literal, Optional, Sequence, Tuple,
 
 import gymnasium as gym
 import numpy as np
-from rltoolkit.envs.utils import ENV_TYPE, gym_new_venv_step_type
-from rltoolkit.envs.worker import (DummyEnvWorker, EnvWorker, RayEnvWorker,
-                                   SubprocEnvWorker)
+
+from .utils import ENV_TYPE, gym_new_venv_step_type
+from .worker import DummyEnvWorker, EnvWorker, RayEnvWorker, SubprocEnvWorker
 
 GYM_RESERVED_KEYS = [
     'metadata',
@@ -403,10 +403,10 @@ class SubprocVectorEnv(BaseVectorEnv):
     def __init__(
         self,
         env_fns: Sequence[Callable[[], ENV_TYPE]],
-        wait_num: int | None = None,
-        timeout: float | None = None,
+        wait_num: Union[int, None] = None,
+        timeout: Union[float, None] = None,
         share_memory: bool = False,
-        context: Literal['fork', 'spawn'] | None = None,
+        context: Union[Literal['fork', 'spawn'], None] = None,
     ) -> None:
 
         def worker_fn(fn: Callable[[], gym.Env]) -> SubprocEnvWorker:

@@ -10,6 +10,17 @@ ModuleType = Type[nn.Module]
 ArgsType = Union[Tuple[Any, ...], Dict[Any, Any], Sequence[Tuple[Any, ...]],
                  Sequence[Dict[Any, Any]]]
 
+__all__ = [
+    'MLP',
+    'Net',
+    'Recurrent',
+    'ActorCritic',
+    'DataParallelNet',
+    'EnsembleLinear',
+    'BranchingNet',
+    'get_dict_state_decorator',
+]
+
 
 def miniblock(
     input_size: int,

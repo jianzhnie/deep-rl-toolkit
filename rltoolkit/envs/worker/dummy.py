@@ -2,7 +2,8 @@ from typing import Any, Callable, List, Optional, Tuple
 
 import gymnasium as gym
 import numpy as np
-from rltoolkit.envs.worker.base import EnvWorker
+
+from .base import EnvWorker
 
 
 class DummyEnvWorker(EnvWorker):

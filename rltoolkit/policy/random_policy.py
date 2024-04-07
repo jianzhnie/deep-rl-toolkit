@@ -2,7 +2,7 @@ from typing import Any, Dict, Optional, Union
 
 import numpy as np
 from rltoolkit.data import Batch
-from rltoolkit.policy import BasePolicy
+from rltoolkit.policy.base_policy import BasePolicy
 
 
 class RandomPolicy(BasePolicy):

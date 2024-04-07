@@ -1,4 +1,4 @@
-from typing import Any, SupportsFloat
+from typing import Any, SupportsFloat, Union
 
 import gymnasium as gym
 import numpy as np
@@ -14,7 +14,8 @@ class ContinuousToDiscrete(gym.ActionWrapper):
         of the action space.
     """
 
-    def __init__(self, env: gym.Env, action_per_dim: int | list[int]) -> None:
+    def __init__(self, env: gym.Env, action_per_dim: Union[int,
+                                                           list[int]]) -> None:
         super().__init__(env)
         assert isinstance(env.action_space, gym.spaces.Box)
         low, high = env.action_space.low, env.action_space.high

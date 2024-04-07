@@ -5,7 +5,7 @@ from typing import Any, Dict, Optional, Tuple, Union
 import numpy as np
 import torch
 from rltoolkit.data import Batch, ReplayBuffer
-from rltoolkit.policy import BasePolicy
+from rltoolkit.policy.base_policy import BasePolicy
 from rltoolkit.utils.exploration import BaseNoise, GaussianNoise
 
 

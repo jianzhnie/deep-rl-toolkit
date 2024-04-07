@@ -8,6 +8,16 @@ from torch import nn
 SIGMA_MIN = -20
 SIGMA_MAX = 2
 
+__all__ = [
+    'Actor',
+    'Critic',
+    'ActorProb',
+    'RecurrentActorProb',
+    'RecurrentCritic',
+    'Perturbation',
+    'VAE',
+]
+
 
 class Actor(nn.Module):
     """Simple actor network. Will create an actor operated in continuous \

@@ -4,7 +4,7 @@ import numpy as np
 import torch
 from rltoolkit.data import Batch, ReplayBuffer
 from rltoolkit.data.utils import to_torch, to_torch_as
-from rltoolkit.policy import BasePolicy
+from rltoolkit.policy.base_policy import BasePolicy
 from rltoolkit.utils import RunningMeanStd
 
 
