@@ -1,8 +1,10 @@
-from .base import BaseTrainer  # Add this line
-from .offpolicy import OffpolicyTrainer, offpolicy_trainer
-from .onpolicy import OnpolicyTrainer, onpolicy_trainer
-from .runner import Runner
-from .utils import gather_info, test_episode
+"""Trainer package."""
+
+from rltoolkit.trainer.base import BaseTrainer  # Add this line
+from rltoolkit.trainer.offpolicy import OffpolicyTrainer, offpolicy_trainer
+from rltoolkit.trainer.onpolicy import OnpolicyTrainer, onpolicy_trainer
+from rltoolkit.trainer.runner import Runner
+from rltoolkit.trainer.utils import gather_info, test_episode
 
 __all__ = [
     'Runner',

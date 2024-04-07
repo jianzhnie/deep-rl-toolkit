@@ -1,17 +1,17 @@
-from .base_policy import BasePolicy
-from .modelfree.a2c import A2CPolicy
-from .modelfree.c51 import C51Policy
-from .modelfree.ddpg import DDPGPolicy
-from .modelfree.discrete_sac import DiscreteSACPolicy
-from .modelfree.dqn import DQNPolicy
-from .modelfree.pg import PGPolicy
-from .modelfree.ppo import PPOPolicy
-from .modelfree.rainbow import RainbowPolicy
-from .modelfree.sac import SACPolicy
-from .modelfree.td3 import TD3Policy
-from .modelfree.trpo import TRPOPolicy
-from .multiagent.mapolicy import MultiAgentPolicyManager
-from .random_policy import RandomPolicy
+from rltoolkit.policy.base_policy import BasePolicy
+from rltoolkit.policy.modelfree.a2c import A2CPolicy
+from rltoolkit.policy.modelfree.c51 import C51Policy
+from rltoolkit.policy.modelfree.ddpg import DDPGPolicy
+from rltoolkit.policy.modelfree.discrete_sac import DiscreteSACPolicy
+from rltoolkit.policy.modelfree.dqn import DQNPolicy
+from rltoolkit.policy.modelfree.pg import PGPolicy
+from rltoolkit.policy.modelfree.ppo import PPOPolicy
+from rltoolkit.policy.modelfree.rainbow import RainbowPolicy
+from rltoolkit.policy.modelfree.sac import SACPolicy
+from rltoolkit.policy.modelfree.td3 import TD3Policy
+from rltoolkit.policy.modelfree.trpo import TRPOPolicy
+from rltoolkit.policy.multiagent.mapolicy import MultiAgentPolicyManager
+from rltoolkit.policy.random_policy import RandomPolicy
 
 __all__ = [
     'BasePolicy',

@@ -5,12 +5,12 @@ from typing import Any, Callable, Dict, List, NamedTuple, Optional, Union
 import gymnasium as gym
 import numpy as np
 import torch
+from rltoolkit.data.batch import Batch, _alloc_by_keys_diff
+from rltoolkit.data.buffer import (CachedReplayBuffer, ReplayBuffer,
+                                   ReplayBufferManager, VectorReplayBuffer)
 from rltoolkit.envs import BaseVectorEnv, DummyVectorEnv
 from rltoolkit.policy.base_policy import BasePolicy
 
-from .batch import Batch, _alloc_by_keys_diff
-from .buffer import (CachedReplayBuffer, ReplayBuffer, ReplayBufferManager,
-                     VectorReplayBuffer)
 from .utils import to_numpy
 
 
