@@ -2,8 +2,8 @@ import sys
 import warnings
 
 sys.path.append('../../')
+from rltoolkit.envs import ShmemVectorEnv
 from rltoolkit.envs.atari_wrappers import wrap_deepmind
-from tianshou.env import ShmemVectorEnv
 
 try:
     import envpool

@@ -10,11 +10,11 @@ from torch.utils.tensorboard import SummaryWriter
 
 sys.path.append('../../')
 from rltoolkit.data import Collector, VectorReplayBuffer
+from rltoolkit.envs import SubprocVectorEnv
 from rltoolkit.policy import DQNPolicy
 from rltoolkit.trainer import OffpolicyTrainer
 from rltoolkit.utils import TensorboardLogger
-from tianshou.env import SubprocVectorEnv
-from tianshou.utils.net.common import Net
+from rltoolkit.utils.net.common import Net
 
 
 def get_args() -> Namespace:
