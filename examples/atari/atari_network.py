@@ -1,7 +1,10 @@
+import sys
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Type, Union
 
 import numpy as np
 import torch
+
+sys.path.append('../../')
 from rltoolkit.utils.net.discrete import NoisyLinear
 from torch import nn
 
