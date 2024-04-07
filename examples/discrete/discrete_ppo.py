@@ -5,13 +5,13 @@ import pprint
 import gymnasium as gym
 import numpy as np
 import torch
-from tianshou.data import Collector, VectorReplayBuffer
-from tianshou.env import DummyVectorEnv
-from tianshou.policy import PPOPolicy
-from tianshou.trainer import onpolicy_trainer
-from tianshou.utils import TensorboardLogger
-from tianshou.utils.net.common import ActorCritic, DataParallelNet, Net
-from tianshou.utils.net.discrete import Actor, Critic
+from rltoolkit.data import Collector, VectorReplayBuffer
+from rltoolkit.envs import DummyVectorEnv
+from rltoolkit.policy import PPOPolicy
+from rltoolkit.trainer import onpolicy_trainer
+from rltoolkit.utils import TensorboardLogger
+from rltoolkit.utils.net.common import ActorCritic, DataParallelNet, Net
+from rltoolkit.utils.net.discrete import Actor, Critic
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -63,7 +63,7 @@ def test_ppo(args=get_args()):
         args.reward_threshold = default_reward_threshold.get(
             args.task, env.spec.reward_threshold)
     # train_envs = gym.make(args.task)
-    # you can also use tianshou.env.SubprocVectorEnv
+    # you can also use rltoolkit.envs.SubprocVectorEnv
     train_envs = DummyVectorEnv(
         [lambda: gym.make(args.task) for _ in range(args.training_num)])
     # test_envs = gym.make(args.task)

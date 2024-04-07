@@ -2,7 +2,7 @@ from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Type, Union
 
 import numpy as np
 import torch
-from tianshou.utils.net.discrete import NoisyLinear
+from rltoolkit.utils.net.discrete import NoisyLinear
 from torch import nn
 
 

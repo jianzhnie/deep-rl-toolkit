@@ -9,13 +9,12 @@ import torch
 from torch.utils.tensorboard import SummaryWriter
 
 sys.path.append('../../')
-from rltoolkit.data import Collector
+from rltoolkit.data import Collector, VectorReplayBuffer
+from rltoolkit.envs import DummyVectorEnv
 from rltoolkit.policy import DQNPolicy
 from rltoolkit.trainer import offpolicy_trainer
 from rltoolkit.utils import TensorboardLogger
-from tianshou.data import VectorReplayBuffer
-from tianshou.env import DummyVectorEnv
-from tianshou.utils.net.common import Net
+from rltoolkit.utils.net.common import Net
 
 
 def get_args():
@@ -58,7 +57,7 @@ def test_dqn(args=get_args()):
     args.state_shape = env.observation_space.shape or env.observation_space.n
     args.action_shape = env.action_space.shape or env.action_space.n
     # train_envs = gym.make(args.task)
-    # you can also use tianshou.env.SubprocVectorEnv
+    # you can also use rltoolkit.envs.SubprocVectorEnv
     train_envs = DummyVectorEnv(
         [lambda: gym.make(args.task) for _ in range(args.training_num)])
     # test_envs = gym.make(args.task)

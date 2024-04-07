@@ -1,4 +1,4 @@
-"""This is a minimal example of using Tianshou with MARL to train agents.
+"""This is a minimal example of using rltoolkit with MARL to train agents.
 
 Author: Will (https://github.com/WillDudley)
 
@@ -6,7 +6,7 @@ Python version used: 3.8.10
 
 Requirements:
 pettingzoo == 1.22.0
-git+https://github.com/thu-ml/tianshou
+git+https://github.com/thu-ml/rltoolkit
 """
 
 import os

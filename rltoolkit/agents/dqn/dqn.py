@@ -9,8 +9,8 @@ import torch.nn.functional as F
 from rltoolkit.agents.base_agent import BaseAgent
 from rltoolkit.agents.configs import BaseConfig
 from rltoolkit.agents.network import QNetwork
+from rltoolkit.envs import BaseVectorEnv, DummyVectorEnv
 from rltoolkit.utils import LinearDecayScheduler
-from tianshou.env import BaseVectorEnv, DummyVectorEnv
 from torch.optim.lr_scheduler import LinearLR
 
 

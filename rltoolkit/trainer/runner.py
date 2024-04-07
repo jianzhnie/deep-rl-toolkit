@@ -3,11 +3,11 @@ import time
 
 import gymnasium as gym
 import numpy as np
-import tianshou
 import torch
 from rltoolkit.agents import DQNAgent
 from rltoolkit.agents.configs import BaseConfig
 from rltoolkit.data import OffPolicyBuffer
+from rltoolkit.envs import SubprocVectorEnv
 from rltoolkit.utils import (ProgressBar, TensorboardLogger, WandbLogger,
                              get_outdir, get_text_logger, soft_target_update)
 from torch.utils.tensorboard import SummaryWriter
@@ -17,9 +17,9 @@ class Runner:
 
     def __init__(self, config: BaseConfig) -> None:
         self.config = config
-        self.train_envs = tianshou.env.SubprocVectorEnv(
+        self.train_envs = SubprocVectorEnv(
             [lambda: gym.make(config.env_id) for _ in range(config.num_envs)])
-        self.test_envs = tianshou.env.SubprocVectorEnv(
+        self.test_envs = SubprocVectorEnv(
             [lambda: gym.make(config.env_id) for _ in range(config.num_envs)])
         env = gym.make(config.env_id)
         self.device = torch.device(

@@ -20,7 +20,7 @@ class BaseTrainer(ABC):
 
     :param learning_type str: type of learning iterator, available choices are
         "offpolicy", "onpolicy" and "offline".
-    :param policy: an instance of the :class:`~tianshou.policy.BasePolicy` class.
+    :param policy: an instance of the :class:`~rltoolkit.policy.BasePolicy` class.
     :param Collector train_collector: the collector used for training.
     :param Collector test_collector: the collector used for testing. If it's None,
         then no testing will be performed.
@@ -108,7 +108,7 @@ class BaseTrainer(ABC):
 
         - epoch int: the epoch number
         - epoch_stat dict: a large collection of metrics of the current epoch
-        - info dict: result returned from :func:`~tianshou.trainer.gather_info`
+        - info dict: result returned from :func:`~rltoolkit.trainer.gather_info`
 
         You can even iterate on several trainers at the same time:
 
