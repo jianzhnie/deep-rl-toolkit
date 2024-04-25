@@ -12,6 +12,11 @@
   - https://github.com/IntelLabs/coach
   - https://intellabs.github.io/coach
 
+- Pearl
+
+  - https://github.com/facebookresearch/Pearl
+  - https://pearlagent.github.io/
+
 - tianshou
 
   - https://github.com/thu-ml/tianshou
