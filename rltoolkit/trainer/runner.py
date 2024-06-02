@@ -5,7 +5,7 @@ import gymnasium as gym
 import numpy as np
 import torch
 from rltoolkit.agents import DQNAgent
-from rltoolkit.agents.configs import BaseConfig
+from rltoolkit.agents.rl_args import RLArguments
 from rltoolkit.data import OffPolicyBuffer
 from rltoolkit.envs import SubprocVectorEnv
 from rltoolkit.utils import (ProgressBar, TensorboardLogger, WandbLogger,
@@ -15,30 +15,30 @@ from torch.utils.tensorboard import SummaryWriter
 
 class Runner:
 
-    def __init__(self, config: BaseConfig) -> None:
-        self.config = config
+    def __init__(self, args: RLArguments) -> None:
+        self.args = args
         self.train_envs = SubprocVectorEnv(
-            [lambda: gym.make(config.env_id) for _ in range(config.num_envs)])
+            [lambda: gym.make(args.env_id) for _ in range(args.num_envs)])
         self.test_envs = SubprocVectorEnv(
-            [lambda: gym.make(config.env_id) for _ in range(config.num_envs)])
-        env = gym.make(config.env_id)
+            [lambda: gym.make(args.env_id) for _ in range(args.num_envs)])
+        env = gym.make(args.env_id)
         self.device = torch.device(
-            'cuda' if torch.cuda.is_available() and config.use_cuda else 'cpu')
+            'cuda' if torch.cuda.is_available() and args.use_cuda else 'cpu')
 
-        config.state_shape = env.observation_space.shape or env.observation_space.n
-        config.action_shape = env.action_space.shape or env.action_space.n
+        args.state_shape = env.observation_space.shape or env.observation_space.n
+        args.action_shape = env.action_space.shape or env.action_space.n
         # should be N_FRAMES x H x W
-        print('Observations shape:', config.state_shape)
-        print('Actions shape:', config.action_shape)
+        print('Observations shape:', args.state_shape)
+        print('Actions shape:', args.action_shape)
 
         # agent
-        self.agent = DQNAgent(self.config, self.train_envs, self.device)
+        self.agent = DQNAgent(self.args, self.train_envs, self.device)
         self.buffer = OffPolicyBuffer(
-            config.buffer_size,
+            args.buffer_size,
             env.observation_space,
             env.action_space,
             self.device,
-            num_envs=config.num_envs,
+            num_envs=args.num_envs,
             handle_timeout_termination=False,
         )
 
@@ -49,38 +49,37 @@ class Runner:
 
         # Logs and Visualizations
         timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
-        log_name = os.path.join(config.project, config.env_id,
-                                config.algo_name,
+        log_name = os.path.join(args.project, args.env_id, args.algo_name,
                                 timestamp).replace(os.path.sep, '_')
-        work_dir = os.path.join(config.work_dir, config.project, config.env_id,
-                                config.algo_name)
+        work_dir = os.path.join(args.work_dir, args.project, args.env_id,
+                                args.algo_name)
         tensorboard_log_dir = get_outdir(work_dir, 'tensorboard_log')
         text_log_dir = get_outdir(work_dir, 'text_log')
         text_log_file = os.path.join(text_log_dir, log_name + '.log')
         self.text_logger = get_text_logger(log_file=text_log_file,
                                            log_level='INFO')
 
-        if config.logger == 'wandb':
+        if args.logger == 'wandb':
             wandb_log_dir = get_outdir(work_dir, 'wandb_log')
             self.vis_logger = WandbLogger(
                 dir=wandb_log_dir,
-                train_interval=config.train_log_interval,
-                test_interval=config.test_log_interval,
-                update_interval=config.train_log_interval,
-                save_interval=config.save_interval,
-                project=config.project,
+                train_interval=args.train_log_interval,
+                test_interval=args.test_log_interval,
+                update_interval=args.train_log_interval,
+                save_interval=args.save_interval,
+                project=args.project,
                 name=log_name,
-                config=config,
+                config=args,
             )
         self.writer = SummaryWriter(tensorboard_log_dir)
-        self.writer.add_text('config', str(config))
-        if config.logger == 'tensorboard':
+        self.writer.add_text('args', str(args))
+        if args.logger == 'tensorboard':
             self.vis_logger = TensorboardLogger(self.writer)
         else:  # wandb
             self.vis_logger.load(self.writer)
 
         # ProgressBar
-        self.progress_bar = ProgressBar(config.max_timesteps)
+        self.progress_bar = ProgressBar(args.max_timesteps)
         # Video Save
         self.video_save_dir = get_outdir(work_dir, 'video_dir')
         self.model_save_dir = get_outdir(work_dir, 'model_dir')
@@ -100,8 +99,8 @@ class Runner:
             done = np.logical_or(terminated, truncated)
             self.buffer.add(obs, next_obs, action, reward, done, info)
             # train model
-            if self.buffer.size() > self.config.wormup_learn_steps:
-                samples = self.buffer.sample(self.config.batch_size)
+            if self.buffer.size() > self.args.wormup_learn_steps:
+                samples = self.buffer.sample(self.args.batch_size)
                 loss = self.agent.learn(samples)
                 episode_loss.append(loss)
             episode_reward += reward
@@ -136,9 +135,9 @@ class Runner:
 
     def run(self) -> None:
         """Train the agent."""
-        obs, _ = self.train_envs.reset(seed=self.config.seed)
+        obs, _ = self.train_envs.reset(seed=self.args.seed)
         self.text_logger.info('Start Training')
-        while self.global_step < self.config.max_timesteps:
+        while self.global_step < self.args.max_timesteps:
             self.eps_greedy = self.agent.eps_greedy_scheduler.step()
             actions = self.agent.get_action(obs, eps_greedy=self.eps_greedy)
             actions = np.array(actions)
@@ -149,18 +148,18 @@ class Runner:
             # Crucial step easy to overlook
             obs = next_obs
             # Training logic
-            if self.global_step >= self.config.warmup_learn_steps:
-                if self.global_step % self.config.train_frequency == 0:
+            if self.global_step >= self.args.warmup_learn_steps:
+                if self.global_step % self.args.train_frequency == 0:
                     # Learner: Update model parameters
                     graddient_step_losses = []
                     step_info = dict()
-                    for _ in range(self.config.gradient_steps):
-                        batchs = self.buffer.sample(self.config.batch_size)
+                    for _ in range(self.args.gradient_steps):
+                        batchs = self.buffer.sample(self.args.batch_size)
                         loss = self.agent.learn(batchs)
                         graddient_step_losses.append(loss)
 
                     step_info['loss'] = np.mean(graddient_step_losses)
-                    step_info['learning_rate'] = self.config.learning_rate
+                    step_info['learning_rate'] = self.args.learning_rate
                     step_info['eps_greedy'] = self.eps_greedy
 
                     # Log training information
@@ -175,18 +174,18 @@ class Runner:
                     self.log_train_infos(step_info, self.global_step)
 
                 # Update target network
-                if self.global_step % self.config.target_update_frequency == 0:
+                if self.global_step % self.args.target_update_frequency == 0:
                     self.text_logger.info('Update Target Model')
                     soft_target_update(
                         src_model=self.agent.q_network,
                         tgt_model=self.agent.q_target,
-                        tau=self.config.soft_update_tau,
+                        tau=self.args.soft_update_tau,
                     )
             self.global_step += 1
             self.progress_bar.update(1)
 
         # Save model
-        if self.config.save_model:
+        if self.args.save_model:
             self.agent.save_model(self.model_save_dir)
 
     def log_train_infos(self, infos: dict, steps: int) -> None:
