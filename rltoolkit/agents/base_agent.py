@@ -1,4 +1,4 @@
-from .configs import BaseConfig
+from rltoolkit.agents.rl_args import RLArguments
 
 
 class BaseAgent:
@@ -6,11 +6,11 @@ class BaseAgent:
     agents.
 
     Args:
-        config (BaseConfig): Configuration object for the agent
+        args (RLArguments): argsuration object for the agent
     """
 
-    def __init__(self, config: BaseConfig) -> None:
-        self.config = config
+    def __init__(self, args: RLArguments) -> None:
+        self.args = args
 
     def sample(self, *args, **kwargs):
         """Return an action with noise when given the observation of the
