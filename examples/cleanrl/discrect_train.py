@@ -23,19 +23,21 @@ if __name__ == '__main__':
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
+    # You can also try SubprocVectorEnv, which will use parallelization
     train_envs = SubprocVectorEnv(
-        [lambda: gym.make(args.env_id) for _ in range(args.num_envs)])
+        [lambda: gym.make(args.env_id) for _ in range(args.train_num)])
     test_envs = SubprocVectorEnv(
-        [lambda: gym.make(args.env_id) for _ in range(args.num_envs)])
-    env = gym.make(args.env_id)
+        [lambda: gym.make(args.env_id) for _ in range(args.test_num)])
+
+    # Note: You can easily define other networks.
+    env: gym.Env = gym.make(args.env_id, render_mode='human')
+    state_shape = env.observation_space.shape or env.observation_space.n
+    action_shape = env.action_space.shape or env.action_space.n
     device = torch.device(
         'cuda' if torch.cuda.is_available() and args.use_cuda else 'cpu')
-
-    args.state_shape = env.observation_space.shape or env.observation_space.n
-    args.action_shape = env.action_space.shape or env.action_space.n
     # should be N_FRAMES x H x W
-    print('Observations shape:', args.state_shape)
-    print('Actions shape:', args.action_shape)
+    print('Observations shape:', state_shape)
+    print('Actions shape:', action_shape)
 
     # agent
     agent = DQNAgent(args, train_envs, device)
