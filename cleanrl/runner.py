@@ -80,7 +80,6 @@ class Runner:
         obs, _ = self.train_env.reset()
         done = False
         while not done:
-            episode_step += 1
             action = self.agent.get_action(obs)
             next_obs, reward, terminated, truncated, info = self.train_env.step(
                 action)
@@ -94,11 +93,12 @@ class Runner:
                         episode_loss.append(loss)
 
             episode_reward += reward
+            episode_step += 1
             obs = next_obs
 
         train_info = {
-            'reward_mean': episode_reward,
-            'length_mean': episode_step,
+            'episode_reward': episode_reward,
+            'episode_step': episode_step,
             'loss': np.mean(episode_loss) if episode_loss else 0.0,
         }
         return train_info
@@ -146,19 +146,21 @@ class Runner:
         episode_cnt = 0
         while self.buffer.size() < self.args.warmup_learn_steps:
             train_info = self.run_train_episode()
-            progress_bar.update(train_info['length_mean'])
+            progress_bar.update(train_info['episode_step'])
 
         while self.global_step < self.args.max_timesteps:
             # Training logic
             train_info = self.run_train_episode()
-            episode_step = train_info['length_mean']
-            self.progress_bar.update(episode_step)
+            episode_step = train_info['episode_step']
+            progress_bar.update(episode_step)
             self.global_step += episode_step
             episode_cnt += 1
 
-            train_info['learning_rate'] = self.args.learning_rate
-            train_info['eps_greedy'] = self.eps_greedy
+            train_info['learning_rate'] = self.agent.learning_rate
+            train_info['eps_greedy'] = self.agent.eps_greedy
+            train_info['rpm_size'] = self.buffer.size()
             train_info['num_episode'] = episode_cnt
+            train_info['global_update_step'] = self.agent.global_update_step
 
             # Log training information
             train_fps = int(self.global_step / (time.time() - self.start_time))
@@ -167,12 +169,12 @@ class Runner:
             if episode_cnt % self.args.train_log_interval:
                 log_message = (
                     '[Train], global_step: {}, episodes: {}, train_fps: {}, '
-                    'reward_mean: {:.2f}, length_mean: {:.2f}').format(
+                    'episode_reward: {:.2f}, episode_step: {:.2f}').format(
                         self.global_step,
                         episode_cnt,
                         train_fps,
-                        train_info['reward_mean'],
-                        train_info['length_mean'],
+                        train_info['episode_reward'],
+                        train_info['episode_step'],
                     )
                 self.text_logger.info(log_message)
                 self.log_train_infos(train_info, self.global_step)

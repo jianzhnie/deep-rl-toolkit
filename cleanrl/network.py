@@ -8,6 +8,31 @@ from torch import Tensor
 from .utils import build_mlp, layer_init_with_orthogonal
 
 
+class QNet(nn.Module):
+    """Initialization.
+
+    只有一层隐藏层的Q网络.
+    """
+
+    def __init__(
+        self,
+        state_shape: Union[int, Tuple[int]],
+        action_shape: Union[int, Tuple[int]],
+    ):
+        super(QNet, self).__init__()
+        input_dim = int(np.prod(state_shape))
+        action_dim = int(np.prod(action_shape))
+        self.network = nn.Sequential(
+            nn.Linear(input_dim, 120),
+            nn.ReLU(),
+            nn.Linear(120, action_dim),
+        )
+
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        """Forward method implementation."""
+        return self.network(obs)
+
+
 # ALGO LOGIC: initialize agent here:
 class QNetwork(nn.Module):
 
@@ -54,7 +79,7 @@ class QNetBase(nn.Module):  # nn.Module is a standard PyTorch Network
         return value * self.value_std + self.value_avg
 
 
-class QNet(QNetBase):
+class QNet_(QNetBase):
 
     def __init__(self, dims: [int], state_dim: int, action_dim: int):
         super().__init__(state_dim=state_dim, action_dim=action_dim)

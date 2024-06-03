@@ -9,7 +9,7 @@ from rltoolkit.utils import LinearDecayScheduler, soft_target_update
 from torch.optim.lr_scheduler import LinearLR
 
 from cleanrl.base_agent import BaseAgent
-from cleanrl.network import QNetwork
+from cleanrl.network import QNet
 from cleanrl.rl_args import RLArguments
 
 
@@ -39,9 +39,9 @@ class DQNAgent(BaseAgent):
         self.global_update_step: int = 0
         self.gradient_steps: int = args.gradient_steps
         self.eps_greedy = args.eps_greedy_start
-
-        self.q_network = QNetwork(state_shape=state_shape,
-                                  action_shape=action_shape).to(device)
+        self.learning_rate = args.learning_rate
+        self.q_network = QNet(state_shape=state_shape,
+                              action_shape=action_shape).to(device)
         self.q_target = copy.deepcopy(self.q_network)
 
         self.optimizer = torch.optim.Adam(params=self.q_network.parameters(),

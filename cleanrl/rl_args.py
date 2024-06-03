@@ -31,7 +31,7 @@ class RLArguments:
         },
     )
     env_id: Optional[str] = field(
-        default='CartPole-v1',
+        default='CartPole-v0',
         metadata={'help': "The environment name. Defaults to 'CartPole-v0'"},
     )
     num_envs: Optional[int] = field(
@@ -50,7 +50,7 @@ class RLArguments:
     )
     # Buffer settings
     buffer_size: Optional[int] = field(
-        default=1000000,
+        default=10000,
         metadata={
             'help': 'Maximum size of the replay buffer. Defaults to 10000'
         },
@@ -71,7 +71,7 @@ class RLArguments:
         },
     )
     eps_greedy_end: Optional[float] = field(
-        default=0.05,
+        default=0.01,
         metadata={
             'help':
             'Final value of epsilon for epsilon-greedy exploration. Defaults to 0.001'
@@ -86,7 +86,7 @@ class RLArguments:
     )
     # Training parameters
     max_timesteps: Optional[int] = field(
-        default=1e6,
+        default=10000,
         metadata={
             'help': 'Maximum number of training steps. Defaults to 12000'
         },
@@ -129,7 +129,7 @@ class RLArguments:
         },
     )
     train_frequency: Optional[int] = field(
-        default=100,
+        default=1,
         metadata={'help': 'Frequency of training updates. Defaults to 200'},
     )
     gradient_steps: Optional[int] = field(
@@ -140,22 +140,21 @@ class RLArguments:
         },
     )
     soft_update_tau: Optional[float] = field(
-        default=0.05,
+        default=1.0,
         metadata={
             'help':
             'Interpolation parameter for soft target updates. Defaults to 0.95'
         },
     )
     target_update_frequency: Optional[int] = field(
-        default=500,
+        default=100,
         metadata={
             'help': 'Frequency of updating the target network. Defaults to 500'
         },
     )
-
     # Evaluation settings
     eval_frequency: Optional[int] = field(
-        default=1000,
+        default=100,
         metadata={'help': 'Frequency of evaluation. Defaults to 1000'},
     )
     eval_episodes: Optional[int] = field(
@@ -182,11 +181,11 @@ class RLArguments:
         metadata={'help': 'Frequency of saving the model. Defaults to 10000'},
     )
     train_log_interval: Optional[int] = field(
-        default=100,
+        default=10,
         metadata={'help': 'Logging interval during training. Defaults to 1'},
     )
     test_log_interval: Optional[int] = field(
-        default=200,
+        default=20,
         metadata={'help': 'Logging interval during evaluation. Defaults to 5'},
     )
     save_interval: Optional[int] = field(
