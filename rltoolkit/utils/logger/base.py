@@ -52,12 +52,7 @@ class BaseLogger(ABC):
         """
         if collect_result['num_episode'] > 0:
             if step - self.last_log_train_step >= self.train_interval:
-                # log_data = {f'train/{k}': v for k, v in collect_result.items()}
-                log_data = {
-                    'train/episode': collect_result['num_episode'],
-                    'train/reward_mean': collect_result['reward_mean'],
-                    'train/length_mean': collect_result['length_mean'],
-                }
+                log_data = {f'train/{k}': v for k, v in collect_result.items()}
                 self.write('train/env_step', step, log_data)
                 self.last_log_train_step = step
 

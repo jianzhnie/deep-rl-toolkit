@@ -20,8 +20,11 @@ class DQNAgent(BaseAgent):
     2015.
 
     Args:
-        args (Namespace): argsuration object for the agent.
-        envs (Union[None]): Environment object.
+        args (RLArguments): Configuration object for the agent.
+        env (Env): Environment object.
+        state_shape (Optional[Union[int, List[int]]]): Shape of the state.
+        action_shape (Optional[Union[int, List[int]]]): Shape of the action.
+        device (Optional[Union[str, torch.device]]): Device to use for computation.
     """
 
     def __init__(
@@ -58,40 +61,32 @@ class DQNAgent(BaseAgent):
             max_steps=args.max_timesteps,
         )
 
-    def get_action(self, obs: torch.Tensor) -> torch.Tensor:
+    def get_action(self, obs: np.array) -> np.ndarray:
         """Get action from the actor network.
-
-        Sample an action when given an observation, based on the current
-        epsilon value, either a greedy action or a random action will be
-        returned.
-
-        Args:
-            obs: Current observation
-
-        Returns:
-            actions (np.array): Action
-        """
-        # Choose a random action with probability epsilon
-
-        if np.random.rand() < self.eps_greedy:
-            action = self.env.action_space.sample()
-        else:
-            action = self.predict(obs)
-
-        # update exploration
-        self.eps_greedy = max(self.eps_greedy_scheduler.step(),
-                              self.args.eps_greedy_end)
-        return action
-
-    def predict(self, obs: torch.Tensor) -> Union[int, List[int]]:
-        """Predict an action when given an observation, a greedy action will be
-        returned.
 
         Args:
             obs (torch.Tensor): Current observation
 
         Returns:
-            actions (Union[int, List[int]]): Action
+            np.ndarray: Selected action
+        """
+        if np.random.rand() < self.eps_greedy:
+            action = self.env.action_space.sample()
+        else:
+            action = self.predict(obs)
+
+        self.eps_greedy = max(self.eps_greedy_scheduler.step(),
+                              self.args.eps_greedy_end)
+        return action
+
+    def predict(self, obs: np.array) -> int:
+        """Predict an action given an observation.
+
+        Args:
+            obs (torch.Tensor): Current observation
+
+        Returns:
+            int: Selected action
         """
         if obs.ndim == 1:
             # If obs is 1-dimensional, we need to expand it to have batch_size = 1
@@ -99,57 +94,40 @@ class DQNAgent(BaseAgent):
 
         obs = torch.Tensor(obs).to(self.device)
         q_values = self.q_network(obs)
-        # Ensure self.q_network is a callable object
         actions = torch.argmax(q_values, dim=1).item()
         return actions
 
     def learn(self, batch: dict[str, torch.Tensor]) -> float:
-        """DQN learner.
+        """Perform a learning step.
+
+        Args:
+            batch (dict[str, torch.Tensor]): Batch of experience
 
         Returns:
-            dict[str, Union[float, int]]: Information about the learning process.
+            float: Loss value
         """
-        # Unpack the batch
-        obs: torch.Tensor = batch.get('obs')
-        next_obs: torch.Tensor = batch.get('next_obs')
-        action: torch.Tensor = batch.get('action')
-        reward: torch.Tensor = batch.get('reward')
-        done: torch.Tensor = batch.get('done')
+        obs = batch['obs'].to(self.device)
+        next_obs = batch['next_obs'].to(self.device)
+        action = batch['action'].to(self.device)
+        reward = batch['reward'].to(self.device)
+        done = batch['done'].to(self.device)
 
-        # Prediction Q(s)
-        current_q_values = self.q_network(obs)
-        # Retrieve the q-values for the actions from the replay buffer
-        current_q_values = torch.gather(current_q_values,
-                                        dim=1,
-                                        index=action.long())
-
-        # Target for Q regression
+        current_q_values = self.q_network(obs).gather(1, action.long())
         with torch.no_grad():
-            next_q_values = self.q_target(next_obs)
-            # Follow greedy policy: use the one with the highest value
-            next_q_values, _ = next_q_values.max(dim=1)
-            # Avoid potential broadcast issue
-            next_q_values = next_q_values.reshape(-1, 1)
-
-        # TD target
+            next_q_values = self.q_target(next_obs).max(1, keepdim=True)[0]
         target_q_values = reward + (1 - done) * self.args.gamma * next_q_values
-        # TD loss
+
         loss = F.mse_loss(current_q_values, target_q_values)
-        # Set the gradients to zero
+
         self.optimizer.zero_grad()
         loss.backward()
-        # Clip gradient norm
         torch.nn.utils.clip_grad_norm_(self.q_network.parameters(),
                                        self.args.max_grad_norm)
-        # Backward propagation to update parameters
         self.optimizer.step()
 
-        # Update target network
         if self.global_update_step % self.args.target_update_frequency == 0:
-            soft_target_update(
-                src_model=self.q_network,
-                tgt_model=self.q_target,
-                tau=self.args.soft_update_tau,
-            )
+            soft_target_update(self.q_network, self.q_target,
+                               self.args.soft_update_tau)
+
         self.global_update_step += 1
         return loss.item()

@@ -23,9 +23,9 @@ class QNet(nn.Module):
         input_dim = int(np.prod(state_shape))
         action_dim = int(np.prod(action_shape))
         self.network = nn.Sequential(
-            nn.Linear(input_dim, 120),
+            nn.Linear(input_dim, 128),
             nn.ReLU(),
-            nn.Linear(120, action_dim),
+            nn.Linear(128, action_dim),
         )
 
     def forward(self, obs: torch.Tensor) -> torch.Tensor:
