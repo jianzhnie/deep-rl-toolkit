@@ -7,8 +7,8 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from rltoolkit.agents.base_agent import BaseAgent
-from rltoolkit.agents.configs import BaseConfig
 from rltoolkit.agents.network import QNetwork
+from rltoolkit.agents.rl_args import RLArguments
 from rltoolkit.envs import BaseVectorEnv, DummyVectorEnv
 from rltoolkit.utils import LinearDecayScheduler
 from torch.optim.lr_scheduler import LinearLR
@@ -21,18 +21,18 @@ class DQNAgent(BaseAgent):
     2015.
 
     Args:
-        config (Namespace): Configuration object for the agent.
+        args (Namespace): argsuration object for the agent.
         envs (Union[None]): Environment object.
     """
 
     def __init__(
         self,
-        config: BaseConfig,
+        args: RLArguments,
         envs: Union[gym.Env, BaseVectorEnv],
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
-        super().__init__(config)
-        self.config = config
+        super().__init__(args)
+        self.args = args
         if isinstance(envs, gym.Env) and not hasattr(envs, '__len__'):
             warnings.warn(
                 'Single environment detected, wrap to DummyVectorEnv.',
@@ -44,24 +44,24 @@ class DQNAgent(BaseAgent):
         self.action_space = self.envs.action_space
 
         self.device = device
-        self.gradient_steps: int = config.gradient_steps
+        self.gradient_steps: int = args.gradient_steps
 
-        self.q_network = QNetwork(state_shape=config.state_shape,
-                                  action_shape=config.action_shape).to(device)
+        self.q_network = QNetwork(state_shape=args.state_shape,
+                                  action_shape=args.action_shape).to(device)
         self.q_target = copy.deepcopy(self.q_network)
 
         self.optimizer = torch.optim.Adam(params=self.q_network.parameters(),
-                                          lr=self.config.learning_rate)
+                                          lr=self.args.learning_rate)
         self.lr_scheduler = LinearLR(
             optimizer=self.optimizer,
-            start_factor=self.config.learning_rate,
-            end_factor=self.config.min_learning_rate,
-            total_iters=self.config.max_timesteps,
+            start_factor=self.args.learning_rate,
+            end_factor=self.args.min_learning_rate,
+            total_iters=self.args.max_timesteps,
         )
         self.eps_greedy_scheduler = LinearDecayScheduler(
-            config.eps_greedy_start,
-            config.eps_greedy_end,
-            max_steps=config.max_timesteps,
+            args.eps_greedy_start,
+            args.eps_greedy_end,
+            max_steps=args.max_timesteps,
         )
 
     def get_action(self, obs: torch.Tensor, eps_greedy: float) -> torch.Tensor:
@@ -83,12 +83,12 @@ class DQNAgent(BaseAgent):
             try:
                 actions = [
                     self.action_space[i].sample()
-                    for i in range(self.config.num_envs)
+                    for i in range(self.args.num_envs)
                 ]
             except TypeError:  # envpool's action space is not for per-env
                 actions = [
                     self.action_space.sample()
-                    for _ in range(self.config.num_envs)
+                    for _ in range(self.args.num_envs)
                 ]
         else:
             actions = self.predict(obs)
@@ -144,7 +144,7 @@ class DQNAgent(BaseAgent):
 
         # TD target
         target_q_values = reward + (1 -
-                                    dones) * self.config.gamma * next_q_values
+                                    dones) * self.args.gamma * next_q_values
         # TD loss
         loss = F.mse_loss(current_q_values, target_q_values)
         # Set the gradients to zero
@@ -152,7 +152,7 @@ class DQNAgent(BaseAgent):
         loss.backward()
         # Clip gradient norm
         torch.nn.utils.clip_grad_norm_(self.q_network.parameters(),
-                                       self.config.max_grad_norm)
+                                       self.args.max_grad_norm)
         # Backward propagation to update parameters
         self.optimizer.step()
 
