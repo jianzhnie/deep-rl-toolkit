@@ -5,8 +5,7 @@ import gymnasium as gym
 import numpy as np
 import torch
 import torch.nn.functional as F
-from rltoolkit.envs import BaseVectorEnv
-from rltoolkit.utils import LinearDecayScheduler
+from rltoolkit.utils import LinearDecayScheduler, soft_target_update
 from torch.optim.lr_scheduler import LinearLR
 
 from cleanrl.base_agent import BaseAgent
@@ -28,16 +27,18 @@ class DQNAgent(BaseAgent):
     def __init__(
         self,
         args: RLArguments,
-        envs: Union[gym.Env, BaseVectorEnv],
+        env: gym.Env,
         state_shape: Optional[Union[int, List[int]]] = None,
         action_shape: Optional[Union[int, List[int]]] = None,
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
         super().__init__(args)
         self.args = args
+        self.env = env
         self.device = device
-        self.action_space = envs.action_space
+        self.global_update_step: int = 0
         self.gradient_steps: int = args.gradient_steps
+        self.eps_greedy = args.eps_greedy_start
 
         self.q_network = QNetwork(state_shape=state_shape,
                                   action_shape=action_shape).to(device)
@@ -57,7 +58,7 @@ class DQNAgent(BaseAgent):
             max_steps=args.max_timesteps,
         )
 
-    def get_action(self, obs: torch.Tensor, eps_greedy: float) -> torch.Tensor:
+    def get_action(self, obs: torch.Tensor) -> torch.Tensor:
         """Get action from the actor network.
 
         Sample an action when given an observation, based on the current
@@ -72,21 +73,15 @@ class DQNAgent(BaseAgent):
         """
         # Choose a random action with probability epsilon
 
-        if np.random.rand() < eps_greedy:
-            try:
-                actions = [
-                    self.action_space[i].sample()
-                    for i in range(self.args.num_envs)
-                ]
-            except TypeError:  # envpool's action space is not for per-env
-                actions = [
-                    self.action_space.sample()
-                    for _ in range(self.args.num_envs)
-                ]
-            actions = np.array(actions)
+        if np.random.rand() < self.eps_greedy:
+            action = self.env.action_space.sample()
         else:
-            actions = self.predict(obs)
-        return actions
+            action = self.predict(obs)
+
+        # update exploration
+        self.eps_greedy = max(self.eps_greedy_scheduler.step(),
+                              self.args.eps_greedy_end)
+        return action
 
     def predict(self, obs: torch.Tensor) -> Union[int, List[int]]:
         """Predict an action when given an observation, a greedy action will be
@@ -150,4 +145,12 @@ class DQNAgent(BaseAgent):
         # Backward propagation to update parameters
         self.optimizer.step()
 
+        # Update target network
+        if self.global_update_step % self.args.target_update_frequency == 0:
+            soft_target_update(
+                src_model=self.q_network,
+                tgt_model=self.q_target,
+                tau=self.args.soft_update_tau,
+            )
+        self.global_update_step += 1
         return loss.item()
