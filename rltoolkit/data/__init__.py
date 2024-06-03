@@ -3,14 +3,19 @@
 
 from rltoolkit.data.batch import Batch
 from rltoolkit.data.buffer.base import ReplayBuffer
-from rltoolkit.data.buffer.base_buffer import BaseBuffer
+from rltoolkit.data.buffer.buffers import (
+    BaseBuffer,
+    OffPolicyBuffer,
+    RolloutBuffer,
+    SimpleReplayBuffer,
+)
 from rltoolkit.data.buffer.cached import CachedReplayBuffer
 from rltoolkit.data.buffer.her import HERReplayBuffer
-from rltoolkit.data.buffer.manager import (HERReplayBufferManager,
-                                           PrioritizedReplayBufferManager,
-                                           ReplayBufferManager)
-from rltoolkit.data.buffer.offpolicy_buffer import OffPolicyBuffer
-from rltoolkit.data.buffer.onpolicy_buffer import RolloutBuffer
+from rltoolkit.data.buffer.manager import (
+    HERReplayBufferManager,
+    PrioritizedReplayBufferManager,
+    ReplayBufferManager,
+)
 from rltoolkit.data.buffer.prio import PrioritizedReplayBuffer
 from rltoolkit.data.buffer.vecbuf import (HERVectorReplayBuffer,
                                           PrioritizedVectorReplayBuffer,
@@ -29,6 +34,7 @@ __all__ = [
     'AsyncCollector',
     'ReplayBuffer',
     'CachedReplayBuffer',
+    'SimpleReplayBuffer',
     'HERReplayBuffer',
     'PrioritizedReplayBuffer',
     'VectorReplayBuffer',
