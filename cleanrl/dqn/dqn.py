@@ -1,17 +1,17 @@
 import copy
-import warnings
 from typing import List, Optional, Union
 
 import gymnasium as gym
 import numpy as np
 import torch
 import torch.nn.functional as F
-from rltoolkit.agents.base_agent import BaseAgent
-from rltoolkit.agents.network import QNetwork
-from rltoolkit.agents.rl_args import RLArguments
-from rltoolkit.envs import BaseVectorEnv, DummyVectorEnv
+from rltoolkit.envs import BaseVectorEnv
 from rltoolkit.utils import LinearDecayScheduler
 from torch.optim.lr_scheduler import LinearLR
+
+from cleanrl.base_agent import BaseAgent
+from cleanrl.network import QNetwork
+from cleanrl.rl_args import RLArguments
 
 
 class DQNAgent(BaseAgent):
@@ -29,25 +29,18 @@ class DQNAgent(BaseAgent):
         self,
         args: RLArguments,
         envs: Union[gym.Env, BaseVectorEnv],
+        state_shape: Optional[Union[int, List[int]]] = None,
+        action_shape: Optional[Union[int, List[int]]] = None,
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
         super().__init__(args)
         self.args = args
-        if isinstance(envs, gym.Env) and not hasattr(envs, '__len__'):
-            warnings.warn(
-                'Single environment detected, wrap to DummyVectorEnv.',
-                stacklevel=2,
-            )
-            self.envs = DummyVectorEnv([lambda: envs])  # type: ignore
-        else:
-            self.envs = envs  # type: ignore
-        self.action_space = self.envs.action_space
-
         self.device = device
+        self.action_space = envs.action_space
         self.gradient_steps: int = args.gradient_steps
 
-        self.q_network = QNetwork(state_shape=args.state_shape,
-                                  action_shape=args.action_shape).to(device)
+        self.q_network = QNetwork(state_shape=state_shape,
+                                  action_shape=action_shape).to(device)
         self.q_target = copy.deepcopy(self.q_network)
 
         self.optimizer = torch.optim.Adam(params=self.q_network.parameters(),
@@ -90,6 +83,7 @@ class DQNAgent(BaseAgent):
                     self.action_space.sample()
                     for _ in range(self.args.num_envs)
                 ]
+            actions = np.array(actions)
         else:
             actions = self.predict(obs)
         return actions
@@ -109,8 +103,8 @@ class DQNAgent(BaseAgent):
             obs = np.expand_dims(obs, axis=0)
 
         obs = torch.Tensor(obs).to(self.device)
-        q_values = self.q_network(
-            obs)  # Ensure self.q_network is a callable object
+        q_values = self.q_network(obs)
+        # Ensure self.q_network is a callable object
         actions = torch.argmax(q_values, dim=1).cpu().numpy()
         return actions
 

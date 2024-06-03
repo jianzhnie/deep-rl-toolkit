@@ -17,13 +17,6 @@ class RLArguments:
         default=True,
         metadata={'help': 'Whether to use CUDA. Defaults to True'},
     )
-    torch_deterministic: Optional[bool] = field(
-        default=None,
-        metadata={
-            'help':
-            "Whether to set torch's random seed for deterministic behavior. Defaults to True"
-        },
-    )
     optimize_memory_usage: Optional[bool] = field(
         default=False,
         metadata={
@@ -38,7 +31,7 @@ class RLArguments:
         },
     )
     env_id: Optional[str] = field(
-        default='CartPole-v0',
+        default='CartPole-v1',
         metadata={'help': "The environment name. Defaults to 'CartPole-v0'"},
     )
     num_envs: Optional[int] = field(
@@ -57,7 +50,7 @@ class RLArguments:
     )
     # Buffer settings
     buffer_size: Optional[int] = field(
-        default=1e6,
+        default=1000000,
         metadata={
             'help': 'Maximum size of the replay buffer. Defaults to 10000'
         },

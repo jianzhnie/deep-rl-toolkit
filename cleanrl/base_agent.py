@@ -2,7 +2,7 @@ import os
 import sys
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from rltoolkit.agents.rl_args import RLArguments
+from cleanrl.rl_args import RLArguments
 
 
 class BaseAgent:

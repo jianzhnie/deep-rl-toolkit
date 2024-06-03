@@ -129,13 +129,39 @@ class Runner:
         while self.global_step < self.args.max_timesteps:
             self.eps_greedy = self.agent.eps_greedy_scheduler.step()
             actions = self.agent.get_action(obs, eps_greedy=self.eps_greedy)
-            actions = np.array(actions)
             next_obs, rewards, terminals, truncations, infos = self.train_envs.step(
                 actions)
+
+            # TRY NOT TO MODIFY: record rewards for plotting purposes
+            if 'final_info' in infos:
+                for info in infos['final_info']:
+                    if info and 'episode' in info:
+                        self.text_logger.info(
+                            f"global_step={self.global_step}, episodic_return={info['episode']['r']}"
+                        )
+                        self.writer.add_scalar(
+                            'charts/episodic_return',
+                            info['episode']['r'],
+                            self.global_step,
+                        )
+                        self.writer.add_scalar(
+                            'charts/episodic_length',
+                            info['episode']['l'],
+                            self.global_step,
+                        )
+
+            # TRY NOT TO MODIFY: save data to reply buffer; handle `final_observation`
+            real_next_obs = next_obs.copy()
+            for idx, trunc in enumerate(truncations):
+                if trunc:
+                    real_next_obs[idx] = infos['final_observation'][idx]
+
             dones = np.logical_or(terminals, truncations)
             self.buffer.add(obs, next_obs, actions, rewards, dones, infos)
+
             # Crucial step easy to overlook
             obs = next_obs
+
             # Training logic
             if self.global_step >= self.args.warmup_learn_steps:
                 if self.global_step % self.args.train_frequency == 0:
@@ -150,6 +176,9 @@ class Runner:
                     step_info['loss'] = np.mean(graddient_step_losses)
                     step_info['learning_rate'] = self.args.learning_rate
                     step_info['eps_greedy'] = self.eps_greedy
+                    step_info['num_episode'] = 1
+                    step_info['reward_mean'] = 0
+                    step_info['length_mean'] = 0
 
                     # Log training information
                     train_fps = int(self.global_step /

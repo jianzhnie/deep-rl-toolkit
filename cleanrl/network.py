@@ -15,7 +15,7 @@ class QNetwork(nn.Module):
         self,
         state_shape: Union[int, Tuple[int]],
         action_shape: Union[int, Tuple[int]],
-    ):
+    ) -> None:
         super().__init__()
         input_dim = int(np.prod(state_shape))
         action_dim = int(np.prod(action_shape))
