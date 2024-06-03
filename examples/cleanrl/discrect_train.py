@@ -7,7 +7,7 @@ import tyro
 
 sys.path.append('../../')
 import gymnasium as gym
-from rltoolkit.data import OffPolicyBuffer
+from rltoolkit.data import SimpleReplayBuffer
 
 from cleanrl.dqn import DQNAgent
 from cleanrl.rl_args import RLArguments
@@ -45,13 +45,11 @@ if __name__ == '__main__':
 
     # agent
     agent = DQNAgent(args, train_env, state_shape, action_shape, device)
-    buffer = OffPolicyBuffer(
+    buffer = SimpleReplayBuffer(
         buffer_size=args.buffer_size,
         observation_space=train_env.observation_space,
         action_space=train_env.action_space,
         device=device,
-        num_envs=args.num_envs,
-        handle_timeout_termination=False,
     )
     runner = Runner(
         args,
