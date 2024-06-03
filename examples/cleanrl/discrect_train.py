@@ -4,30 +4,45 @@ import sys
 import numpy as np
 import torch
 
-sys.path.append('../')
-import gym
+sys.path.append('../../')
+import gymnasium as gym
 from rltoolkit.data import OffPolicyBuffer
-from rltoolkit.envs import SubprocVectorEnv
 from transformers import HfArgumentParser
 
 from cleanrl.dqn import DQNAgent
 from cleanrl.rl_args import RLArguments
 from cleanrl.runner import Runner
 
+
+def make_env(env_id, seed):
+
+    def thunk():
+        env = gym.make(env_id)
+        env = gym.wrappers.RecordEpisodeStatistics(env)
+        env.action_space.seed(seed)
+        return env
+
+    return thunk
+
+
 if __name__ == '__main__':
-    parser = HfArgumentParser(RLArguments)
-    args: RLArguments = parser.parse_args_into_dataclasses()
+    parser = HfArgumentParser((RLArguments, ))
+    (args,
+     _) = parser.parse_args_into_dataclasses(return_remaining_strings=True)
+
+    args: RLArguments
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    torch.backends.cudnn.deterministic = args.torch_deterministic
 
-    # You can also try SubprocVectorEnv, which will use parallelization
-    train_envs = SubprocVectorEnv(
-        [lambda: gym.make(args.env_id) for _ in range(args.train_num)])
-    test_envs = SubprocVectorEnv(
-        [lambda: gym.make(args.env_id) for _ in range(args.test_num)])
+    train_envs = gym.vector.SyncVectorEnv(
+        [make_env(args.env_id, args.seed + i) for i in range(args.num_envs)])
+    test_envs = gym.vector.SyncVectorEnv(
+        [make_env(args.env_id, args.seed + i) for i in range(args.num_envs)])
+    assert isinstance(
+        train_envs.single_action_space,
+        gym.spaces.Discrete), 'only discrete action space is supported'
 
     # Note: You can easily define other networks.
     env: gym.Env = gym.make(args.env_id, render_mode='human')
@@ -40,14 +55,20 @@ if __name__ == '__main__':
     print('Actions shape:', action_shape)
 
     # agent
-    agent = DQNAgent(args, train_envs, device)
+    agent = DQNAgent(args, train_envs, state_shape, action_shape, device)
     buffer = OffPolicyBuffer(
         args.buffer_size,
-        env.observation_space,
-        env.action_space,
+        train_envs.single_observation_space,
+        train_envs.single_action_space,
         device=device,
         num_envs=args.num_envs,
         handle_timeout_termination=False,
     )
-    runner = Runner(args)
+    runner = Runner(
+        args,
+        train_envs=train_envs,
+        test_envs=test_envs,
+        agent=agent,
+        buffer=buffer,
+    )
     runner.run()
