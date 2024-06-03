@@ -74,8 +74,9 @@ class Runner:
 
     # train an episode
     def run_train_episode(self):
-        episode_reward = 0
         episode_step = 0
+        episode_reward = 0
+        episode_loss = []
         obs, _ = self.train_env.reset()
         done = False
         while not done:
@@ -84,22 +85,21 @@ class Runner:
             next_obs, reward, terminated, truncated, info = self.train_env.step(
                 action)
             done = np.logical_or(terminated, truncated)
-            self.buffer.add(obs, next_obs, action, reward, done, info)
+            self.buffer.add(obs, next_obs, action, reward, done)
             if self.buffer.size() > self.args.warmup_learn_steps:
                 if self.global_step % self.args.train_frequency == 0:
-                    graddient_step_losses = []
                     for _ in range(self.args.gradient_steps):
                         batchs = self.buffer.sample(self.args.batch_size)
                         loss = self.agent.learn(batchs)
-                        graddient_step_losses.append(loss)
+                        episode_loss.append(loss)
 
             episode_reward += reward
             obs = next_obs
 
         train_info = {
-            'episode_reward': episode_reward,
-            'episode_step': episode_step,
-            'loss': np.mean(graddient_step_losses),
+            'reward_mean': episode_reward,
+            'length_mean': episode_step,
+            'loss': np.mean(episode_loss) if episode_loss else 0.0,
         }
         return train_info
 
@@ -110,8 +110,7 @@ class Runner:
         eval_rewards = []
         eval_steps = []
         for _ in range(n_eval_episodes):
-            self.test_env.seed(np.random.randint(100))
-            obs = self.test_env.reset()
+            obs, info = self.test_env.reset(seed=np.random.randint(100))
             done = False
             episode_reward = 0.0
             episode_step = 0
@@ -122,15 +121,21 @@ class Runner:
                 obs = next_obs
                 episode_reward += reward
                 episode_step += 1
+                done = np.logical_or(terminated, truncated)
                 if done:
-                    self.test_env.close()
+                    self.test_env.reset()
             eval_rewards.append(episode_reward)
             eval_steps.append(episode_step)
-        mean_reward = np.mean(eval_rewards)
-        mean_steps = np.mean(eval_steps)
+
+        reward_mean = np.mean(eval_rewards)
+        reward_std = np.std(eval_rewards)
+        length_mean = np.mean(eval_steps)
+        length_std = np.std(eval_steps)
         test_info = {
-            'reward_mean': mean_reward,
-            'length_mean': mean_steps,
+            'reward_mean': reward_mean,
+            'reward_std': reward_std,
+            'length_mean': length_mean,
+            'length_std': length_std,
         }
         return test_info
 
@@ -141,32 +146,41 @@ class Runner:
         episode_cnt = 0
         while self.buffer.size() < self.args.warmup_learn_steps:
             train_info = self.run_train_episode()
-            progress_bar.update(train_info['episode_step'])
+            progress_bar.update(train_info['length_mean'])
 
         while self.global_step < self.args.max_timesteps:
             # Training logic
             train_info = self.run_train_episode()
-            episode_step = train_info['episode_step']
+            episode_step = train_info['length_mean']
             self.progress_bar.update(episode_step)
             self.global_step += episode_step
             episode_cnt += 1
 
             train_info['learning_rate'] = self.args.learning_rate
             train_info['eps_greedy'] = self.eps_greedy
-            train_info['episode_cnt'] = episode_cnt
+            train_info['num_episode'] = episode_cnt
 
             # Log training information
             train_fps = int(self.global_step / (time.time() - self.start_time))
             train_info['fps'] = train_fps
-            log_message = ('[Train], global_step: {}, train_fps: {}, '
-                           'loss: {:.2f}'.format(self.global_step, train_fps,
-                                                 train_info['loss']))
-            self.text_logger.info(log_message)
-            self.log_train_infos(train_info, self.global_step)
+
+            if episode_cnt % self.args.train_log_interval:
+                log_message = (
+                    '[Train], global_step: {}, episodes: {}, train_fps: {}, '
+                    'reward_mean: {:.2f}, length_mean: {:.2f}').format(
+                        self.global_step,
+                        episode_cnt,
+                        train_fps,
+                        train_info['reward_mean'],
+                        train_info['length_mean'],
+                    )
+                self.text_logger.info(log_message)
+                self.log_train_infos(train_info, self.global_step)
 
             # perform evaluation
             if episode_cnt % self.args.test_log_interval == 0:
                 test_info = self.run_evaluate_episodes(n_eval_episodes=5)
+                test_info['num_episode'] = episode_cnt
                 self.text_logger.info(
                     '[Eval], episode: {}, eval_rewards: {:.2f}'.format(
                         episode_cnt, test_info.get('reward_mean', 0.0)))

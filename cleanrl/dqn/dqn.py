@@ -100,7 +100,7 @@ class DQNAgent(BaseAgent):
         obs = torch.Tensor(obs).to(self.device)
         q_values = self.q_network(obs)
         # Ensure self.q_network is a callable object
-        actions = torch.argmax(q_values, dim=1).cpu().numpy()
+        actions = torch.argmax(q_values, dim=1).item()
         return actions
 
     def learn(self, batch: dict[str, torch.Tensor]) -> float:
@@ -110,11 +110,11 @@ class DQNAgent(BaseAgent):
             dict[str, Union[float, int]]: Information about the learning process.
         """
         # Unpack the batch
-        obs: torch.Tensor = batch.observations
-        action: torch.Tensor = batch.actions
-        reward: torch.Tensor = batch.rewards
-        next_obs: torch.Tensor = batch.next_observations
-        dones: torch.Tensor = batch.dones
+        obs: torch.Tensor = batch.get('obs')
+        next_obs: torch.Tensor = batch.get('next_obs')
+        action: torch.Tensor = batch.get('action')
+        reward: torch.Tensor = batch.get('reward')
+        done: torch.Tensor = batch.get('done')
 
         # Prediction Q(s)
         current_q_values = self.q_network(obs)
@@ -132,8 +132,7 @@ class DQNAgent(BaseAgent):
             next_q_values = next_q_values.reshape(-1, 1)
 
         # TD target
-        target_q_values = reward + (1 -
-                                    dones) * self.args.gamma * next_q_values
+        target_q_values = reward + (1 - done) * self.args.gamma * next_q_values
         # TD loss
         loss = F.mse_loss(current_q_values, target_q_values)
         # Set the gradients to zero

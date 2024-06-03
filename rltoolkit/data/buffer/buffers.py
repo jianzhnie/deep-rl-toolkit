@@ -657,7 +657,7 @@ class SimpleReplayBuffer(object):
             next_obs=self.next_observations[idxs],
             action=self.actions[idxs],
             reward=self.rewards[idxs],
-            terminal=self.dones[idxs],
+            done=self.dones[idxs],
             indices=idxs,
         )
         batch = {

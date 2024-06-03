@@ -186,7 +186,7 @@ class RLArguments:
         metadata={'help': 'Logging interval during training. Defaults to 1'},
     )
     test_log_interval: Optional[int] = field(
-        default=500,
+        default=200,
         metadata={'help': 'Logging interval during evaluation. Defaults to 5'},
     )
     save_interval: Optional[int] = field(
@@ -260,7 +260,7 @@ class DQNConfig:
         learning_rate: float = 1e-3,
         min_learning_rate: float = 1e-5,
         lr_scheduler_method: str = 'linear',
-        max_timesteps: int = 500000,
+        max_timesteps: int = 100000,
         warmup_learn_steps: int = 1000,
         train_frequency: int = 100,
         gradient_steps: int = 5,
