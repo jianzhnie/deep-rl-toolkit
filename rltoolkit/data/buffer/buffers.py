@@ -562,13 +562,14 @@ class RolloutBuffer(BaseBuffer):
         return RolloutBufferSamples(*tuple(map(self.to_torch, data)))
 
 
-class SimpleReplayBuffer(object):
+class SimpleReplayBuffer:
     """A simple FIFO experience replay buffer for off-policy RL or offline RL.
 
     Args:
-        buffer_size (int): max size of replay memory
-        obs_dim (int or tuple): observation shape
-        act_dim (int or tuple): action shape
+        buffer_size (int): Maximum size of the replay memory.
+        observation_space (spaces.Space): The observation space of the environment.
+        action_space (spaces.Space): The action space of the environment.
+        device (str, optional): Device to store the tensors ('cpu' or 'cuda'). Default is 'cpu'.
     """
 
     def __init__(
@@ -586,14 +587,12 @@ class SimpleReplayBuffer(object):
 
         self.observations = np.zeros((buffer_size, ) + self.obs_shape,
                                      dtype=observation_space.dtype)
-        self.next_observations = np.zeros(
-            (self.buffer_size, ) + self.obs_shape,
-            dtype=observation_space.dtype,
-        )
-        self.actions = np.zeros((self.buffer_size, self.action_dim),
+        self.next_observations = np.zeros((buffer_size, ) + self.obs_shape,
+                                          dtype=observation_space.dtype)
+        self.actions = np.zeros((buffer_size, self.action_dim),
                                 dtype=action_space.dtype)
-        self.rewards = np.zeros((self.buffer_size, 1), dtype=np.float32)
-        self.dones = np.zeros((self.buffer_size, 1), dtype=np.float32)
+        self.rewards = np.zeros((buffer_size, 1), dtype=np.float32)
+        self.dones = np.zeros((buffer_size, 1), dtype=np.float32)
 
         self.curr_ptr = 0
         self.curr_size = 0
@@ -607,16 +606,15 @@ class SimpleReplayBuffer(object):
         reward: np.ndarray,
         done: np.ndarray,
     ) -> None:
-        """add an experience sample at the end of replay memory.
+        """Add an experience sample to the replay buffer.
 
         Args:
-            obs (float32): observation, shape of obs_dim
-            act (int32 in Continuous control environment, float32 in Continuous control environment): action, shape of act_dim
-            reward (float32): reward
-            next_obs (float32): next observation, shape of obs_dim
-            terminal (bool): terminal of an episode or not
+            obs (np.ndarray): The observation.
+            next_obs (np.ndarray): The next observation.
+            action (np.ndarray): The action taken.
+            reward (np.ndarray): The reward received.
+            done (np.ndarray): Whether the episode is done.
         """
-
         self.observations[self.curr_ptr] = np.array(obs).copy()
         self.next_observations[self.curr_ptr] = np.array(next_obs).copy()
         self.actions[self.curr_ptr] = np.array(action).copy()
@@ -627,31 +625,29 @@ class SimpleReplayBuffer(object):
         self.curr_size = min(self.curr_size + 1, self.buffer_size)
 
     def to_torch(self, array: np.ndarray, copy: bool = True) -> torch.Tensor:
-        """
-        Convert a numpy array to a PyTorch tensor.
-        Note: it copies the data by default
+        """Convert a numpy array to a PyTorch tensor.
 
-        :param array:
-        :param copy: Whether to copy or not the data
-            (may be useful to avoid changing things be reference)
-        :return:
+        Args:
+            array (np.ndarray): The numpy array to convert.
+            copy (bool, optional): Whether to copy the data. Defaults to True.
+
+        Returns:
+            torch.Tensor: The PyTorch tensor.
         """
         if copy:
             return torch.tensor(array).to(self.device)
         return torch.as_tensor(array).to(self.device)
 
-    def sample(self, batch_size: int) -> Dict[str, np.ndarray]:
-        """sample a batch from replay memory.
+    def sample(self, batch_size: int) -> Dict[str, torch.Tensor]:
+        """Sample a batch of experiences from the replay buffer.
 
         Args:
-            batch_size (int): batch size
+            batch_size (int): The number of samples to return.
 
         Returns:
-            a batch of experience samples: obs, action, reward, next_obs, terminal
+            Dict[str, torch.Tensor]: A dictionary containing sampled observations, actions, rewards, next observations, dones, and indices.
         """
-
         idxs = np.random.randint(self.curr_size, size=batch_size)
-
         batch = dict(
             obs=self.observations[idxs],
             next_obs=self.next_observations[idxs],
@@ -660,21 +656,26 @@ class SimpleReplayBuffer(object):
             done=self.dones[idxs],
             indices=idxs,
         )
-        batch = {
-            key: torch.tensor(val, device=self.device)
-            for (key, val) in batch.items()
-        }
+        batch = {key: self.to_torch(val) for key, val in batch.items()}
         return batch
 
     def size(self) -> int:
-        """get current size of replay memory."""
+        """Get the current size of the replay buffer.
+
+        Returns:
+            int: The current size of the buffer.
+        """
         return self.curr_size
 
-    def __len__(self):
+    def __len__(self) -> int:
         return self.curr_size
 
     def save(self, pathname: str) -> None:
-        """save replay memory to local file (numpy file format: *.npz)."""
+        """Save the replay buffer to a file.
+
+        Args:
+            pathname (str): The path to the file where the buffer should be saved.
+        """
         other = np.array([self.curr_size, self.curr_ptr], dtype=np.int32)
         np.savez(
             pathname,
@@ -687,7 +688,11 @@ class SimpleReplayBuffer(object):
         )
 
     def load(self, pathname: str) -> None:
-        """load replay memory from local file (numpy file format: *.npz)."""
+        """Load the replay buffer from a file.
+
+        Args:
+            pathname (str): The path to the file from which the buffer should be loaded.
+        """
         data = np.load(pathname)
         other = data['other']
         self.curr_size = min(int(other[0]), self.buffer_size)
