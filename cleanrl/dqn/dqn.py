@@ -9,7 +9,7 @@ from rltoolkit.utils import LinearDecayScheduler, soft_target_update
 from torch.optim.lr_scheduler import LinearLR
 
 from cleanrl.base_agent import BaseAgent
-from cleanrl.network import QNet
+from cleanrl.network import DuelingNet, QNet
 from cleanrl.rl_args import RLArguments
 
 
@@ -33,12 +33,17 @@ class DQNAgent(BaseAgent):
         state_shape: Optional[Union[int, List[int]]] = None,
         action_shape: Optional[Union[int, List[int]]] = None,
         double_dqn: Optional[bool] = False,
+        dueling_dqn: Optional[bool] = False,
+        n_steps: Optional[int] = 1,
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
         super().__init__(args)
+        assert (isinstance(n_steps, int) and
+                n_steps > 0), 'N-step should be an integer and greater than 0.'
         self.args = args
         self.env = env
         self.double_dqn = double_dqn
+        self.n_steps = n_steps
         self.device = device
         self.global_update_step = 0
         self.target_model_update_step = 0
@@ -46,8 +51,14 @@ class DQNAgent(BaseAgent):
         self.learning_rate = args.learning_rate
 
         # Initialize networks
-        self.qnet = QNet(state_shape=state_shape,
-                         action_shape=action_shape).to(device)
+        if dueling_dqn:
+            self.qnet = DuelingNet(state_shape=state_shape,
+                                   action_shape=action_shape,
+                                   hidden_dim=128).to(device)
+        else:
+            self.qnet = QNet(state_shape=state_shape,
+                             action_shape=action_shape,
+                             hidden_dim=128).to(device)
         self.target_qnet = copy.deepcopy(self.qnet)
 
         # Initialize optimizer and schedulers
@@ -135,7 +146,9 @@ class DQNAgent(BaseAgent):
                 next_q_values = self.target_qnet(next_obs).max(1,
                                                                keepdim=True)[0]
 
-        target_q_values = reward + (1 - done) * self.args.gamma * next_q_values
+        target_q_values = (
+            reward +
+            (1 - done) * self.args.gamma**self.n_steps * next_q_values)
         # Compute loss
         loss = F.mse_loss(current_q_values, target_q_values)
 
