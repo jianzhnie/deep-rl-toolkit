@@ -110,11 +110,11 @@ class DQNAgent(BaseAgent):
         Returns:
             float: Loss value.
         """
-        obs = batch['obs'].to(self.device)
-        next_obs = batch['next_obs'].to(self.device)
-        action = batch['action'].to(self.device)
-        reward = batch['reward'].to(self.device)
-        done = batch['done'].to(self.device)
+        obs = batch['obs']
+        next_obs = batch['next_obs']
+        action = batch['action']
+        reward = batch['reward']
+        done = batch['done']
 
         # Soft update target network
         if self.global_update_step % self.args.target_update_frequency == 0:

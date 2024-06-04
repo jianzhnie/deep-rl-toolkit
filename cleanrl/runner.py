@@ -6,7 +6,7 @@ import gymnasium as gym
 import numpy as np
 
 sys.path.append((os.path.join(os.path.dirname(__file__), '..')))
-from rltoolkit.data import BaseBuffer
+from rltoolkit.data import SimpleReplayBuffer as ReplayBuffer
 from rltoolkit.utils import (ProgressBar, TensorboardLogger, WandbLogger,
                              get_outdir, get_text_logger)
 from torch.utils.tensorboard import SummaryWriter
@@ -23,7 +23,7 @@ class Runner:
         train_env: gym.Env,
         test_env: gym.Env,
         agent: BaseAgent,
-        buffer: BaseBuffer,
+        buffer: ReplayBuffer,
     ) -> None:
         self.args = args
         self.train_env = train_env
@@ -83,7 +83,7 @@ class Runner:
             action = self.agent.get_action(obs)
             next_obs, reward, terminated, truncated, info = self.train_env.step(
                 action)
-            done = np.logical_or(terminated, truncated)
+            done = terminated or truncated
             self.buffer.add(obs, next_obs, action, reward, done)
             if self.buffer.size() > self.args.warmup_learn_steps:
                 if self.global_step % self.args.train_frequency == 0:
@@ -103,10 +103,8 @@ class Runner:
         }
         return train_info
 
-    def run_evaluate_episodes(
-        self,
-        n_eval_episodes: int = 5,
-    ) -> dict[str, float]:
+    def run_evaluate_episodes(self,
+                              n_eval_episodes: int = 5) -> dict[str, float]:
         eval_rewards = []
         eval_steps = []
         for _ in range(n_eval_episodes):
@@ -121,7 +119,7 @@ class Runner:
                 obs = next_obs
                 episode_reward += reward
                 episode_step += 1
-                done = np.logical_or(terminated, truncated)
+                done = terminated or truncated
                 if done:
                     self.test_env.reset()
             eval_rewards.append(episode_reward)
@@ -185,7 +183,7 @@ class Runner:
                 test_info['num_episode'] = episode_cnt
                 self.text_logger.info(
                     '[Eval], episode: {}, eval_rewards: {:.2f}'.format(
-                        episode_cnt, test_info.get('reward_mean', 0.0)))
+                        episode_cnt, test_info['reward_mean']))
                 self.log_test_infos(test_info, self.global_step)
 
         # Save model

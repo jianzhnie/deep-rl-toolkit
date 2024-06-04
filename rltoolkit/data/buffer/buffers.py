@@ -586,9 +586,9 @@ class SimpleReplayBuffer:
         self.action_dim = get_action_dim(action_space)
 
         self.observations = np.zeros((buffer_size, ) + self.obs_shape,
-                                     dtype=observation_space.dtype)
+                                     dtype=np.float32)
         self.next_observations = np.zeros((buffer_size, ) + self.obs_shape,
-                                          dtype=observation_space.dtype)
+                                          dtype=np.float32)
         self.actions = np.zeros((buffer_size, self.action_dim),
                                 dtype=action_space.dtype)
         self.rewards = np.zeros((buffer_size, 1), dtype=np.float32)

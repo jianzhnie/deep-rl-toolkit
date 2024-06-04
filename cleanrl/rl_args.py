@@ -71,7 +71,7 @@ class RLArguments:
         },
     )
     eps_greedy_end: Optional[float] = field(
-        default=0.01,
+        default=0.1,
         metadata={
             'help':
             'Final value of epsilon for epsilon-greedy exploration. Defaults to 0.001'

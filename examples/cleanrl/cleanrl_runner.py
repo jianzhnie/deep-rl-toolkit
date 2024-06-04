@@ -31,6 +31,7 @@ if __name__ == '__main__':
     random.seed(args.seed)
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
+    torch.cuda.manual_seed_all(args.seed)
 
     # Note: You can easily define other networks.
     train_env: gym.Env = gym.make(args.env_id)
