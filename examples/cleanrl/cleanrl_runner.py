@@ -7,11 +7,10 @@ import tyro
 
 sys.path.append('../../')
 import gymnasium as gym
+from rltoolkit.cleanrl.agent import DQNAgent
+from rltoolkit.cleanrl.rl_args import RLArguments
+from rltoolkit.cleanrl.runner import Runner
 from rltoolkit.data import SimpleReplayBuffer
-
-from cleanrl.dqn import DQNAgent
-from cleanrl.rl_args import RLArguments
-from cleanrl.runner import Runner
 
 
 def make_env(env_id, seed):

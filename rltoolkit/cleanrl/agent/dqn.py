@@ -5,12 +5,11 @@ import gymnasium as gym
 import numpy as np
 import torch
 import torch.nn.functional as F
+from rltoolkit.cleanrl.agent.base import BaseAgent
+from rltoolkit.cleanrl.rl_args import RLArguments
+from rltoolkit.cleanrl.utils.network import DuelingNet, QNet
 from rltoolkit.utils import LinearDecayScheduler, soft_target_update
 from torch.optim.lr_scheduler import LinearLR
-
-from cleanrl.base_agent import BaseAgent
-from cleanrl.network import DuelingNet, QNet
-from cleanrl.rl_args import RLArguments
 
 
 class DQNAgent(BaseAgent):
