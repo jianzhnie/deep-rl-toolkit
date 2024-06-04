@@ -110,7 +110,7 @@ class Runner:
         eval_rewards = []
         eval_steps = []
         for _ in range(n_eval_episodes):
-            obs, info = self.test_env.reset(seed=np.random.randint(100))
+            obs, info = self.test_env.reset()
             done = False
             episode_reward = 0.0
             episode_step = 0
@@ -142,12 +142,8 @@ class Runner:
     def run(self) -> None:
         """Train the agent."""
         self.text_logger.info('Start Training')
-        progress_bar = ProgressBar(self.args.max_timesteps)
         episode_cnt = 0
-        while self.buffer.size() < self.args.warmup_learn_steps:
-            train_info = self.run_train_episode()
-            progress_bar.update(train_info['episode_step'])
-
+        progress_bar = ProgressBar(self.args.max_timesteps)
         while self.global_step < self.args.max_timesteps:
             # Training logic
             train_info = self.run_train_episode()
@@ -156,17 +152,17 @@ class Runner:
             self.global_step += episode_step
             episode_cnt += 1
 
-            train_info['learning_rate'] = self.agent.learning_rate
-            train_info['eps_greedy'] = self.agent.eps_greedy
-            train_info['rpm_size'] = self.buffer.size()
             train_info['num_episode'] = episode_cnt
+            train_info['rpm_size'] = self.buffer.size()
+            train_info['eps_greedy'] = self.agent.eps_greedy
+            train_info['learning_rate'] = self.agent.learning_rate
             train_info['global_update_step'] = self.agent.global_update_step
 
             # Log training information
             train_fps = int(self.global_step / (time.time() - self.start_time))
             train_info['fps'] = train_fps
 
-            if episode_cnt % self.args.train_log_interval:
+            if episode_cnt % self.args.train_log_interval == 0:
                 log_message = (
                     '[Train], global_step: {}, episodes: {}, train_fps: {}, '
                     'episode_reward: {:.2f}, episode_step: {:.2f}').format(
@@ -181,7 +177,8 @@ class Runner:
 
             # perform evaluation
             if episode_cnt % self.args.test_log_interval == 0:
-                test_info = self.run_evaluate_episodes(n_eval_episodes=5)
+                test_info = self.run_evaluate_episodes(
+                    n_eval_episodes=self.args.eval_episodes)
                 test_info['num_episode'] = episode_cnt
                 self.text_logger.info(
                     '[Eval], episode: {}, eval_rewards: {:.2f}'.format(

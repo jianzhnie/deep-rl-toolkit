@@ -39,7 +39,6 @@ class DQNAgent(BaseAgent):
         self.env = env
         self.device = device
         self.global_update_step = 0
-        self.gradient_steps = args.gradient_steps
         self.eps_greedy = args.eps_greedy_start
         self.learning_rate = args.learning_rate
 

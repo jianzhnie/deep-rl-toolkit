@@ -39,10 +39,8 @@ if __name__ == '__main__':
     action_shape = train_env.action_space.shape or train_env.action_space.n
     device = torch.device(
         'cuda' if torch.cuda.is_available() and args.use_cuda else 'cpu')
-    # should be N_FRAMES x H x W
     print('Observations shape:', state_shape)
     print('Actions shape:', action_shape)
-
     # agent
     agent = DQNAgent(args, train_env, state_shape, action_shape, device)
     buffer = SimpleReplayBuffer(

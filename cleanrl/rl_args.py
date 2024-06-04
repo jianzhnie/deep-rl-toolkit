@@ -153,10 +153,6 @@ class RLArguments:
         },
     )
     # Evaluation settings
-    eval_frequency: Optional[int] = field(
-        default=100,
-        metadata={'help': 'Frequency of evaluation. Defaults to 1000'},
-    )
     eval_episodes: Optional[int] = field(
         default=10,
         metadata={'help': 'Number of episodes to evaluate. Defaults to 10'},
@@ -175,10 +171,6 @@ class RLArguments:
             'help':
             'Flag indicating whether to save the trained model. Defaults to False'
         },
-    )
-    save_model_frequency: Optional[int] = field(
-        default=1000,
-        metadata={'help': 'Frequency of saving the model. Defaults to 10000'},
     )
     train_log_interval: Optional[int] = field(
         default=10,
