@@ -17,12 +17,9 @@ class RLArguments:
         default=True,
         metadata={'help': 'Whether to use CUDA. Defaults to True'},
     )
-    optimize_memory_usage: Optional[bool] = field(
-        default=False,
-        metadata={
-            'help': 'Whether to optimize memory usage. Defaults to False'
-        },
-    )
+    torch_deterministic: Optional[bool] = field(
+        default=True,
+        metadata={'help': 'Whether to use CUDA. Defaults to True'})
     # Environment settings
     seed: Optional[int] = field(
         default=42,
@@ -60,6 +57,12 @@ class RLArguments:
         metadata={
             'help':
             'Size of the mini-batches sampled from the replay buffer during training. Defaults to 32'
+        },
+    )
+    optimize_memory_usage: Optional[bool] = field(
+        default=False,
+        metadata={
+            'help': 'Whether to optimize memory usage. Defaults to False'
         },
     )
     # Epsilon-Greedy Scheduler settings

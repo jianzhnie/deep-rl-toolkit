@@ -89,8 +89,8 @@ class Runner:
                 if self.global_step % self.args.train_frequency == 0:
                     for _ in range(self.args.gradient_steps):
                         batchs = self.buffer.sample(self.args.batch_size)
-                        loss = self.agent.learn(batchs)
-                        episode_loss.append(loss)
+                        learn_result = self.agent.learn(batchs)
+                        episode_loss.append(learn_result['loss'])
 
             episode_reward += reward
             episode_step += 1

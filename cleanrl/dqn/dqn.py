@@ -124,25 +124,31 @@ class DQNAgent(BaseAgent):
 
         # Compute current Q values
         current_q_values = self.qnet(obs).gather(1, action.long())
-
         # Compute target Q values
         if self.double_dqn:
-            greedy_action = self.qnet(next_obs).max(dim=1, keepdim=True)[1]
-            next_q_values = self.target_qnet(next_obs).gather(1, greedy_action)
+            with torch.no_grad():
+                greedy_action = self.qnet(next_obs).max(dim=1, keepdim=True)[1]
+                next_q_values = self.target_qnet(next_obs).gather(
+                    1, greedy_action)
         else:
-            next_q_values = self.target_qnet(next_obs).max(1, keepdim=True)[0]
+            with torch.no_grad():
+                next_q_values = self.target_qnet(next_obs).max(1,
+                                                               keepdim=True)[0]
 
         target_q_values = reward + (1 - done) * self.args.gamma * next_q_values
-
         # Compute loss
         loss = F.mse_loss(current_q_values, target_q_values)
 
         # Optimize the model
         self.optimizer.zero_grad()
-        loss.backward()
         if self.args.clip_weights and self.args.max_grad_norm > 0:
             torch.nn.utils.clip_grad_norm_(self.qnet.parameters(),
                                            self.args.max_grad_norm)
+        loss.backward()
         self.optimizer.step()
         self.global_update_step += 1
-        return loss.item()
+
+        learn_result = {
+            'loss': loss.item(),
+        }
+        return learn_result

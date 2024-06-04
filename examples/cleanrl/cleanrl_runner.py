@@ -32,6 +32,7 @@ if __name__ == '__main__':
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
+    torch.backends.cudnn.deterministic = args.torch_deterministic
 
     # Note: You can easily define other networks.
     train_env: gym.Env = gym.make(args.env_id)
@@ -42,6 +43,7 @@ if __name__ == '__main__':
         'cuda' if torch.cuda.is_available() and args.use_cuda else 'cpu')
     print('Observations shape:', state_shape)
     print('Actions shape:', action_shape)
+
     # agent
     agent = DQNAgent(
         args=args,
