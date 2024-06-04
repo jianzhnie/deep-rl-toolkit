@@ -3,7 +3,6 @@
 <p align="center">
 <img src="docs/images/logo.png" alt="logo" width="1000"/>
 </p>
----
 
 ## Overview
 
@@ -24,7 +23,6 @@ Deep RL Toolkit is a flexible and high-efficient reinforcement learning framewor
 ## Table of Content
 
 - [Deep-RL-Toolkit](#deep-rl-toolkit)
-  - [](#)
   - [Overview](#overview)
   - [Table of Content](#table-of-content)
   - [Supported Algorithms](#supported-algorithms)
