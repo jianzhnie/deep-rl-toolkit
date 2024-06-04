@@ -51,12 +51,15 @@ if __name__ == '__main__':
         state_shape=state_shape,
         action_shape=action_shape,
         double_dqn=args.double_dqn,
+        n_steps=args.n_steps,
         device=device,
     )
     buffer = SimpleReplayBuffer(
         buffer_size=args.buffer_size,
         observation_space=train_env.observation_space,
         action_space=train_env.action_space,
+        n_steps=args.n_steps,
+        gamma=args.gamma,
         device=device,
     )
     runner = Runner(
