@@ -102,6 +102,13 @@ class RLArguments:
             'Flag indicating whether to use dueling DQN. Defaults to False'
         },
     )
+    n_steps: Optional[int] = field(
+        default=5,
+        metadata={
+            'help':
+            'Number of steps to take before updating the target network. Defaults to 1'
+        },
+    )
     # Training parameters
     max_timesteps: Optional[int] = field(
         default=12000,

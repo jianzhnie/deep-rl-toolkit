@@ -577,6 +577,8 @@ class SimpleReplayBuffer:
         buffer_size: int,
         observation_space: spaces.Space,
         action_space: spaces.Space,
+        n_steps: int = 3,
+        gamma: float = 0.99,
         device: str = 'cpu',
     ) -> None:
         self.buffer_size = buffer_size
@@ -593,6 +595,14 @@ class SimpleReplayBuffer:
                                 dtype=action_space.dtype)
         self.rewards = np.zeros((buffer_size, 1), dtype=np.float32)
         self.dones = np.zeros((buffer_size, 1), dtype=np.float32)
+
+        # for N-step Learning
+        assert (isinstance(n_steps, int) and
+                n_steps > 0), 'N-step should be an integer and greater than 0.'
+
+        self.n_step_buffer = deque(maxlen=n_steps)
+        self.n_steps = n_steps
+        self.gamma = gamma
 
         self.curr_ptr = 0
         self.curr_size = 0
@@ -615,6 +625,17 @@ class SimpleReplayBuffer:
             reward (np.ndarray): The reward received.
             done (np.ndarray): Whether the episode is done.
         """
+        if self.n_steps > 1:
+            transition = (obs, action, next_obs, reward, done)
+            self.n_step_buffer.append(transition)
+
+            # Make a n-step transition
+            # Firstly, get curr obs and curr action
+            obs, action = self.n_step_buffer[0][:2]
+            # get the next_obs, reward, terminal in n_step_buffer deque
+            next_obs, reward, done = self.get_n_step_info(
+                self.n_step_buffer, self.gamma)
+
         self.observations[self.curr_ptr] = np.array(obs).copy()
         self.next_observations[self.curr_ptr] = np.array(next_obs).copy()
         self.actions[self.curr_ptr] = np.array(action).copy()
@@ -623,6 +644,21 @@ class SimpleReplayBuffer:
 
         self.curr_ptr = (self.curr_ptr + 1) % self.buffer_size
         self.curr_size = min(self.curr_size + 1, self.buffer_size)
+
+    def get_n_step_info(self, n_step_buffer: Deque,
+                        gamma: float) -> Tuple[float, np.array, bool]:
+        """Return n step rew, next_obs, and terminal."""
+        # info of the last transition
+        next_obs, reward, done = n_step_buffer[-1][-3:]
+
+        # info of the n-1 transition
+        sub_n_step_buffer = list(n_step_buffer)[:-1]
+        for transition in reversed(sub_n_step_buffer):
+            next_o, r, d = transition[-3:]
+            reward += r + gamma * reward * (1 - d)
+            next_obs, done = (next_o, d) if d else (next_obs, done)
+
+        return next_obs, reward, done
 
     def to_torch(self, array: np.ndarray, copy: bool = True) -> torch.Tensor:
         """Convert a numpy array to a PyTorch tensor.
@@ -706,91 +742,7 @@ class SimpleReplayBuffer:
                                                                    curr_size]
 
 
-class MultiStepReplayBuffer(SimpleReplayBuffer):
-    """A simple numpy replay buffer."""
-
-    def __init__(
-        self,
-        buffer_size: int,
-        obs_dim: Union[int, Tuple],
-        action_dim: Union[int, Tuple] = 1,
-        batch_size: int = 32,
-        n_step: int = 3,
-        gamma: float = 0.99,
-        device: str = 'cpu',
-    ):
-        super(MultiStepReplayBuffer,
-              self).__init__(buffer_size, obs_dim, action_dim, batch_size,
-                             device)
-
-        # for N-step Learning
-        self.n_step_buffer = deque(maxlen=n_step)
-        self.n_step = n_step
-        self.gamma = gamma
-
-    def append(
-        self,
-        obs: np.ndarray,
-        act: np.ndarray,
-        rew: float,
-        next_obs: np.ndarray,
-        terminal: bool,
-    ) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray, bool]:
-        transition = (obs, act, rew, next_obs, terminal)
-        self.n_step_buffer.append(transition)
-
-        # single step transition is not ready
-        if len(self.n_step_buffer) < self.n_step:
-            return
-
-        # make a n-step transition
-        # firstly, get curr obs and curr action
-        obs, act = self.n_step_buffer[0][:2]
-        # get the next_obs, reward, terminal in n_step_buffer deque
-        rew, next_obs, terminal = self._get_n_step_info(
-            self.n_step_buffer, self.gamma)
-
-        self.observations[self.curr_ptr] = obs
-        self.next_observations[self.curr_ptr] = next_obs
-        self.actions[self.curr_ptr] = act
-        self.rewards[self.curr_ptr] = rew
-        self.dones[self.curr_ptr] = terminal
-
-        self.curr_ptr = (self.curr_ptr + 1) % self.buffer_size
-        self.curr_size = min(self.curr_size + 1, self.buffer_size)
-
-        return self.n_step_buffer[0]
-
-    def sample_batch_from_idxs(self,
-                               indices: np.ndarray) -> Dict[str, np.ndarray]:
-        # for N-step Learning
-        batch = dict(
-            obs=self.observations[indices],
-            next_obs=self.next_observations[indices],
-            action=self.actions[indices],
-            reward=self.rewards[indices],
-            terminal=self.dones[indices],
-        )
-        return batch
-
-    def _get_n_step_info(self, n_step_buffer: Deque,
-                         gamma: float) -> Tuple[float, np.array, bool]:
-        """Return n step rew, next_obs, and terminal."""
-        # info of the last transition
-        rew, next_obs, terminal = n_step_buffer[-1][-3:]
-
-        # info of the n-1 transition
-        sub_n_step_buffer = list(n_step_buffer)[:-1]
-        for transition in reversed(sub_n_step_buffer):
-            r, n_o, d = transition[-3:]
-
-            rew = r + gamma * rew * (1 - d)
-            next_obs, terminal = (n_o, d) if d else (next_obs, terminal)
-
-        return rew, next_obs, terminal
-
-
-class PrioritizedReplayBuffer(MultiStepReplayBuffer):
+class PrioritizedReplayBuffer(SimpleReplayBuffer):
     """Prioritized Replay buffer.
 
     Attributes:

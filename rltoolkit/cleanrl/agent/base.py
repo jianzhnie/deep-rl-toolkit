@@ -1,9 +1,6 @@
-import os
-import sys
 from typing import Any
 
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
-from cleanrl.rl_args import RLArguments
+from rltoolkit.cleanrl.rl_args import RLArguments
 
 
 class BaseAgent:

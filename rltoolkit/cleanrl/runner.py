@@ -1,18 +1,14 @@
 import os
-import sys
 import time
 
 import gymnasium as gym
 import numpy as np
-
-sys.path.append((os.path.join(os.path.dirname(__file__), '..')))
+from rltoolkit.cleanrl.agent import BaseAgent
+from rltoolkit.cleanrl.rl_args import RLArguments
 from rltoolkit.data import SimpleReplayBuffer as ReplayBuffer
 from rltoolkit.utils import (ProgressBar, TensorboardLogger, WandbLogger,
                              get_outdir, get_text_logger)
 from torch.utils.tensorboard import SummaryWriter
-
-from cleanrl.base_agent import BaseAgent
-from cleanrl.rl_args import RLArguments
 
 
 class Runner:
