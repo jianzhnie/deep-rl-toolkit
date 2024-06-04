@@ -46,12 +46,12 @@ class DQNAgent(BaseAgent):
         self.learning_rate = args.learning_rate
 
         # Initialize networks
-        self.q_network = QNet(state_shape=state_shape,
-                              action_shape=action_shape).to(device)
-        self.q_target = copy.deepcopy(self.q_network)
+        self.qnet = QNet(state_shape=state_shape,
+                         action_shape=action_shape).to(device)
+        self.target_qnet = copy.deepcopy(self.qnet)
 
         # Initialize optimizer and schedulers
-        self.optimizer = torch.optim.Adam(params=self.q_network.parameters(),
+        self.optimizer = torch.optim.Adam(params=self.qnet.parameters(),
                                           lr=self.learning_rate)
         self.lr_scheduler = LinearLR(
             optimizer=self.optimizer,
@@ -97,7 +97,7 @@ class DQNAgent(BaseAgent):
             obs = np.expand_dims(obs, axis=0)
 
         obs = torch.Tensor(obs).to(self.device)
-        q_values = self.q_network(obs)
+        q_values = self.qnet(obs)
         action = torch.argmax(q_values, dim=1).item()
         return action
 
@@ -116,16 +116,21 @@ class DQNAgent(BaseAgent):
         reward = batch['reward'].to(self.device)
         done = batch['done'].to(self.device)
 
+        # Soft update target network
+        if self.global_update_step % self.args.target_update_frequency == 0:
+            soft_target_update(self.qnet, self.target_qnet,
+                               self.args.soft_update_tau)
+            self.target_model_update_step += 1
+
         # Compute current Q values
-        current_q_values = self.q_network(obs).gather(1, action.long())
+        current_q_values = self.qnet(obs).gather(1, action.long())
 
         # Compute target Q values
         if self.double_dqn:
-            greedy_action = self.q_network(next_obs).max(dim=1,
-                                                         keepdim=True)[1]
-            next_q_values = self.q_target(next_obs).gather(1, greedy_action)
+            greedy_action = self.qnet(next_obs).max(dim=1, keepdim=True)[1]
+            next_q_values = self.target_qnet(next_obs).gather(1, greedy_action)
         else:
-            next_q_values = self.q_target(next_obs).max(1, keepdim=True)[0]
+            next_q_values = self.target_qnet(next_obs).max(1, keepdim=True)[0]
 
         target_q_values = reward + (1 - done) * self.args.gamma * next_q_values
 
@@ -136,15 +141,8 @@ class DQNAgent(BaseAgent):
         self.optimizer.zero_grad()
         loss.backward()
         if self.args.clip_weights and self.args.max_grad_norm > 0:
-            torch.nn.utils.clip_grad_norm_(self.q_network.parameters(),
+            torch.nn.utils.clip_grad_norm_(self.qnet.parameters(),
                                            self.args.max_grad_norm)
         self.optimizer.step()
-
-        # Soft update target network
-        if self.global_update_step % self.args.target_update_frequency == 0:
-            soft_target_update(self.q_network, self.q_target,
-                               self.args.soft_update_tau)
-            self.target_model_update_step += 1
-
         self.global_update_step += 1
         return loss.item()

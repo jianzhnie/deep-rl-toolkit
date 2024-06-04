@@ -164,6 +164,7 @@ class Runner:
             train_fps = int(self.global_step / (time.time() - self.start_time))
             train_info['fps'] = train_fps
 
+            # Log training information
             if episode_cnt % self.args.train_log_interval == 0:
                 log_message = (
                     '[Train], global_step: {}, episodes: {}, train_fps: {}, '
@@ -177,7 +178,7 @@ class Runner:
                 self.text_logger.info(log_message)
                 self.log_train_infos(train_info, self.global_step)
 
-            # perform evaluation
+            # Log testing information
             if episode_cnt % self.args.test_log_interval == 0:
                 test_info = self.run_evaluate_episodes(
                     n_eval_episodes=self.args.eval_episodes)
