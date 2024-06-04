@@ -56,7 +56,7 @@ For the details of DRL algorithms, please check out the educational webpage [Ope
 <img src="https://github.com/jianzhnie/RLToolkit/blob/main/docs/images/trained.gif" alt="logo" width="810"/>
 </p>
 <p align="center">
-<img src="https://github.com/jianzhnie/RLToolkit/blob/main/examples//tutorials/assets/img/breakout.gif" width = "200" height ="200"/> <img src="https://github.com/jianzhnie/RLToolkit/blob/main/examples//tutorials/assets/img/spaceinvaders.gif" width = "200" height ="200"/> <img src="examples/tutorials/assets/img/seaquest.gif" width = "200" height ="200"/><img src="docs/images/Breakout.gif" width = "200" height ="200" alt="Breakout"/>
+<img src="https://github.com/jianzhnie/RLToolkit/blob/main/examples//tutorials/assets/img/breakout.gif" width = "200" height ="200"/> <img src="https://github.com/jianzhnie/RLToolkit/blob/main/examples//tutorials/assets/img/spaceinvaders.gif" width = "200" height ="200"/> <img src="https://github.com/jianzhnie/RLToolkit/blob/main/tutorials/assets/img/seaquest.gif" width = "200" height ="200"/><img src="https://github.com/jianzhnie/RLToolkit/blob/main/docs/images/Breakout.gif" width = "200" height ="200" alt="Breakout"/>
 <br>
 <p align="center">
 <img src="https://github.com/jianzhnie/RLToolkit/blob/main/docs/images/performance.gif" width = "265" height ="200" alt="NeurlIPS2018"/> <img src="https://github.com/jianzhnie/RLToolkit/blob/main/docs/images/Half-Cheetah.gif" width = "265" height ="200" alt="Half-Cheetah"/> <img src="https://github.com/jianzhnie/RLToolkit/blob/main/examples/tutorials/assets/img/snowballfight.gif" width = "265" height ="200"/>
