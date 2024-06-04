@@ -32,13 +32,16 @@ class DQNAgent(BaseAgent):
         env: gym.Env,
         state_shape: Optional[Union[int, List[int]]] = None,
         action_shape: Optional[Union[int, List[int]]] = None,
+        double_dqn: Optional[bool] = False,
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
         super().__init__(args)
         self.args = args
         self.env = env
+        self.double_dqn = double_dqn
         self.device = device
         self.global_update_step = 0
+        self.target_model_update_step = 0
         self.eps_greedy = args.eps_greedy_start
         self.learning_rate = args.learning_rate
 
@@ -59,7 +62,7 @@ class DQNAgent(BaseAgent):
         self.eps_greedy_scheduler = LinearDecayScheduler(
             args.eps_greedy_start,
             args.eps_greedy_end,
-            max_steps=args.max_timesteps,
+            max_steps=args.max_timesteps * 0.8,
         )
 
     def get_action(self, obs: np.ndarray) -> np.ndarray:
@@ -117,8 +120,13 @@ class DQNAgent(BaseAgent):
         current_q_values = self.q_network(obs).gather(1, action.long())
 
         # Compute target Q values
-        with torch.no_grad():
+        if self.double_dqn:
+            greedy_action = self.q_network(next_obs).max(dim=1,
+                                                         keepdim=True)[1]
+            next_q_values = self.q_target(next_obs).gather(1, greedy_action)
+        else:
             next_q_values = self.q_target(next_obs).max(1, keepdim=True)[0]
+
         target_q_values = reward + (1 - done) * self.args.gamma * next_q_values
 
         # Compute loss
@@ -127,14 +135,16 @@ class DQNAgent(BaseAgent):
         # Optimize the model
         self.optimizer.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(self.q_network.parameters(),
-                                       self.args.max_grad_norm)
+        if self.args.clip_weights and self.args.max_grad_norm > 0:
+            torch.nn.utils.clip_grad_norm_(self.q_network.parameters(),
+                                           self.args.max_grad_norm)
         self.optimizer.step()
 
         # Soft update target network
         if self.global_update_step % self.args.target_update_frequency == 0:
             soft_target_update(self.q_network, self.q_target,
                                self.args.soft_update_tau)
+            self.target_model_update_step += 1
 
         self.global_update_step += 1
         return loss.item()

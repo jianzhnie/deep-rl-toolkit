@@ -84,9 +84,24 @@ class RLArguments:
             "Type of scheduler used for epsilon-greedy exploration. Defaults to 'Linear'"
         },
     )
+    # DQN Algorithm settings
+    double_dqn: Optional[float] = field(
+        default=False,
+        metadata={
+            'help':
+            'Flag indicating whether to use double DQN. Defaults to False'
+        },
+    )
+    dueling_dqn: Optional[float] = field(
+        default=False,
+        metadata={
+            'help':
+            'Flag indicating whether to use dueling DQN. Defaults to False'
+        },
+    )
     # Training parameters
     max_timesteps: Optional[int] = field(
-        default=10000,
+        default=12000,
         metadata={
             'help': 'Maximum number of training steps. Defaults to 12000'
         },
@@ -98,7 +113,7 @@ class RLArguments:
         },
     )
     learning_rate: Optional[float] = field(
-        default=1e-3,
+        default=1e-4,
         metadata={
             'help': 'Learning rate used by the optimizer. Defaults to 0.001'
         },
@@ -115,6 +130,13 @@ class RLArguments:
         metadata={
             'help':
             "Method used for learning rate scheduling. Defaults to 'linear'"
+        },
+    )
+    clip_weights: Optional[bool] = field(
+        default=False,
+        metadata={
+            'help':
+            'Flag indicating whether to clip the weights of the model. Defaults to False'
         },
     )
     max_grad_norm: Optional[float] = field(

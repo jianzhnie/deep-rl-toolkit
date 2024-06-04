@@ -73,7 +73,7 @@ class Runner:
         self.model_save_dir = get_outdir(work_dir, 'model_dir')
 
     # train an episode
-    def run_train_episode(self):
+    def run_train_episode(self) -> dict[str, float]:
         episode_step = 0
         episode_reward = 0
         episode_loss = []
@@ -157,6 +157,8 @@ class Runner:
             train_info['eps_greedy'] = self.agent.eps_greedy
             train_info['learning_rate'] = self.agent.learning_rate
             train_info['global_update_step'] = self.agent.global_update_step
+            train_info[
+                'target_model_update_step'] = self.agent.target_model_update_step
 
             # Log training information
             train_fps = int(self.global_step / (time.time() - self.start_time))

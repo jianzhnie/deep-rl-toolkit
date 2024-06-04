@@ -42,7 +42,14 @@ if __name__ == '__main__':
     print('Observations shape:', state_shape)
     print('Actions shape:', action_shape)
     # agent
-    agent = DQNAgent(args, train_env, state_shape, action_shape, device)
+    agent = DQNAgent(
+        args=args,
+        env=train_env,
+        state_shape=state_shape,
+        action_shape=action_shape,
+        double_dqn=args.double_dqn,
+        device=device,
+    )
     buffer = SimpleReplayBuffer(
         buffer_size=args.buffer_size,
         observation_space=train_env.observation_space,
