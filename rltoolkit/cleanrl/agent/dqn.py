@@ -84,8 +84,8 @@ class DQNAgent(BaseAgent):
         Returns:
             np.ndarray: Selected action.
         """
-        if np.random.rand() < self.eps_greedy:
-            action = self.env.action_space.sample()
+        if np.random.rand() <= self.eps_greedy:
+            action = np.random.randint(self.env.action_space.n)
         else:
             action = self.predict(obs)
 
@@ -106,9 +106,8 @@ class DQNAgent(BaseAgent):
             # Expand to have batch_size = 1
             obs = np.expand_dims(obs, axis=0)
 
-        obs = torch.Tensor(obs).to(self.device)
-        q_values = self.qnet(obs)
-        action = torch.argmax(q_values, dim=1).item()
+        obs = torch.tensor(obs, dtype=torch.float, device=self.device)
+        action = self.qnet(obs).argmax().item()
         return action
 
     def learn(self, batch: Dict[str, torch.Tensor]) -> float:
@@ -136,14 +135,10 @@ class DQNAgent(BaseAgent):
         current_q_values = self.qnet(obs).gather(1, action.long())
         # Compute target Q values
         if self.double_dqn:
-            with torch.no_grad():
-                greedy_action = self.qnet(next_obs).max(dim=1, keepdim=True)[1]
-                next_q_values = self.target_qnet(next_obs).gather(
-                    1, greedy_action)
+            greedy_action = self.qnet(next_obs).max(dim=1, keepdim=True)[1]
+            next_q_values = self.target_qnet(next_obs).gather(1, greedy_action)
         else:
-            with torch.no_grad():
-                next_q_values = self.target_qnet(next_obs).max(1,
-                                                               keepdim=True)[0]
+            next_q_values = self.target_qnet(next_obs).max(1, keepdim=True)[0]
 
         target_q_values = (
             reward +

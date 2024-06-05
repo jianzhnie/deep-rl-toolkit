@@ -89,7 +89,7 @@ class RLArguments:
     )
     # DQN Algorithm settings
     double_dqn: Optional[float] = field(
-        default=False,
+        default=True,
         metadata={
             'help':
             'Flag indicating whether to use double DQN. Defaults to False'
@@ -103,7 +103,7 @@ class RLArguments:
         },
     )
     n_steps: Optional[int] = field(
-        default=5,
+        default=1,
         metadata={
             'help':
             'Number of steps to take before updating the target network. Defaults to 1'

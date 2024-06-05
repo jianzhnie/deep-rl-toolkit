@@ -27,7 +27,7 @@ class QNet(nn.Module):
         action_dim = int(np.prod(action_shape))
         self.network = nn.Sequential(
             nn.Linear(obs_dim, hidden_dim),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Linear(hidden_dim, action_dim),
         )
 
