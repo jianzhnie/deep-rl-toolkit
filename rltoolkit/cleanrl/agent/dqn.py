@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from rltoolkit.cleanrl.agent.base import BaseAgent
-from rltoolkit.cleanrl.rl_args import RLArguments
+from rltoolkit.cleanrl.rl_args import DQNArguments
 from rltoolkit.cleanrl.utils.network import DuelingNet, QNet
 from rltoolkit.utils import LinearDecayScheduler, soft_target_update
 from torch.optim.lr_scheduler import LinearLR
@@ -27,22 +27,17 @@ class DQNAgent(BaseAgent):
 
     def __init__(
         self,
-        args: RLArguments,
+        args: DQNArguments,
         env: gym.Env,
-        state_shape: Optional[Union[int, List[int]]] = None,
-        action_shape: Optional[Union[int, List[int]]] = None,
-        double_dqn: Optional[bool] = False,
-        dueling_dqn: Optional[bool] = False,
-        n_steps: Optional[int] = 1,
+        state_shape: Union[int, List[int]] = None,
+        action_shape: Union[int, List[int]] = None,
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
         super().__init__(args)
-        assert (isinstance(n_steps, int) and
-                n_steps > 0), 'N-step should be an integer and greater than 0.'
+        assert (isinstance(args.n_steps, int) and args.n_steps > 0
+                ), 'N-step should be an integer and greater than 0.'
         self.args = args
         self.env = env
-        self.double_dqn = double_dqn
-        self.n_steps = n_steps
         self.device = device
         self.global_update_step = 0
         self.target_model_update_step = 0
@@ -50,7 +45,7 @@ class DQNAgent(BaseAgent):
         self.learning_rate = args.learning_rate
 
         # Initialize networks
-        if dueling_dqn:
+        if args.dueling_dqn:
             self.qnet = DuelingNet(state_shape=state_shape,
                                    action_shape=action_shape,
                                    hidden_dim=128).to(device)
@@ -62,10 +57,10 @@ class DQNAgent(BaseAgent):
 
         # Initialize optimizer and schedulers
         self.optimizer = torch.optim.Adam(params=self.qnet.parameters(),
-                                          lr=self.learning_rate)
+                                          lr=args.learning_rate)
         self.lr_scheduler = LinearLR(
             optimizer=self.optimizer,
-            start_factor=self.learning_rate,
+            start_factor=args.learning_rate,
             end_factor=args.min_learning_rate,
             total_iters=args.max_timesteps,
         )
@@ -135,7 +130,7 @@ class DQNAgent(BaseAgent):
         # Compute current Q values
         current_q_values = self.qnet(obs).gather(1, action.long())
         # Compute target Q values
-        if self.double_dqn:
+        if self.args.double_dqn:
             with torch.no_grad():
                 greedy_action = self.qnet(next_obs).max(dim=1, keepdim=True)[1]
                 next_q_values = self.target_qnet(next_obs).gather(
@@ -147,7 +142,7 @@ class DQNAgent(BaseAgent):
 
         target_q_values = (
             reward +
-            (1 - done) * self.args.gamma**self.n_steps * next_q_values)
+            (1 - done) * self.args.gamma**self.args.n_steps * next_q_values)
         # Compute loss
         loss = F.mse_loss(current_q_values, target_q_values)
 

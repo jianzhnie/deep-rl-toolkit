@@ -87,28 +87,6 @@ class RLArguments:
             "Type of scheduler used for epsilon-greedy exploration. Defaults to 'Linear'"
         },
     )
-    # DQN Algorithm settings
-    double_dqn: Optional[float] = field(
-        default=False,
-        metadata={
-            'help':
-            'Flag indicating whether to use double DQN. Defaults to False'
-        },
-    )
-    dueling_dqn: Optional[float] = field(
-        default=False,
-        metadata={
-            'help':
-            'Flag indicating whether to use dueling DQN. Defaults to False'
-        },
-    )
-    n_steps: Optional[int] = field(
-        default=5,
-        metadata={
-            'help':
-            'Number of steps to take before updating the target network. Defaults to 1'
-        },
-    )
     # Training parameters
     max_timesteps: Optional[int] = field(
         default=12000,
@@ -222,3 +200,92 @@ class RLArguments:
             'help': "Logger to use for recording logs. Defaults to 'wandb'"
         },
     )
+
+
+@dataclass
+class DQNArguments(RLArguments):
+    # DQN Algorithm settings
+    double_dqn: Optional[float] = field(
+        default=False,
+        metadata={
+            'help':
+            'Flag indicating whether to use double DQN. Defaults to False'
+        },
+    )
+    dueling_dqn: Optional[float] = field(
+        default=False,
+        metadata={
+            'help':
+            'Flag indicating whether to use dueling DQN. Defaults to False'
+        },
+    )
+    n_steps: Optional[int] = field(
+        default=5,
+        metadata={
+            'help':
+            'Number of steps to take before updating the target network. Defaults to 1'
+        },
+    )
+
+
+@dataclass
+class C51Argments(RLArguments):
+    hidden_dim: Optional[int] = field(default=128,
+                                      metadata={'help': 'The hidden dim'})
+    num_atoms: Optional[float] = field(default=101,
+                                       metadata={'help': 'the num atoms'})
+    v_min: Optional[float] = field(default=101,
+                                   metadata={'help': 'the num atoms'})
+    v_max: Optional[float] = field(default=101,
+                                   metadata={'help': 'the num atoms'})
+
+
+@dataclass
+class DDPGArgments(RLArguments):
+    hidden_dim: Optional[int] = field(default=128,
+                                      metadata={'help': 'The hidden dim'})
+    actor_lr: Optional[float] = field(
+        default=1e-4,
+        metadata={
+            'help': 'Learning rate used by the optimizer. Defaults to 0.001'
+        },
+    )
+    critic_lr: Optional[float] = field(
+        default=1e-4,
+        metadata={
+            'help': 'Learning rate used by the optimizer. Defaults to 0.001'
+        },
+    )
+
+    action_bound: Optional[float] = field(default=2,
+                                          metadata={'help': 'action bound'})
+
+
+@dataclass
+class PPOArgments(RLArguments):
+    hidden_dim: Optional[int] = field(default=128,
+                                      metadata={'help': 'The hidden dim'})
+    actor_lr: Optional[float] = field(
+        default=1e-4,
+        metadata={
+            'help': 'Learning rate used by the optimizer. Defaults to 0.001'
+        },
+    )
+    critic_lr: Optional[float] = field(
+        default=1e-4,
+        metadata={
+            'help': 'Learning rate used by the optimizer. Defaults to 0.001'
+        },
+    )
+    action_bound: Optional[float] = field(default=2,
+                                          metadata={'help': 'action bound'})
+    lmbda: Optional[float] = field(default=2,
+                                   metadata={'help': 'action bound'})
+    clip_param: Optional[float] = field(default=0.2,
+                                        metadata={'help': 'action bound'})
+    target_kl: Optional[float] = field(default=0.01,
+                                       metadata={'help': 'action bound'})
+    policy_net_iters: Optional[int] = field(default=2,
+                                            metadata={'help': 'action bound'})
+    critic_net_iters: Optional[int] = field(default=2,
+                                            metadata={'help': 'action bound'})
