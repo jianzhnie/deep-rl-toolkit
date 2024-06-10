@@ -18,7 +18,7 @@ class DQNAgent(BaseAgent):
     "Human-Level Control Through Deep Reinforcement Learning" - Mnih V. et al., 2015.
 
     Args:
-        args (RLArguments): Configuration object for the agent.
+        args (DQNArguments): Configuration object for the agent.
         env (gym.Env): Environment object.
         state_shape (Optional[Union[int, List[int]]]): Shape of the state.
         action_shape (Optional[Union[int, List[int]]]): Shape of the action.
@@ -107,7 +107,7 @@ class DQNAgent(BaseAgent):
             # Expand to have batch_size = 1
             obs = np.expand_dims(obs, axis=0)
 
-        obs = torch.Tensor(obs).to(self.device)
+        obs = torch.tensor(obs, dtype=torch.float, device=self.device)
         q_values = self.qnet(obs)
         action = torch.argmax(q_values, dim=1).item()
         return action
@@ -132,6 +132,7 @@ class DQNAgent(BaseAgent):
             soft_target_update(self.qnet, self.target_qnet,
                                self.args.soft_update_tau)
             self.target_model_update_step += 1
+        self.global_update_step += 1
 
         # Compute current Q values
         current_q_values = self.qnet(obs).gather(1, action.long())
@@ -149,17 +150,24 @@ class DQNAgent(BaseAgent):
         target_q_values = (
             reward +
             (1 - done) * self.args.gamma**self.args.n_steps * next_q_values)
+
         # Compute loss
         loss = F.mse_loss(current_q_values, target_q_values)
 
         # Optimize the model
         self.optimizer.zero_grad()
+
         if self.args.clip_weights and self.args.max_grad_norm > 0:
             torch.nn.utils.clip_grad_norm_(self.qnet.parameters(),
                                            self.args.max_grad_norm)
         loss.backward()
         self.optimizer.step()
-        self.global_update_step += 1
+
+        # learning rate decay
+        for param_group in self.optimizer.param_groups:
+            self.learning_rate = max(self.lr_scheduler.step(1),
+                                     self.args.min_learning_rate)
+            param_group['lr'] = self.learning_rate
 
         learn_result = {
             'loss': loss.item(),
