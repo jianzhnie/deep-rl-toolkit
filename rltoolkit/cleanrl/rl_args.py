@@ -205,6 +205,8 @@ class RLArguments:
 @dataclass
 class DQNArguments(RLArguments):
     # DQN Algorithm settings
+    hidden_dim: Optional[int] = field(default=128,
+                                      metadata={'help': 'The hidden dim'})
     double_dqn: Optional[float] = field(
         default=False,
         metadata={
@@ -259,6 +261,14 @@ class DDPGArguments(RLArguments):
 
     action_bound: Optional[float] = field(default=2,
                                           metadata={'help': 'action bound'})
+
+
+@dataclass
+class PGArguments(RLArguments):
+    hidden_dim: Optional[int] = field(default=128,
+                                      metadata={'help': 'The hidden dim'})
+    with_baseline: Optional[bool] = field(
+        default=False, metadata={'help': 'Whether to use a baseline'})
 
 
 @dataclass
