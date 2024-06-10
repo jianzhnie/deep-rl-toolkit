@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn.functional as F
 from rltoolkit.cleanrl.agent.base import BaseAgent
-from rltoolkit.cleanrl.rl_args import RLArguments
+from rltoolkit.cleanrl.rl_args import DQNArguments
 from rltoolkit.cleanrl.utils.network import DuelingNet, QNet
 from rltoolkit.utils import LinearDecayScheduler, soft_target_update
 from torch.optim.lr_scheduler import LinearLR
@@ -18,7 +18,7 @@ class DQNAgent(BaseAgent):
     "Human-Level Control Through Deep Reinforcement Learning" - Mnih V. et al., 2015.
 
     Args:
-        args (RLArguments): Configuration object for the agent.
+        args (DQNArguments): Configuration object for the agent.
         env (gym.Env): Environment object.
         state_shape (Optional[Union[int, List[int]]]): Shape of the state.
         action_shape (Optional[Union[int, List[int]]]): Shape of the action.
@@ -27,45 +27,46 @@ class DQNAgent(BaseAgent):
 
     def __init__(
         self,
-        args: RLArguments,
+        args: DQNArguments,
         env: gym.Env,
-        state_shape: Optional[Union[int, List[int]]] = None,
-        action_shape: Optional[Union[int, List[int]]] = None,
-        double_dqn: Optional[bool] = False,
-        dueling_dqn: Optional[bool] = False,
-        n_steps: Optional[int] = 1,
+        state_shape: Union[int, List[int]] = None,
+        action_shape: Union[int, List[int]] = None,
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
         super().__init__(args)
-        assert (isinstance(n_steps, int) and
-                n_steps > 0), 'N-step should be an integer and greater than 0.'
+        assert (isinstance(args.n_steps, int) and args.n_steps > 0
+                ), 'N-step should be an integer and greater than 0.'
         self.args = args
         self.env = env
-        self.double_dqn = double_dqn
-        self.n_steps = n_steps
         self.device = device
         self.global_update_step = 0
         self.target_model_update_step = 0
         self.eps_greedy = args.eps_greedy_start
         self.learning_rate = args.learning_rate
+        self.obs_dim = int(np.prod(state_shape))
+        self.action_dim = int(np.prod(action_shape))
 
         # Initialize networks
-        if dueling_dqn:
-            self.qnet = DuelingNet(state_shape=state_shape,
-                                   action_shape=action_shape,
-                                   hidden_dim=128).to(device)
+        if args.dueling_dqn:
+            self.qnet = DuelingNet(
+                obs_dim=self.obs_dim,
+                action_dim=self.action_dim,
+                hidden_dim=self.args.hidden_dim,
+            ).to(device)
         else:
-            self.qnet = QNet(state_shape=state_shape,
-                             action_shape=action_shape,
-                             hidden_dim=128).to(device)
+            self.qnet = QNet(
+                obs_dim=self.obs_dim,
+                action_dim=self.action_dim,
+                hidden_dim=self.args.hidden_dim,
+            ).to(device)
         self.target_qnet = copy.deepcopy(self.qnet)
 
         # Initialize optimizer and schedulers
         self.optimizer = torch.optim.Adam(params=self.qnet.parameters(),
-                                          lr=self.learning_rate)
+                                          lr=args.learning_rate)
         self.lr_scheduler = LinearLR(
             optimizer=self.optimizer,
-            start_factor=self.learning_rate,
+            start_factor=args.learning_rate,
             end_factor=args.min_learning_rate,
             total_iters=args.max_timesteps,
         )
@@ -107,7 +108,8 @@ class DQNAgent(BaseAgent):
             obs = np.expand_dims(obs, axis=0)
 
         obs = torch.tensor(obs, dtype=torch.float, device=self.device)
-        action = self.qnet(obs).argmax().item()
+        q_values = self.qnet(obs)
+        action = torch.argmax(q_values, dim=1).item()
         return action
 
     def learn(self, batch: Dict[str, torch.Tensor]) -> float:
@@ -130,30 +132,42 @@ class DQNAgent(BaseAgent):
             soft_target_update(self.qnet, self.target_qnet,
                                self.args.soft_update_tau)
             self.target_model_update_step += 1
+        self.global_update_step += 1
 
         # Compute current Q values
         current_q_values = self.qnet(obs).gather(1, action.long())
         # Compute target Q values
-        if self.double_dqn:
-            greedy_action = self.qnet(next_obs).max(dim=1, keepdim=True)[1]
-            next_q_values = self.target_qnet(next_obs).gather(1, greedy_action)
+        if self.args.double_dqn:
+            with torch.no_grad():
+                greedy_action = self.qnet(next_obs).max(dim=1, keepdim=True)[1]
+                next_q_values = self.target_qnet(next_obs).gather(
+                    1, greedy_action)
         else:
-            next_q_values = self.target_qnet(next_obs).max(1, keepdim=True)[0]
+            with torch.no_grad():
+                next_q_values = self.target_qnet(next_obs).max(1,
+                                                               keepdim=True)[0]
 
         target_q_values = (
             reward +
-            (1 - done) * self.args.gamma**self.n_steps * next_q_values)
+            (1 - done) * self.args.gamma**self.args.n_steps * next_q_values)
+
         # Compute loss
         loss = F.mse_loss(current_q_values, target_q_values)
 
         # Optimize the model
         self.optimizer.zero_grad()
+
         if self.args.clip_weights and self.args.max_grad_norm > 0:
             torch.nn.utils.clip_grad_norm_(self.qnet.parameters(),
                                            self.args.max_grad_norm)
         loss.backward()
         self.optimizer.step()
-        self.global_update_step += 1
+
+        # learning rate decay
+        for param_group in self.optimizer.param_groups:
+            self.learning_rate = max(self.lr_scheduler.step(1),
+                                     self.args.min_learning_rate)
+            param_group['lr'] = self.learning_rate
 
         learn_result = {
             'loss': loss.item(),

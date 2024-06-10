@@ -18,7 +18,10 @@ class BaseAgent:
         """Return an action with noise when given the observation of the
         environment.
 
-        This function is typically used during training to perform exploration by adding noise to the action.
+        This function is typically used during training to perform exploration and will usually do the following things:
+           1. Accept numpy data as input;
+           2. Feed numpy data or onvert numpy data to tensor (optional);
+           3. Add sampling operation in numpy level.
 
         Args:
             *args: Variable length argument list.
@@ -30,8 +33,7 @@ class BaseAgent:
         raise NotImplementedError
 
     def predict(self, *args: Any, **kwargs: Any) -> Any:
-        """Predict an estimated Q value when given the observation of the
-        environment.
+        """Predict the action when given the observation of the environment.
 
         This function is often used during evaluation.
 
@@ -47,7 +49,11 @@ class BaseAgent:
     def learn(self, *args: Any, **kwargs: Any) -> Any:
         """The training interface for the agent.
 
-        This function is used during the training stage.
+        This function will usually do the following things:
+
+            1. Accept numpy data as input;
+            2. Feed numpy data or onvert numpy data to tensor (optional);
+            3. Implement the learn policy.
 
         Args:
             *args: Variable length argument list.
