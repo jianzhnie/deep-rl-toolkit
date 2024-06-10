@@ -9,7 +9,6 @@ from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import DQNArguments
 from rltoolkit.cleanrl.utils.network import DuelingNet, QNet
 from rltoolkit.utils import LinearDecayScheduler, soft_target_update
-from torch.optim.lr_scheduler import LinearLR
 
 
 class DQNAgent(BaseAgent):
@@ -64,7 +63,7 @@ class DQNAgent(BaseAgent):
         # Initialize optimizer and schedulers
         self.optimizer = torch.optim.Adam(params=self.qnet.parameters(),
                                           lr=args.learning_rate)
-        self.lr_scheduler = LinearLR(
+        self.lr_scheduler = torch.optim.lr_scheduler.LinearLR(
             optimizer=self.optimizer,
             start_factor=args.learning_rate,
             end_factor=args.min_learning_rate,
@@ -85,8 +84,8 @@ class DQNAgent(BaseAgent):
         Returns:
             np.ndarray: Selected action.
         """
-        if np.random.rand() < self.eps_greedy:
-            action = self.env.action_space.sample()
+        if np.random.rand() <= self.eps_greedy:
+            action = np.random.randint(self.env.action_space.n)
         else:
             action = self.predict(obs)
 
@@ -162,12 +161,6 @@ class DQNAgent(BaseAgent):
                                            self.args.max_grad_norm)
         loss.backward()
         self.optimizer.step()
-
-        # learning rate decay
-        for param_group in self.optimizer.param_groups:
-            self.learning_rate = max(self.lr_scheduler.step(1),
-                                     self.args.min_learning_rate)
-            param_group['lr'] = self.learning_rate
 
         learn_result = {
             'loss': loss.item(),

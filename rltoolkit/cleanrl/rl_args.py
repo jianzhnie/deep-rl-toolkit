@@ -4,34 +4,38 @@ from typing import Optional
 
 @dataclass
 class RLArguments:
-    # common settings
-    project: Optional[str] = field(
+    """Common settings for Reinforcement Learning algorithms."""
+
+    project: str = field(
         default='rltoolkit',
-        metadata={'help': "Name of the project. Defaults to 'Gym'"},
+        metadata={'help': "Name of the project. Defaults to 'rltoolkit'"},
     )
-    algo_name: Optional[str] = field(
+    algo_name: str = field(
         default='dqn',
         metadata={'help': "Name of the algorithm. Defaults to 'dqn'"},
     )
-    use_cuda: Optional[bool] = field(
+    use_cuda: bool = field(
         default=True,
         metadata={'help': 'Whether to use CUDA. Defaults to True'},
     )
-    torch_deterministic: Optional[bool] = field(
+    torch_deterministic: bool = field(
         default=True,
-        metadata={'help': 'Whether to use CUDA. Defaults to True'})
-    # Environment settings
-    seed: Optional[int] = field(
-        default=42,
         metadata={
-            'help': 'Seed for environment randomization. Defaults to 123'
+            'help':
+            'Whether to use deterministic operations in CUDA. Defaults to True'
         },
     )
-    env_id: Optional[str] = field(
+    seed: int = field(
+        default=42,
+        metadata={
+            'help': 'Seed for environment randomization. Defaults to 42'
+        },
+    )
+    env_id: str = field(
         default='CartPole-v0',
         metadata={'help': "The environment name. Defaults to 'CartPole-v0'"},
     )
-    num_envs: Optional[int] = field(
+    num_envs: int = field(
         default=10,
         metadata={
             'help':
@@ -42,133 +46,128 @@ class RLArguments:
         default=None,
         metadata={
             'help':
-            'Flag indicating whether to capture videos of the environment during training. Defaults to True'
+            'Flag indicating whether to capture videos of the environment during training.'
         },
     )
-    # Buffer settings
-    buffer_size: Optional[int] = field(
+    buffer_size: int = field(
         default=10000,
         metadata={
             'help': 'Maximum size of the replay buffer. Defaults to 10000'
         },
     )
-    batch_size: Optional[int] = field(
+    batch_size: int = field(
         default=32,
         metadata={
             'help':
             'Size of the mini-batches sampled from the replay buffer during training. Defaults to 32'
         },
     )
-    optimize_memory_usage: Optional[bool] = field(
+    optimize_memory_usage: bool = field(
         default=False,
         metadata={
             'help': 'Whether to optimize memory usage. Defaults to False'
         },
     )
-    # Epsilon-Greedy Scheduler settings
-    eps_greedy_start: Optional[float] = field(
+    eps_greedy_start: float = field(
         default=1.0,
         metadata={
             'help':
             'Initial value of epsilon for epsilon-greedy exploration. Defaults to 1.0'
         },
     )
-    eps_greedy_end: Optional[float] = field(
+    eps_greedy_end: float = field(
         default=0.1,
         metadata={
             'help':
-            'Final value of epsilon for epsilon-greedy exploration. Defaults to 0.001'
+            'Final value of epsilon for epsilon-greedy exploration. Defaults to 0.1'
         },
     )
-    eps_greedy_scheduler: Optional[str] = field(
+    eps_greedy_scheduler: str = field(
         default='linear',
         metadata={
             'help':
-            "Type of scheduler used for epsilon-greedy exploration. Defaults to 'Linear'"
+            "Type of scheduler used for epsilon-greedy exploration. Defaults to 'linear'"
         },
     )
-    # Training parameters
-    max_timesteps: Optional[int] = field(
+    max_timesteps: int = field(
         default=12000,
         metadata={
             'help': 'Maximum number of training steps. Defaults to 12000'
         },
     )
-    gamma: Optional[float] = field(
+    gamma: float = field(
         default=0.99,
         metadata={
             'help': 'Discount factor for future rewards. Defaults to 0.99'
         },
     )
-    learning_rate: Optional[float] = field(
+    learning_rate: float = field(
         default=1e-4,
         metadata={
-            'help': 'Learning rate used by the optimizer. Defaults to 0.001'
+            'help': 'Learning rate used by the optimizer. Defaults to 1e-4'
         },
     )
-    min_learning_rate: Optional[float] = field(
+    min_learning_rate: float = field(
         default=1e-5,
         metadata={
             'help':
             'Minimum learning rate used by the optimizer. Defaults to 1e-5'
         },
     )
-    lr_scheduler_method: Optional[str] = field(
+    lr_scheduler_method: str = field(
         default='linear',
         metadata={
             'help':
             "Method used for learning rate scheduling. Defaults to 'linear'"
         },
     )
-    clip_weights: Optional[bool] = field(
+    clip_weights: bool = field(
         default=False,
         metadata={
             'help':
             'Flag indicating whether to clip the weights of the model. Defaults to False'
         },
     )
-    max_grad_norm: Optional[float] = field(
+    max_grad_norm: float = field(
         default=1.0,
         metadata={'help': 'Maximum gradient norm. Defaults to 1.0'},
     )
-    warmup_learn_steps: Optional[int] = field(
+    warmup_learn_steps: int = field(
         default=1000,
         metadata={
             'help':
             'Number of steps before starting to update the model. Defaults to 1000'
         },
     )
-    train_frequency: Optional[int] = field(
+    train_frequency: int = field(
         default=1,
-        metadata={'help': 'Frequency of training updates. Defaults to 200'},
+        metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
-    gradient_steps: Optional[int] = field(
+    gradient_steps: int = field(
         default=1,
         metadata={
             'help':
-            'Number of times to update the learner network. Defaults to 5'
+            'Number of times to update the learner network. Defaults to 1'
         },
     )
-    soft_update_tau: Optional[float] = field(
+    soft_update_tau: float = field(
         default=1.0,
         metadata={
             'help':
-            'Interpolation parameter for soft target updates. Defaults to 0.95'
+            'Interpolation parameter for soft target updates. Defaults to 1.0'
         },
     )
-    target_update_frequency: Optional[int] = field(
+    target_update_frequency: int = field(
         default=100,
         metadata={
-            'help': 'Frequency of updating the target network. Defaults to 500'
+            'help': 'Frequency of updating the target network. Defaults to 100'
         },
     )
-    # Evaluation settings
-    eval_episodes: Optional[int] = field(
+    eval_episodes: int = field(
         default=10,
         metadata={'help': 'Number of episodes to evaluate. Defaults to 10'},
     )
-    # Log and Model Save
-    work_dir: Optional[str] = field(
+    work_dir: str = field(
         default='work_dirs',
         metadata={
             'help':
@@ -178,23 +177,24 @@ class RLArguments:
     save_model: Optional[bool] = field(
         default=None,
         metadata={
-            'help':
-            'Flag indicating whether to save the trained model. Defaults to False'
+            'help': 'Flag indicating whether to save the trained model.'
         },
     )
-    train_log_interval: Optional[int] = field(
+    train_log_interval: int = field(
         default=10,
-        metadata={'help': 'Logging interval during training. Defaults to 1'},
+        metadata={'help': 'Logging interval during training. Defaults to 10'},
     )
-    test_log_interval: Optional[int] = field(
+    test_log_interval: int = field(
         default=20,
-        metadata={'help': 'Logging interval during evaluation. Defaults to 5'},
+        metadata={
+            'help': 'Logging interval during evaluation. Defaults to 20'
+        },
     )
-    save_interval: Optional[int] = field(
+    save_interval: int = field(
         default=1000,
-        metadata={'help': 'Frequency of saving the model. Defaults to 1'},
+        metadata={'help': 'Frequency of saving the model. Defaults to 1000'},
     )
-    logger: Optional[str] = field(
+    logger: str = field(
         default='wandb',
         metadata={
             'help': "Logger to use for recording logs. Defaults to 'wandb'"
@@ -204,25 +204,31 @@ class RLArguments:
 
 @dataclass
 class DQNArguments(RLArguments):
-    # DQN Algorithm settings
-    hidden_dim: Optional[int] = field(default=128,
-                                      metadata={'help': 'The hidden dim'})
-    double_dqn: Optional[float] = field(
+    """DQN-specific settings."""
+
+    hidden_dim: int = field(
+        default=128,
+        metadata={
+            'help':
+            'The hidden dimension size of the neural network. Defaults to 128'
+        },
+    )
+    double_dqn: bool = field(
         default=False,
         metadata={
             'help':
-            'Flag indicating whether to use double DQN. Defaults to False'
+            'Flag indicating whether to use Double DQN. Defaults to False'
         },
     )
-    dueling_dqn: Optional[float] = field(
+    dueling_dqn: bool = field(
         default=False,
         metadata={
             'help':
-            'Flag indicating whether to use dueling DQN. Defaults to False'
+            'Flag indicating whether to use Dueling DQN. Defaults to False'
         },
     )
-    n_steps: Optional[int] = field(
-        default=5,
+    n_steps: int = field(
+        default=1,
         metadata={
             'help':
             'Number of steps to take before updating the target network. Defaults to 1'
@@ -232,70 +238,117 @@ class DQNArguments(RLArguments):
 
 @dataclass
 class C51Arguments(RLArguments):
-    hidden_dim: Optional[int] = field(default=128,
-                                      metadata={'help': 'The hidden dim'})
-    num_atoms: Optional[float] = field(default=101,
-                                       metadata={'help': 'the num atoms'})
-    v_min: Optional[float] = field(default=101,
-                                   metadata={'help': 'the num atoms'})
-    v_max: Optional[float] = field(default=101,
-                                   metadata={'help': 'the num atoms'})
+    """C51-specific settings."""
+
+    hidden_dim: int = field(
+        default=128,
+        metadata={
+            'help':
+            'The hidden dimension size of the neural network. Defaults to 128'
+        },
+    )
+    num_atoms: int = field(
+        default=51,
+        metadata={
+            'help': 'Number of atoms in the C51 algorithm. Defaults to 51'
+        },
+    )
+    v_min: float = field(
+        default=-10.0,
+        metadata={
+            'help':
+            'Minimum value for the value distribution in C51. Defaults to -10.0'
+        },
+    )
+    v_max: float = field(
+        default=10.0,
+        metadata={
+            'help':
+            'Maximum value for the value distribution in C51. Defaults to 10.0'
+        },
+    )
 
 
 @dataclass
 class DDPGArguments(RLArguments):
-    hidden_dim: Optional[int] = field(default=128,
-                                      metadata={'help': 'The hidden dim'})
-    actor_lr: Optional[float] = field(
-        default=1e-4,
-        metadata={
-            'help': 'Learning rate used by the optimizer. Defaults to 0.001'
-        },
-    )
-    critic_lr: Optional[float] = field(
-        default=1e-4,
-        metadata={
-            'help': 'Learning rate used by the optimizer. Defaults to 0.001'
-        },
-    )
+    """DDPG-specific settings."""
 
-    action_bound: Optional[float] = field(default=2,
-                                          metadata={'help': 'action bound'})
+    hidden_dim: int = field(
+        default=128,
+        metadata={
+            'help':
+            'The hidden dimension size of the neural network. Defaults to 128'
+        },
+    )
+    actor_lr: float = field(
+        default=1e-4,
+        metadata={
+            'help': 'Learning rate for the actor network. Defaults to 1e-4'
+        },
+    )
+    critic_lr: float = field(
+        default=1e-4,
+        metadata={
+            'help': 'Learning rate for the critic network. Defaults to 1e-4'
+        },
+    )
+    action_bound: float = field(
+        default=2.0,
+        metadata={'help': 'Action bound for the environment. Defaults to 2.0'},
+    )
 
 
 @dataclass
 class PGArguments(RLArguments):
-    hidden_dim: Optional[int] = field(default=128,
-                                      metadata={'help': 'The hidden dim'})
-    with_baseline: Optional[bool] = field(
-        default=False, metadata={'help': 'Whether to use a baseline'})
+    """Policy Gradient-specific settings."""
+
+    hidden_dim: int = field(
+        default=128,
+        metadata={
+            'help':
+            'The hidden dimension size of the neural network. Defaults to 128'
+        },
+    )
+    with_baseline: bool = field(
+        default=False,
+        metadata={
+            'help':
+            'Whether to use a baseline in the policy gradient method. Defaults to False'
+        },
+    )
 
 
 @dataclass
 class PPOArguments(RLArguments):
-    hidden_dim: Optional[int] = field(default=128,
-                                      metadata={'help': 'The hidden dim'})
-    actor_lr: Optional[float] = field(
-        default=1e-4,
+    """PPO-specific settings."""
+
+    hidden_dim: int = field(
+        default=128,
         metadata={
-            'help': 'Learning rate used by the optimizer. Defaults to 0.001'
+            'help':
+            'The hidden dimension size of the neural network. Defaults to 128'
         },
     )
-    critic_lr: Optional[float] = field(
+    actor_lr: float = field(
         default=1e-4,
         metadata={
-            'help': 'Learning rate used by the optimizer. Defaults to 0.001'
+            'help': 'Learning rate for the actor network. Defaults to 1e-4'
         },
     )
-    action_bound: Optional[float] = field(default=2,
-                                          metadata={'help': 'action bound'})
-    lmbda: Optional[float] = field(default=2,
-                                   metadata={'help': 'action bound'})
-    clip_param: Optional[float] = field(default=0.2,
-                                        metadata={'help': 'action bound'})
-    target_kl: Optional[float] = field(default=0.01,
-                                       metadata={'help': 'action bound'})
-    policy_net_iters: Optional[int] = field(default=2,
-                                            metadata={'help': 'action bound'})
-    critic_net_iters: Optional[int] = field(default=2,
-                                            metadata={'help': 'action bound'})
+    critic_lr: float = field(
+        default=1e-4,
+        metadata={
+            'help': 'Learning rate for the critic network. Defaults to 1e-4'
+        },
+    )
+    action_bound: float = field(
+        default=2.0,
+        metadata={'help': 'Action bound for the environment. Defaults to 2.0'},
+    )
+    lmbda: float = field(
+        default=0.95,
+        metadata={
+            'help':
+            'Lambda for Generalized Advantage Estimation (GAE). Defaults to 0.95'
+        },
+    )

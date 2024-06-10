@@ -22,8 +22,9 @@ class QNet(nn.Module):
         super(QNet, self).__init__()
         self.network = nn.Sequential(
             nn.Linear(obs_dim, hidden_dim),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(inplace=True),
             nn.Linear(hidden_dim, action_dim),
         )
 
