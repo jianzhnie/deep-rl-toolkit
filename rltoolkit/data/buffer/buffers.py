@@ -148,6 +148,58 @@ class BaseBuffer(ABC):
         return reward
 
 
+class EpisodeBuffer:
+    """Episode buffer for DRQN agent."""
+
+    def __init__(
+        self,
+        observation_space: spaces.Space,
+        action_space: spaces.Space,
+        device: str = 'cpu',
+    ) -> None:
+        self.device = device
+        self.obs_shape = get_obs_shape(observation_space)
+        self.action_dim = get_action_dim(action_space)
+        self.obs = []
+        self.action = []
+        self.reward = []
+        self.done = []
+        self.value = []
+        self.log_prob = []
+
+    def add(
+        self,
+        obs: np.ndarray,
+        action: np.ndarray,
+        reward: np.ndarray,
+        done: np.ndarray,
+        value: torch.Tensor,
+        log_prob: torch.Tensor,
+    ) -> None:
+        self.obs.append(obs)
+        self.action.append(action)
+        self.reward.append(reward)
+        self.done.append(done)
+        self.value.append(value)
+        self.log_prob.append(log_prob)
+
+    def sample(self, lookup_step=None, idx=None) -> Dict[str, np.ndarray]:
+        obs = np.array(self.obs)
+        action = np.array(self.action)
+        reward = np.array(self.reward)
+        done = np.array(self.done)
+
+        obs = obs[idx:idx + lookup_step + 1]
+        action = action[idx:idx + lookup_step]
+        reward = reward[idx:idx + lookup_step]
+        done = done[idx:idx + lookup_step]
+
+        return dict(obs=obs, acts=action, rews=reward, done=done)
+
+    def __len__(self) -> int:
+        return len(self.action)
+
+
 class OffPolicyBuffer(BaseBuffer):
     """Replay buffer used in off-policy algorithms like SAC/TD3.
 

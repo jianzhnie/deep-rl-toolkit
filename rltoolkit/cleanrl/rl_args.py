@@ -205,6 +205,8 @@ class RLArguments:
 @dataclass
 class DQNArguments(RLArguments):
     # DQN Algorithm settings
+    hidden_dim: Optional[int] = field(default=128,
+                                      metadata={'help': 'The hidden dim'})
     double_dqn: Optional[float] = field(
         default=False,
         metadata={
@@ -229,7 +231,7 @@ class DQNArguments(RLArguments):
 
 
 @dataclass
-class C51Argments(RLArguments):
+class C51Arguments(RLArguments):
     hidden_dim: Optional[int] = field(default=128,
                                       metadata={'help': 'The hidden dim'})
     num_atoms: Optional[float] = field(default=101,
@@ -241,7 +243,7 @@ class C51Argments(RLArguments):
 
 
 @dataclass
-class DDPGArgments(RLArguments):
+class DDPGArguments(RLArguments):
     hidden_dim: Optional[int] = field(default=128,
                                       metadata={'help': 'The hidden dim'})
     actor_lr: Optional[float] = field(
@@ -262,7 +264,15 @@ class DDPGArgments(RLArguments):
 
 
 @dataclass
-class PPOArgments(RLArguments):
+class PGArguments(RLArguments):
+    hidden_dim: Optional[int] = field(default=128,
+                                      metadata={'help': 'The hidden dim'})
+    with_baseline: Optional[bool] = field(
+        default=False, metadata={'help': 'Whether to use a baseline'})
+
+
+@dataclass
+class PPOArguments(RLArguments):
     hidden_dim: Optional[int] = field(default=128,
                                       metadata={'help': 'The hidden dim'})
     actor_lr: Optional[float] = field(
