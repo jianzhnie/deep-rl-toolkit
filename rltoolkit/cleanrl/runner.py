@@ -91,6 +91,8 @@ class Runner:
             episode_reward += reward
             episode_step += 1
             obs = next_obs
+            if done:
+                break
 
         train_info = {
             'episode_reward': episode_reward,
