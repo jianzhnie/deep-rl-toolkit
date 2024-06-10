@@ -43,16 +43,22 @@ class DQNAgent(BaseAgent):
         self.target_model_update_step = 0
         self.eps_greedy = args.eps_greedy_start
         self.learning_rate = args.learning_rate
+        self.obs_dim = int(np.prod(state_shape))
+        self.action_dim = int(np.prod(action_shape))
 
         # Initialize networks
         if args.dueling_dqn:
-            self.qnet = DuelingNet(state_shape=state_shape,
-                                   action_shape=action_shape,
-                                   hidden_dim=128).to(device)
+            self.qnet = DuelingNet(
+                obs_dim=self.obs_dim,
+                action_dim=self.action_dim,
+                hidden_dim=self.args.hidden_dim,
+            ).to(device)
         else:
-            self.qnet = QNet(state_shape=state_shape,
-                             action_shape=action_shape,
-                             hidden_dim=128).to(device)
+            self.qnet = QNet(
+                obs_dim=self.obs_dim,
+                action_dim=self.action_dim,
+                hidden_dim=self.args.hidden_dim,
+            ).to(device)
         self.target_qnet = copy.deepcopy(self.qnet)
 
         # Initialize optimizer and schedulers
