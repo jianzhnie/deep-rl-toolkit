@@ -19,7 +19,7 @@ class RLArguments:
         metadata={'help': 'Whether to use CUDA. Defaults to True'},
     )
     torch_deterministic: bool = field(
-        default=True,
+        default=False,
         metadata={
             'help':
             'Whether to use deterministic operations in CUDA. Defaults to True'
@@ -158,7 +158,7 @@ class RLArguments:
         },
     )
     target_update_frequency: int = field(
-        default=100,
+        default=500,
         metadata={
             'help': 'Frequency of updating the target network. Defaults to 100'
         },
@@ -175,7 +175,7 @@ class RLArguments:
         },
     )
     save_model: Optional[bool] = field(
-        default=None,
+        default=False,
         metadata={
             'help': 'Flag indicating whether to save the trained model.'
         },
