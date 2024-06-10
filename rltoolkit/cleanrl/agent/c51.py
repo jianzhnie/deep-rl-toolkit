@@ -6,7 +6,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from rltoolkit.cleanrl.agent.base import BaseAgent
-from rltoolkit.cleanrl.rl_args import C51Argments
+from rltoolkit.cleanrl.rl_args import C51Arguments
 from rltoolkit.utils import LinearDecayScheduler, soft_target_update
 
 
@@ -63,7 +63,7 @@ class C51Agent(BaseAgent):
 
     def __init__(
         self,
-        args: C51Argments,
+        args: C51Arguments,
         env: gym.Env,
         state_shape: Union[int, List[int]] = None,
         action_shape: Union[int, List[int]] = None,

@@ -222,7 +222,7 @@ class DQNArguments(RLArguments):
         },
     )
     n_steps: Optional[int] = field(
-        default=5,
+        default=1,
         metadata={
             'help':
             'Number of steps to take before updating the target network. Defaults to 1'

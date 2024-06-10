@@ -6,7 +6,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from rltoolkit.cleanrl.agent.base import BaseAgent
-from rltoolkit.cleanrl.rl_args import PPOArgments
+from rltoolkit.cleanrl.rl_args import PPOArguments
 from torch.distributions import Categorical
 from torch.distributions.kl import kl_divergence
 
@@ -61,7 +61,7 @@ class PPOAgent(BaseAgent):
 
     def __init__(
         self,
-        args: PPOArgments,
+        args: PPOArguments,
         env: gym.Env,
         state_shape: Union[int, List[int]] = None,
         action_shape: Union[int, List[int]] = None,
