@@ -15,16 +15,15 @@ class QNet(nn.Module):
 
     def __init__(
         self,
-        state_shape: Union[int, Tuple[int]],
-        action_shape: Union[int, Tuple[int]],
+        obs_dim: int,
+        action_dim: int,
         hidden_dim: int = 128,
-    ):
+    ) -> None:
         super(QNet, self).__init__()
-        obs_dim = int(np.prod(state_shape))
-        action_dim = int(np.prod(action_shape))
         self.network = nn.Sequential(
             nn.Linear(obs_dim, hidden_dim),
             nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
             nn.Linear(hidden_dim, action_dim),
         )
 
@@ -38,14 +37,12 @@ class DuelingNet(nn.Module):
 
     def __init__(
         self,
-        state_shape: Union[int, Tuple[int]],
-        action_shape: Union[int, Tuple[int]],
+        obs_dim: int,
+        action_dim: int,
         hidden_dim: int = 128,
     ):
         """Initialization."""
         super(DuelingNet, self).__init__()
-        obs_dim = int(np.prod(state_shape))
-        action_dim = int(np.prod(action_shape))
         # set common feature layer
         self.feature_layer = nn.Sequential(nn.Linear(obs_dim, hidden_dim),
                                            nn.ReLU())
