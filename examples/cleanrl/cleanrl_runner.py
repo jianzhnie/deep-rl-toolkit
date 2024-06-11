@@ -19,6 +19,9 @@ from rltoolkit.cleanrl.rl_args import (C51Arguments, DDPGArguments,
                                        DQNArguments, PPOArguments,
                                        SACArguments)
 from rltoolkit.data import SimpleReplayBuffer
+from rltoolkit.utils.logger.logging import get_logger
+
+logger = get_logger(__name__)
 
 
 def make_env(env_id, seed) -> Callable[[], RecordEpisodeStatistics]:
@@ -119,7 +122,13 @@ def main() -> None:
         algo_args: SACArguments = tyro.cli(SACArguments)
 
     # Extract Algo-specific settings
-    algo_config = config.get(run_args.algo_name)
+    if run_args.algo_name in config:
+        algo_config = config.get(run_args.algo_name)
+    else:
+        algo_config = {}
+        logger.warning(
+            f'No configuration found for {run_args.algo_name} in {config_file}. Using default settings.'
+        )
     # Update parser with YAML configuration
     args = update_dataclass_from_dict(algo_args, algo_config)
 
@@ -134,11 +143,18 @@ def main() -> None:
     test_env: gym.Env = gym.make(args.env_id)
     state_shape = train_env.observation_space.shape or train_env.observation_space.n
     action_shape = train_env.action_space.shape or train_env.action_space.n
-
+    args.action_bound = (train_env.action_space.high[0] if isinstance(
+        train_env.action_space, gym.spaces.Box) else None)
     device = torch.device(
         'cuda' if torch.cuda.is_available() and args.use_cuda else 'cpu')
-    print('Observations shape:', state_shape)
-    print('Actions shape:', action_shape)
+
+    print('---------------------------------------')
+    print('Environment:', args.env_id)
+    print('Algorithm:', args.algo_name)
+    print('State Shape:', state_shape)
+    print('Action Shape:', action_shape)
+    print('Action Bound:', args.action_bound)
+    print('---------------------------------------')
 
     # agent
     agent = Agent(

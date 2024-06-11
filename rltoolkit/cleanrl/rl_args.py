@@ -240,6 +240,17 @@ class DQNArguments(RLArguments):
             'help': 'Frequency of updating the target network. Defaults to 100'
         },
     )
+    train_frequency: int = field(
+        default=1,
+        metadata={'help': 'Frequency of training updates. Defaults to 1'},
+    )
+    gradient_steps: int = field(
+        default=2,
+        metadata={
+            'help':
+            'Number of times to update the learner network. Defaults to 1'
+        },
+    )
 
 
 @dataclass
@@ -280,6 +291,17 @@ class C51Arguments(RLArguments):
             'Maximum value for the value distribution in C51. Defaults to 100.0'
         },
     )
+    train_frequency: int = field(
+        default=1,
+        metadata={'help': 'Frequency of training updates. Defaults to 1'},
+    )
+    gradient_steps: int = field(
+        default=2,
+        metadata={
+            'help':
+            'Number of times to update the learner network. Defaults to 1'
+        },
+    )
 
 
 @dataclass
@@ -291,6 +313,17 @@ class DDPGArguments(RLArguments):
         metadata={
             'help':
             'The hidden dimension size of the neural network. Defaults to 128'
+        },
+    )
+    train_frequency: int = field(
+        default=1,
+        metadata={'help': 'Frequency of training updates. Defaults to 1'},
+    )
+    gradient_steps: int = field(
+        default=2,
+        metadata={
+            'help':
+            'Number of times to update the learner network. Defaults to 1'
         },
     )
     n_steps: int = field(

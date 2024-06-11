@@ -83,10 +83,11 @@ class OffPolicyRunner:
             done = terminated or truncated
             self.buffer.add(obs, next_obs, action, reward, done)
             if self.buffer.size() > self.args.warmup_learn_steps:
-                if self.global_step % self.args.train_frequency == 0:
-                    batchs = self.buffer.sample(self.args.batch_size)
-                    learn_result = self.agent.learn(batchs)
-                    episode_result_info.append(learn_result)
+                if self.episode_cnt % self.args.train_frequency == 0:
+                    for _ in range(self.args.gradient_steps):
+                        batchs = self.buffer.sample(self.args.batch_size)
+                        learn_result = self.agent.learn(batchs)
+                        episode_result_info.append(learn_result)
 
             episode_reward += reward
             episode_step += 1
@@ -139,7 +140,7 @@ class OffPolicyRunner:
     def run(self) -> None:
         """Train the agent."""
         self.text_logger.info('Start Training')
-        episode_cnt = 0
+        self.episode_cnt = 0
         progress_bar = ProgressBar(self.args.max_timesteps)
         while self.global_step < self.args.max_timesteps:
             # Training logic
@@ -147,19 +148,12 @@ class OffPolicyRunner:
             episode_step = train_info['episode_step']
             progress_bar.update(episode_step)
             self.global_step += episode_step
-            episode_cnt += 1
+            self.episode_cnt += 1
 
-            train_info['num_episode'] = episode_cnt
+            train_info['num_episode'] = self.episode_cnt
             train_info['rpm_size'] = self.buffer.size()
             train_info['eps_greedy'] = (self.agent.eps_greedy if hasattr(
                 self.agent, 'eps_greedy') else 0.0)
-            train_info['learning_rate'] = (self.agent.learning_rate if hasattr(
-                self.agent, 'learning_rate') else 0.0)
-            train_info['actor_lr'] = (self.agent.actor_lr if hasattr(
-                self.agent, 'actor_lr') else 0.0)
-            train_info['critic_lr'] = (self.agent.critic_lr if hasattr(
-                self.agent, 'critic_lr') else 0.0)
-            train_info['global_update_step'] = self.agent.global_update_step
             train_info[
                 'target_model_update_step'] = self.agent.target_model_update_step
 
@@ -168,12 +162,12 @@ class OffPolicyRunner:
             train_info['fps'] = train_fps
 
             # Log training information
-            if episode_cnt % self.args.train_log_interval == 0:
+            if self.episode_cnt % self.args.train_log_interval == 0:
                 log_message = (
                     '[Train], global_step: {}, episodes: {}, train_fps: {}, '
                     'episode_reward: {:.2f}, episode_step: {:.2f}').format(
                         self.global_step,
-                        episode_cnt,
+                        self.episode_cnt,
                         train_fps,
                         train_info['episode_reward'],
                         train_info['episode_step'],
@@ -182,13 +176,13 @@ class OffPolicyRunner:
                 self.log_train_infos(train_info, self.global_step)
 
             # Log testing information
-            if episode_cnt % self.args.test_log_interval == 0:
+            if self.episode_cnt % self.args.test_log_interval == 0:
                 test_info = self.run_evaluate_episodes(
                     n_eval_episodes=self.args.eval_episodes)
-                test_info['num_episode'] = episode_cnt
+                test_info['num_episode'] = self.episode_cnt
                 self.text_logger.info(
                     '[Eval], episode: {}, eval_rewards: {:.2f}'.format(
-                        episode_cnt, test_info['reward_mean']))
+                        self.episode_cnt, test_info['reward_mean']))
                 self.log_test_infos(test_info, self.global_step)
 
         # Save model

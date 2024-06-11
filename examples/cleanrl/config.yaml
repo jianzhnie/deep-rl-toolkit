@@ -23,7 +23,6 @@ dueling_dqn:
   buffer_size: 10000
   batch_size: 64
   dueling_dqn : True
-  logger: tensorboard
 
 dueling_ddqn:
   env_id: CartPole-v0
@@ -34,7 +33,6 @@ dueling_ddqn:
   batch_size: 64
   double_dqn: True
   dueling_dqn: True
-  logger: tensorboard
 
 
 c51:
@@ -45,4 +43,13 @@ c51:
   buffer_size: 10000
   train_frequency: 10
   batch_size: 128
-  logger: tensorboard
+
+ddpg:
+  env_id: Pendulum-v1
+  algo_name: ddpg
+  actor_lr: 2.5e-3
+  critic_lr: 2.5e-3
+  max_timesteps: 50000
+  buffer_size: 10000
+  train_frequency: 10
+  batch_size: 128
