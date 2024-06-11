@@ -51,8 +51,11 @@ class C51Agent(BaseAgent):
         ).to(device)
 
         self.target_qnet = copy.deepcopy(self.qnet)
-        self.optimizer = torch.optim.Adam(self.qnet.parameters(),
-                                          lr=args.learning_rate)
+        self.optimizer = torch.optim.Adam(
+            self.qnet.parameters(),
+            lr=args.learning_rate,
+            eps=0.01 / args.batch_size,
+        )
 
         # Initialize epsilon-greedy scheduler
         self.eps_greedy_scheduler = LinearDecayScheduler(

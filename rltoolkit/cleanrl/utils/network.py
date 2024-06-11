@@ -200,9 +200,9 @@ class C51Network(nn.Module):
         self.action_dim = action_dim
         self.network = nn.Sequential(
             nn.Linear(obs_dim, hidden_dim),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
+            nn.ReLU(inplace=True),
             nn.Linear(hidden_dim, action_dim * num_atoms),
         )
 
@@ -233,8 +233,6 @@ class C51Network(nn.Module):
 
         if action is None:
             # Select the action with the highest Q-value
-            action = torch.argmax(q_values, dim=1)
-            action = action.to(dtype=torch.long)
-
+            action = torch.argmax(q_values, dim=1).to(dtype=torch.long)
         # Return the action and the PMF of the selected action
         return action, pmfs[torch.arange(len(obs)), action]
