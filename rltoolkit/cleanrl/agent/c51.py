@@ -11,13 +11,14 @@ from rltoolkit.utils import LinearDecayScheduler, soft_target_update
 
 
 class C51Agent(BaseAgent):
-    """Agent.
+    """C51 Agent for reinforcement learning.
 
     Args:
-        action_dim (int): action space dimension
-        total_step (int): total epsilon decay steps
-        learning_rate (float): initial learning rate
-        target_model_update_step (int): target network update frequency
+        args (C51Arguments): Configuration arguments for the C51 agent.
+        env (gym.Env): The environment in which the agent will operate.
+        state_shape (Union[int, List[int]]): The shape of the state space.
+        action_shape (Union[int, List[int]]): The shape of the action space.
+        device (str, optional): The device to use for computation ('cpu' or 'cuda'). Defaults to 'cpu'.
     """
 
     def __init__(
@@ -26,10 +27,9 @@ class C51Agent(BaseAgent):
         env: gym.Env,
         state_shape: Union[int, List[int]],
         action_shape: Union[int, List[int]],
-        device='cpu',
+        device: str = 'cpu',
     ) -> None:
         super().__init__(args)
-
         self.args = args
         self.env = env
         self.device = device
@@ -40,7 +40,7 @@ class C51Agent(BaseAgent):
         self.obs_dim = int(np.prod(state_shape))
         self.action_dim = int(np.prod(action_shape))
 
-        # Main network
+        # Initialize the main and target networks
         self.qnet = C51Network(
             obs_dim=self.obs_dim,
             action_dim=self.action_dim,
@@ -49,65 +49,61 @@ class C51Agent(BaseAgent):
             v_min=args.v_min,
             v_max=args.v_max,
         ).to(device)
-        # Target network
+
         self.target_qnet = copy.deepcopy(self.qnet)
-        # Create an optimizer
         self.optimizer = torch.optim.Adam(self.qnet.parameters(),
                                           lr=args.learning_rate)
 
+        # Initialize epsilon-greedy scheduler
         self.eps_greedy_scheduler = LinearDecayScheduler(
             args.eps_greedy_start,
             args.eps_greedy_end,
             max_steps=args.max_timesteps * 0.8,
         )
 
-    def get_action(self, obs) -> int:
-        """Sample an action when given an observation, base on the current
-        epsilon value, either a greedy action or a random action will be
-        returned.
+    def get_action(self, obs: np.ndarray) -> int:
+        """Sample an action based on the current observation and epsilon value.
 
         Args:
-            obs: current observation
+            obs (np.ndarray): Current observation.
 
         Returns:
-            act (int): action
+            int: Selected action.
         """
-        # Choose a random action with probability epsilon
         if np.random.rand() <= self.eps_greedy:
             act = self.env.action_space.sample()
         else:
-            # Choose the action with highest Q-value at the current state
             act = self.predict(obs)
 
         self.eps_greedy = max(self.eps_greedy_scheduler.step(),
                               self.args.eps_greedy_end)
-
         return act
 
-    def predict(self, obs: np.array) -> int:
-        """Predict an action when given an observation, a greedy action will be
-        returned.
+    def predict(self, obs: np.ndarray) -> int:
+        """Predict an action based on the current observation using the
+        Q-network.
 
         Args:
-            obs (np.float32): shape of (batch_size, obs_dim) , current observation
+            obs (np.ndarray): Current observation.
 
         Returns:
-            act(int): action
+            int: Predicted action.
         """
         if obs.ndim == 1:
-            # Expand to have batch_size = 1
             obs = np.expand_dims(obs, axis=0)
 
         obs = torch.tensor(obs, dtype=torch.float, device=self.device)
         action, _ = self.qnet(obs)
-        action = action.item()
-        return action
+        return action.item()
 
     def learn(self, batch: Dict[str, torch.Tensor]) -> float:
-        """Update model with an episode data.
+        """Update the model based on a batch of experience.
+
+        Args:
+            batch (Dict[str, torch.Tensor]): Batch of experience.
 
         Returns:
-            loss (float)
+            float: Loss value.
         """
         obs = batch['obs']
         next_obs = batch['next_obs']
@@ -122,23 +118,19 @@ class C51Agent(BaseAgent):
             self.target_model_update_step += 1
 
         self.global_update_step += 1
-
         action = action.to(dtype=torch.long)
+
         with torch.no_grad():
             _, next_pmfs = self.target_qnet(next_obs)
             next_atoms = reward + self.args.gamma * self.target_qnet.atoms * (
                 1 - done)
 
-            # projection
             delta_z = self.target_qnet.atoms[1] - self.target_qnet.atoms[0]
             tz = next_atoms.clamp(self.args.v_min, self.args.v_max)
-
             b = (tz - self.args.v_min) / delta_z
             l = b.floor().clamp(0, self.args.num_atoms - 1)
             u = b.ceil().clamp(0, self.args.num_atoms - 1)
 
-            # (l == u).float() handles the case where bj is exactly an integer
-            # example bj = 1, then the upper ceiling should be uj= 2, and lj= 1
             d_m_l = (u + (l == u).float() - b) * next_pmfs
             d_m_u = (b - l) * next_pmfs
             target_pmfs = torch.zeros_like(next_pmfs)
@@ -153,7 +145,6 @@ class C51Agent(BaseAgent):
 
         self.optimizer.zero_grad()
         loss.backward()
-        # 反向传播更新参数
         self.optimizer.step()
 
         result = {'loss': loss.item()}
