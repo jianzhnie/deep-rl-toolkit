@@ -243,34 +243,27 @@ class DQNArguments(RLArguments):
 
 
 @dataclass
-class C51Arguments(RLArguments):
+class C51Arguments(DQNArguments):
     """C51-specific settings."""
 
-    hidden_dim: int = field(
-        default=128,
-        metadata={
-            'help':
-            'The hidden dimension size of the neural network. Defaults to 128'
-        },
-    )
     num_atoms: int = field(
-        default=51,
+        default=101,
         metadata={
-            'help': 'Number of atoms in the C51 algorithm. Defaults to 51'
+            'help': 'Number of atoms in the C51 algorithm. Defaults to 101'
         },
     )
     v_min: float = field(
-        default=-10.0,
+        default=-100.0,
         metadata={
             'help':
-            'Minimum value for the value distribution in C51. Defaults to -10.0'
+            'Minimum value for the value distribution in C51. Defaults to -100.0'
         },
     )
     v_max: float = field(
-        default=10.0,
+        default=100.0,
         metadata={
             'help':
-            'Maximum value for the value distribution in C51. Defaults to 10.0'
+            'Maximum value for the value distribution in C51. Defaults to 100.0'
         },
     )
 

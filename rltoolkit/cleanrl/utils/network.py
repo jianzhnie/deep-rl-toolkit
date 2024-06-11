@@ -1,5 +1,5 @@
 import math
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -172,6 +172,16 @@ class NoisyNet(nn.Module):
 
 
 class C51Network(nn.Module):
+    """Neural network for the C51 algorithm in reinforcement learning.
+
+    Args:
+        obs_dim (int): Dimension of the observation space.
+        hidden_dim (int): Dimension of the hidden layers.
+        action_dim (int): Dimension of the action space.
+        num_atoms (int, optional): Number of atoms for the value distribution. Defaults to 101.
+        v_min (float, optional): Minimum value of the value distribution. Defaults to -100.
+        v_max (float, optional): Maximum value of the value distribution. Defaults to 100.
+    """
 
     def __init__(
         self,
@@ -199,18 +209,32 @@ class C51Network(nn.Module):
     def forward(
         self,
         obs: torch.Tensor,
-        action: torch.Tensor = None,
-    ) -> tuple[torch.Tensor, torch.Tensor]:
-        # obs: batch_size * obs_dim
-        # logits: (batch_size, action_dim * num_atoms)
+        action: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Forward pass through the network.
+
+        Args:
+            obs (torch.Tensor): The observation tensor of shape (batch_size, obs_dim).
+            action (Optional[torch.Tensor]): The action tensor of shape (batch_size,).
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]:
+                - The action tensor of shape (batch_size,).
+                - The probability mass function (PMF) for each action of shape (batch_size, num_atoms).
+        """
+        # Compute logits: (batch_size, action_dim * num_atoms)
         logits = self.network(obs)
-        # logits: (batch_size, action_dim, num_atoms)
+        # Reshape logits to (batch_size, action_dim, num_atoms)
         logits = logits.view(len(obs), self.action_dim, self.num_atoms)
-        # probability mass function for each action
-        # pmfs: (batch_size * action_dim * num_atoms)
-        pmfs = torch.softmax(logits, dim=2)
+        # Compute the probability mass function (PMF) using softmax
+        pmfs = F.softmax(logits, dim=2)
+        # Compute Q-values by summing over the atoms dimension
         q_values = (pmfs * self.atoms).sum(2)
+
         if action is None:
-            action = torch.argmax(q_values, 1)
+            # Select the action with the highest Q-value
+            action = torch.argmax(q_values, dim=1)
             action = action.to(dtype=torch.long)
+
+        # Return the action and the PMF of the selected action
         return action, pmfs[torch.arange(len(obs)), action]

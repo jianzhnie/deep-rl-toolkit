@@ -24,10 +24,10 @@ class C51Agent(BaseAgent):
         self,
         args: C51Arguments,
         env: gym.Env,
-        state_shape: Union[int, List[int]] = None,
-        action_shape: Union[int, List[int]] = None,
+        state_shape: Union[int, List[int]],
+        action_shape: Union[int, List[int]],
         device='cpu',
-    ):
+    ) -> None:
         super().__init__(args)
 
         self.args = args
@@ -74,7 +74,7 @@ class C51Agent(BaseAgent):
         """
         # Choose a random action with probability epsilon
         if np.random.rand() <= self.eps_greedy:
-            act = np.random.randint(self.action_dim)
+            act = self.env.action_space.sample()
         else:
             # Choose the action with highest Q-value at the current state
             act = self.predict(obs)
@@ -84,7 +84,7 @@ class C51Agent(BaseAgent):
 
         return act
 
-    def predict(self, obs) -> int:
+    def predict(self, obs: np.array) -> int:
         """Predict an action when given an observation, a greedy action will be
         returned.
 
@@ -94,7 +94,10 @@ class C51Agent(BaseAgent):
         Returns:
             act(int): action
         """
-        obs = np.expand_dims(obs, axis=0)
+        if obs.ndim == 1:
+            # Expand to have batch_size = 1
+            obs = np.expand_dims(obs, axis=0)
+
         obs = torch.tensor(obs, dtype=torch.float, device=self.device)
         action, _ = self.qnet(obs)
         action = action.item()
@@ -112,15 +115,18 @@ class C51Agent(BaseAgent):
         reward = batch['reward']
         done = batch['done']
 
-        if self.global_update_step % self.target_model_update_step == 0:
+        if self.global_update_step % self.args.target_update_frequency == 0:
             soft_target_update(self.qnet,
                                self.target_qnet,
                                tau=self.args.soft_update_tau)
+            self.target_model_update_step += 1
+
+        self.global_update_step += 1
 
         action = action.to(dtype=torch.long)
         with torch.no_grad():
             _, next_pmfs = self.target_qnet(next_obs)
-            next_atoms = reward + self.args.gamma * self.target_qnet.num_atoms * (
+            next_atoms = reward + self.args.gamma * self.target_qnet.atoms * (
                 1 - done)
 
             # projection
@@ -149,5 +155,6 @@ class C51Agent(BaseAgent):
         loss.backward()
         # 反向传播更新参数
         self.optimizer.step()
-        self.global_update_step += 1
-        return loss.item()
+
+        result = {'loss': loss.item()}
+        return result
