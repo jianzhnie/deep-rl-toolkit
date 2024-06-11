@@ -8,10 +8,6 @@ import torch.nn.functional as F
 
 
 class QNet(nn.Module):
-    """Initialization.
-
-    只有一层隐藏层的Q网络.
-    """
 
     def __init__(
         self,
@@ -41,25 +37,28 @@ class DuelingNet(nn.Module):
         obs_dim: int,
         action_dim: int,
         hidden_dim: int = 128,
-    ):
+    ) -> None:
         """Initialization."""
         super(DuelingNet, self).__init__()
         # set common feature layer
-        self.feature_layer = nn.Sequential(nn.Linear(obs_dim, hidden_dim),
-                                           nn.ReLU())
+        self.feature_layer = nn.Sequential(
+            nn.Linear(obs_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, hidden_dim),
+        )
         # set advantage layer
         self.advantage_layer = nn.Linear(hidden_dim, action_dim)
         # set value layer
         self.value_layer = nn.Linear(hidden_dim, 1)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
         """Forward method implementation."""
-        feature = self.feature_layer(x)
+        feature = self.feature_layer(obs)
         value = self.value_layer(feature)
         advantage = self.advantage_layer(feature)
         # Q值由V值和A值计算得到
-        q = value + advantage - advantage.mean(dim=-1, keepdim=True)
-        return q
+        q_value = value + advantage - advantage.mean(dim=-1, keepdim=True)
+        return q_value
 
 
 class NoisyLinear(nn.Module):
@@ -170,3 +169,48 @@ class NoisyNet(nn.Module):
     def reset_noise(self):
         """Reset all noisy layers."""
         self.noisy_layer.reset_noise()
+
+
+class C51Network(nn.Module):
+
+    def __init__(
+        self,
+        obs_dim: int,
+        hidden_dim: int,
+        action_dim: int,
+        num_atoms: int = 101,
+        v_min: float = -100,
+        v_max: float = 100,
+    ) -> None:
+        super().__init__()
+        self.num_atoms = num_atoms
+        self.register_buffer('atoms',
+                             torch.linspace(v_min, v_max, steps=num_atoms))
+
+        self.action_dim = action_dim
+        self.network = nn.Sequential(
+            nn.Linear(obs_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, action_dim * num_atoms),
+        )
+
+    def forward(
+        self,
+        obs: torch.Tensor,
+        action: torch.Tensor = None,
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        # obs: batch_size * obs_dim
+        # logits: (batch_size, action_dim * num_atoms)
+        logits = self.network(obs)
+        # logits: (batch_size, action_dim, num_atoms)
+        logits = logits.view(len(obs), self.action_dim, self.num_atoms)
+        # probability mass function for each action
+        # pmfs: (batch_size * action_dim * num_atoms)
+        pmfs = torch.softmax(logits, dim=2)
+        q_values = (pmfs * self.atoms).sum(2)
+        if action is None:
+            action = torch.argmax(q_values, 1)
+            action = action.to(dtype=torch.long)
+        return action, pmfs[torch.arange(len(obs)), action]

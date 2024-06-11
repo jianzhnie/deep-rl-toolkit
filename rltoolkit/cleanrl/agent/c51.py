@@ -4,51 +4,10 @@ from typing import Dict, List, Union
 import gymnasium as gym
 import numpy as np
 import torch
-import torch.nn as nn
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import C51Arguments
+from rltoolkit.cleanrl.utils.network import C51Network
 from rltoolkit.utils import LinearDecayScheduler, soft_target_update
-
-
-class QNetwork(nn.Module):
-
-    def __init__(
-        self,
-        obs_dim: int,
-        hidden_dim: int,
-        action_dim: int,
-        num_atoms: int = 101,
-        v_min: float = -100,
-        v_max: float = 100,
-    ) -> None:
-        super().__init__()
-        self.args.num_atoms = num_atoms
-        self.register_buffer('atoms',
-                             torch.linspace(v_min, v_max, steps=num_atoms))
-
-        self.action_dim = action_dim
-        self.network = nn.Sequential(
-            nn.Linear(obs_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Linear(hidden_dim, action_dim * num_atoms),
-        )
-
-    def forward(self, x: torch.Tensor, action: torch.Tensor = None):
-        # x : batch_size * obs_dim
-        # logits: batch_size * (action_dim * num_atoms)
-        logits = self.network(x)
-        # logits: batch_size * action_dim * num_atoms
-        logits = logits.view(len(x), self.action_dim, self.args.num_atoms)
-        # probability mass function for each action
-        # pmfs: batch_size * action_dim * num_atoms
-        pmfs = torch.softmax(logits, dim=2)
-        q_values = (pmfs * self.atoms).sum(2)
-        if action is None:
-            action = torch.argmax(q_values, 1)
-            action = action.to(dtype=torch.long)
-        return action, pmfs[torch.arange(len(x)), action]
 
 
 class C51Agent(BaseAgent):
@@ -82,7 +41,7 @@ class C51Agent(BaseAgent):
         self.action_dim = int(np.prod(action_shape))
 
         # Main network
-        self.qnet = QNetwork(
+        self.qnet = C51Network(
             obs_dim=self.obs_dim,
             action_dim=self.action_dim,
             hidden_dim=args.hidden_dim,
