@@ -102,7 +102,7 @@ class RLArguments:
         },
     )
     learning_rate: float = field(
-        default=1e-4,
+        default=1e-2,
         metadata={
             'help': 'Learning rate used by the optimizer. Defaults to 1e-4'
         },
@@ -314,6 +314,37 @@ class PGArguments(RLArguments):
         metadata={
             'help':
             'Whether to use a baseline in the policy gradient method. Defaults to False'
+        },
+    )
+
+
+@dataclass
+class A2CArguments(RLArguments):
+    hidden_dim: int = field(
+        default=128,
+        metadata={
+            'help':
+            'The hidden dimension size of the neural network. Defaults to 128'
+        },
+    )
+    entropy_weight: float = field(
+        default=0.01,
+        metadata={
+            'help':
+            'Entropy weight for the policy gradient method. Defaults to 0.01'
+        },
+    )
+
+    actor_lr: float = field(
+        default=1e-4,
+        metadata={
+            'help': 'Learning rate for the actor network. Defaults to 1e-4'
+        },
+    )
+    critic_lr: float = field(
+        default=1e-4,
+        metadata={
+            'help': 'Learning rate for the critic network. Defaults to 1e-4'
         },
     )
 

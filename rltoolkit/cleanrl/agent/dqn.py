@@ -59,7 +59,7 @@ class DQNAgent(BaseAgent):
                 hidden_dim=self.args.hidden_dim,
             ).to(device)
         self.target_qnet = copy.deepcopy(self.qnet)
-
+        self.target_qnet.eval()
         # Initialize optimizer and schedulers
         self.optimizer = torch.optim.Adam(params=self.qnet.parameters(),
                                           lr=args.learning_rate)
@@ -84,8 +84,9 @@ class DQNAgent(BaseAgent):
         Returns:
             np.ndarray: Selected action.
         """
+        # epsilon greedy policy
         if np.random.rand() <= self.eps_greedy:
-            action = np.random.randint(self.env.action_space.n)
+            action = self.env.action_space.sample()
         else:
             action = self.predict(obs)
 
@@ -144,7 +145,7 @@ class DQNAgent(BaseAgent):
                     1, greedy_action)
         else:
             with torch.no_grad():
-                next_q_values = self.target_qnet(next_obs).max(1,
+                next_q_values = self.target_qnet(next_obs).max(dim=1,
                                                                keepdim=True)[0]
 
         target_q_values = (

@@ -1,3 +1,4 @@
+import os
 import random
 import sys
 
@@ -6,10 +7,11 @@ import torch
 import tyro
 
 sys.path.append('../../')
+sys.path.append(os.getcwd())
 import gymnasium as gym
 from rltoolkit.cleanrl.agent import DQNAgent
-from rltoolkit.cleanrl.rl_args import RLArguments
-from rltoolkit.cleanrl.runner import Runner
+from rltoolkit.cleanrl.offpolicy_runner import OffPolicyRunner
+from rltoolkit.cleanrl.rl_args import DQNArguments
 from rltoolkit.data import SimpleReplayBuffer
 
 
@@ -25,7 +27,7 @@ def make_env(env_id, seed):
 
 
 if __name__ == '__main__':
-    args: RLArguments = tyro.cli(RLArguments)
+    args: DQNArguments = tyro.cli(DQNArguments)
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -33,11 +35,11 @@ if __name__ == '__main__':
     torch.cuda.manual_seed_all(args.seed)
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
-    # Note: You can easily define other networks.
     train_env: gym.Env = gym.make(args.env_id)
     test_env: gym.Env = gym.make(args.env_id)
     state_shape = train_env.observation_space.shape or train_env.observation_space.n
     action_shape = train_env.action_space.shape or train_env.action_space.n
+
     device = torch.device(
         'cuda' if torch.cuda.is_available() and args.use_cuda else 'cpu')
     print('Observations shape:', state_shape)
@@ -49,8 +51,6 @@ if __name__ == '__main__':
         env=train_env,
         state_shape=state_shape,
         action_shape=action_shape,
-        double_dqn=args.double_dqn,
-        n_steps=args.n_steps,
         device=device,
     )
     buffer = SimpleReplayBuffer(
@@ -61,7 +61,7 @@ if __name__ == '__main__':
         gamma=args.gamma,
         device=device,
     )
-    runner = Runner(
+    runner = OffPolicyRunner(
         args,
         train_env=train_env,
         test_env=test_env,

@@ -11,7 +11,7 @@ from rltoolkit.utils import (ProgressBar, TensorboardLogger, WandbLogger,
 from torch.utils.tensorboard import SummaryWriter
 
 
-class Runner:
+class OffPolicyRunner:
 
     def __init__(
         self,
