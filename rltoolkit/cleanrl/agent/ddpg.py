@@ -4,75 +4,12 @@ from typing import Dict, List, Union
 import gym
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import DDPGArguments
+from rltoolkit.cleanrl.utils.continous_action import (OUNoise, PolicyNet,
+                                                      ValueNet)
 from rltoolkit.utils import soft_target_update
-
-
-class PolicyNet(nn.Module):
-    """Policy Network for Actor-Critic method.
-
-    Args:
-        obs_dim (int): Dimension of observation space.
-        hidden_dim (int): Dimension of hidden layer.
-        action_dim (int): Dimension of action space.
-    """
-
-    def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int):
-        super(PolicyNet, self).__init__()
-        self.fc1 = nn.Linear(obs_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, action_dim)
-        self.relu = nn.ReLU(inplace=True)
-
-    def forward(self, obs: torch.Tensor) -> torch.Tensor:
-        """Forward pass.
-
-        Args:
-            obs (torch.Tensor): Observation tensor.
-
-        Returns:
-            torch.Tensor: Action tensor mapped to the range [-1, 1].
-        """
-        out = self.fc1(obs)
-        out = self.relu(out)
-        out = self.fc2(out)
-        out = torch.tanh(out)  # Map to [-1, 1]
-        return out
-
-
-class ValueNet(nn.Module):
-    """Value Network for Critic in Actor-Critic method.
-
-    Args:
-        obs_dim (int): Dimension of observation space.
-        hidden_dim (int): Dimension of hidden layer.
-        action_dim (int): Dimension of action space.
-    """
-
-    def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int) -> None:
-        super(ValueNet, self).__init__()
-        self.fc1 = nn.Linear(obs_dim + action_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, 1)
-        self.relu = nn.ReLU(inplace=True)
-
-    def forward(self, obs: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
-        """Forward pass.
-
-        Args:
-            obs (torch.Tensor): Observation tensor.
-            action (torch.Tensor): Action tensor.
-
-        Returns:
-            torch.Tensor: Q-value tensor.
-        """
-        # Concatenate observation and action
-        cat = torch.cat([obs, action], dim=1)
-        out = self.fc1(cat)
-        out = self.relu(out)
-        out = self.fc2(out)
-        return out
 
 
 class DDPGAgent(BaseAgent):
@@ -93,14 +30,13 @@ class DDPGAgent(BaseAgent):
         env: gym.Env,
         state_shape: Union[int, List[int]],
         action_shape: Union[int, List[int]],
-        action_bound: float,
         device: str = 'cpu',
     ) -> None:
         super().__init__(args)
         self.args = args
         self.env = env
         self.device = device
-        self.action_bound = action_bound
+        self.action_bound = args.action_bound
         self.obs_dim = int(np.prod(state_shape))
         self.action_dim = int(np.prod(action_shape))
         self.global_update_step = 0
@@ -116,6 +52,12 @@ class DDPGAgent(BaseAgent):
         # Target Networks
         self.target_actor = copy.deepcopy(self.policy_net)
         self.target_critic = copy.deepcopy(self.critic_net)
+
+        self.noiser = OUNoise(
+            mu=0.0,
+            sigma=self.args.ou_noise_sigma,
+            theta=self.args.ou_noise_theta,
+        )
 
         # Optimizers
         self.actor_optimizer = torch.optim.Adam(self.policy_net.parameters(),
@@ -166,6 +108,16 @@ class DDPGAgent(BaseAgent):
         reward = batch['reward']
         done = batch['done']
 
+        # Soft update target networks
+        if self.global_update_step % self.args.target_update_frequency == 0:
+            soft_target_update(self.policy_net, self.target_actor,
+                               self.args.soft_update_tau)
+            soft_target_update(self.critic_net, self.target_critic,
+                               self.args.soft_update_tau)
+            self.target_model_update_step += 1
+
+        self.global_update_step += 1
+
         # Current Q values
         curr_q_values = self.critic_net(obs, action)
         with torch.no_grad():
@@ -191,13 +143,9 @@ class DDPGAgent(BaseAgent):
         policy_loss.backward()
         self.actor_optimizer.step()
 
-        # Soft update target networks
-        if self.global_update_step % self.args.target_update_frequency == 0:
-            soft_target_update(self.policy_net, self.target_actor,
-                               self.args.soft_update_tau)
-            soft_target_update(self.critic_net, self.target_critic,
-                               self.args.soft_update_tau)
-            self.target_model_update_step += 1
-
-        self.global_update_step += 1
-        return policy_loss.item(), value_loss.item()
+        result = {
+            'policy_loss': policy_loss.item(),
+            'value_loss': value_loss.item(),
+            'loss': policy_loss.item() + value_loss.item(),
+        }
+        return result

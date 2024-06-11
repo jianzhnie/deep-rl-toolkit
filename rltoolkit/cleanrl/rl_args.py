@@ -243,9 +243,23 @@ class DQNArguments(RLArguments):
 
 
 @dataclass
-class C51Arguments(DQNArguments):
+class C51Arguments(RLArguments):
     """C51-specific settings."""
 
+    hidden_dim: int = field(
+        default=128,
+        metadata={
+            'help':
+            'The hidden dimension size of the neural network. Defaults to 128'
+        },
+    )
+    n_steps: int = field(
+        default=1,
+        metadata={
+            'help':
+            'Number of steps to take before updating the target network. Defaults to 1'
+        },
+    )
     num_atoms: int = field(
         default=101,
         metadata={
@@ -279,6 +293,13 @@ class DDPGArguments(RLArguments):
             'The hidden dimension size of the neural network. Defaults to 128'
         },
     )
+    n_steps: int = field(
+        default=1,
+        metadata={
+            'help':
+            'Number of steps to take before updating the target network. Defaults to 1'
+        },
+    )
     actor_lr: float = field(
         default=1e-4,
         metadata={
@@ -294,6 +315,20 @@ class DDPGArguments(RLArguments):
     action_bound: float = field(
         default=2.0,
         metadata={'help': 'Action bound for the environment. Defaults to 2.0'},
+    )
+    ou_noise_sigma: float = field(
+        default=0.3,
+        metadata={
+            'help':
+            'Standard deviation of the Ornstein-Uhlenbeck noise. Defaults to 0.3'
+        },
+    )
+    ou_noise_theta: float = field(
+        default=0.15,
+        metadata={
+            'help':
+            'Theta parameter of the Ornstein-Uhlenbeck noise. Defaults to 0.15'
+        },
     )
 
 

@@ -5,6 +5,7 @@ import gymnasium as gym
 import numpy as np
 from rltoolkit.cleanrl.agent import BaseAgent
 from rltoolkit.cleanrl.rl_args import RLArguments
+from rltoolkit.cleanrl.utils.utils import calculate_mean
 from rltoolkit.data import SimpleReplayBuffer as ReplayBuffer
 from rltoolkit.utils import (ProgressBar, TensorboardLogger, WandbLogger,
                              get_outdir, get_text_logger)
@@ -72,7 +73,7 @@ class OffPolicyRunner:
     def run_train_episode(self) -> dict[str, float]:
         episode_step = 0
         episode_reward = 0
-        episode_loss = []
+        episode_result_info = []
         obs, _ = self.train_env.reset()
         done = False
         while not done:
@@ -82,9 +83,10 @@ class OffPolicyRunner:
             done = terminated or truncated
             self.buffer.add(obs, next_obs, action, reward, done)
             if self.buffer.size() > self.args.warmup_learn_steps:
-                batchs = self.buffer.sample(self.args.batch_size)
-                learn_result = self.agent.learn(batchs)
-                episode_loss.append(learn_result['loss'])
+                if self.global_step % self.args.train_frequency == 0:
+                    batchs = self.buffer.sample(self.args.batch_size)
+                    learn_result = self.agent.learn(batchs)
+                    episode_result_info.append(learn_result)
 
             episode_reward += reward
             episode_step += 1
@@ -92,11 +94,12 @@ class OffPolicyRunner:
             if done:
                 break
 
+        episode_info = calculate_mean(episode_result_info)
         train_info = {
             'episode_reward': episode_reward,
             'episode_step': episode_step,
-            'loss': np.mean(episode_loss) if episode_loss else 0.0,
         }
+        train_info.update(episode_info)
         return train_info
 
     def run_evaluate_episodes(self,
@@ -148,8 +151,14 @@ class OffPolicyRunner:
 
             train_info['num_episode'] = episode_cnt
             train_info['rpm_size'] = self.buffer.size()
-            train_info['eps_greedy'] = self.agent.eps_greedy
-            train_info['learning_rate'] = self.agent.learning_rate
+            train_info['eps_greedy'] = (self.agent.eps_greedy if hasattr(
+                self.agent, 'eps_greedy') else 0.0)
+            train_info['learning_rate'] = (self.agent.learning_rate if hasattr(
+                self.agent, 'learning_rate') else 0.0)
+            train_info['actor_lr'] = (self.agent.actor_lr if hasattr(
+                self.agent, 'actor_lr') else 0.0)
+            train_info['critic_lr'] = (self.agent.critic_lr if hasattr(
+                self.agent, 'critic_lr') else 0.0)
             train_info['global_update_step'] = self.agent.global_update_step
             train_info[
                 'target_model_update_step'] = self.agent.target_model_update_step

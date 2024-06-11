@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import C51Arguments
-from rltoolkit.cleanrl.utils.network import C51Network
+from rltoolkit.cleanrl.utils.discrete_action import C51Network
 from rltoolkit.utils import LinearDecayScheduler, soft_target_update
 
 
