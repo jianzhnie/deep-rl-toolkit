@@ -16,7 +16,7 @@ Deep RL Toolkit is a flexible and high-efficient reinforcement learning framewor
 
 - **Elastic**: allows to elastically and automatically allocate computing resources on the cloud.
 
-- **Lightweight**: the core codes \<1,000 lines (check [Demo](./examples/tutorials/lesson3/DQN/train.py)).
+- **Lightweight**: the core codes \<1,000 lines (check [Demo](examples/cleanrl/cleanrl_runner.py)).
 
 - **Stable**: much more stable than [Stable Baselines 3](https://github.com/DLR-RM/stable-baselines3) by utilizing various ensemble methods.
 
@@ -78,9 +78,18 @@ If you want to learn more about deep reinforcemnet learning, please read the [de
 
 ```bash
 git clone https://github.com/jianzhnie/deep-rl-toolkit.git
-cd examples/cleanrl/
 
-python cleanrl_runner.py  --logger tensorboard --env CartPole-v0 --algo dqn
+# Run the DQN algorithm on the CartPole-v0 environment
+python examples/cleanrl/cleanrl_runner.py --env CartPole-v0 --algo dqn
+
+# Run the C51 algorithm on the CartPole-v0 environment
+python examples/cleanrl/cleanrl_runner.py --env CartPole-v0 --algo c51
+
+# Run the DDPG algorithm on the Pendulum-v1 environment
+python examples/cleanrl/cleanrl_runner.py --env Pendulum-v0 --algo ddpg
+
+# Run the PPO algorithm on the CartPole-v0 environment
+python examples/cleanrl/cleanrl_runner.py --env CartPole-v0 --algo ppo
 ```
 
 ## References
