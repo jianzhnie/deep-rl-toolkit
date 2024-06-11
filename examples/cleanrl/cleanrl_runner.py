@@ -2,25 +2,28 @@ import argparse
 import os
 import random
 import sys
-from typing import Any, Dict
+from typing import Any, Callable, Dict
 
 import numpy as np
 import torch
 import tyro
 import yaml
+from gymnasium.wrappers.record_episode_statistics import \
+    RecordEpisodeStatistics
 
 sys.path.append(os.getcwd())
 import gymnasium as gym
-from rltoolkit.cleanrl.agent import DDPGAgent, DQNAgent
+from rltoolkit.cleanrl.agent import C51Agent, DDPGAgent, DQNAgent
 from rltoolkit.cleanrl.offpolicy_runner import OffPolicyRunner
-from rltoolkit.cleanrl.rl_args import (DDPGArguments, DQNArguments,
-                                       PPOArguments, SACArguments)
+from rltoolkit.cleanrl.rl_args import (C51Arguments, DDPGArguments,
+                                       DQNArguments, PPOArguments,
+                                       SACArguments)
 from rltoolkit.data import SimpleReplayBuffer
 
 
-def make_env(env_id, seed):
+def make_env(env_id, seed) -> Callable[[], RecordEpisodeStatistics]:
 
-    def thunk():
+    def thunk() -> RecordEpisodeStatistics:
         env = gym.make(env_id)
         env = gym.wrappers.RecordEpisodeStatistics(env)
         env.action_space.seed(seed)
@@ -69,6 +72,7 @@ def main() -> None:
             'dueling_dqn',
             'dueling_ddqn',
             'rainbow',
+            'c51',
             'pg',
             'ac',
             'a2c',
@@ -93,23 +97,31 @@ def main() -> None:
     # Parse arguments
     run_args = parser.parse_args()
     if run_args.algo_name in [
-            'dqn', 'ddqn', 'dueling_dqn', 'dueling_ddqn', 'rainbow'
+            'dqn',
+            'ddqn',
+            'noisy_dqn',
+            'dueling_dqn',
+            'dueling_ddqn',
+            'rainbow',
     ]:
         # Update parser with DQN configuration
-        args: DQNArguments = tyro.cli(DQNArguments)
+        algo_args: DQNArguments = tyro.cli(DQNArguments)
         Agent: DQNAgent = DQNAgent
+    elif run_args.algo_name == 'c51':
+        algo_args: C51Arguments = tyro.cli(C51Arguments)
+        Agent: C51Agent = C51Agent
     elif run_args.algo_name == 'ddpg':
-        args: DDPGArguments = tyro.cli(DDPGArguments)
+        algo_args: DDPGArguments = tyro.cli(DDPGArguments)
         Agent: DDPGAgent = DDPGAgent
     elif run_args.algo_name == 'ppo':
-        args: PPOArguments = tyro.cli(PPOArguments)
+        algo_args: PPOArguments = tyro.cli(PPOArguments)
     elif run_args.algo_name == 'sac':
-        args: SACArguments = tyro.cli(SACArguments)
+        algo_args: SACArguments = tyro.cli(SACArguments)
 
     # Extract Algo-specific settings
     algo_config = config.get(run_args.algo_name)
     # Update parser with YAML configuration
-    args = update_dataclass_from_dict(args, algo_config)
+    args = update_dataclass_from_dict(algo_args, algo_config)
 
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)

@@ -5,7 +5,6 @@ dqn:
   max_timesteps: 12000
   buffer_size: 10000
   batch_size: 64
-  n_step: 5
 
 ddqn:
   env_id: CartPole-v0
@@ -35,4 +34,15 @@ dueling_ddqn:
   batch_size: 64
   double_dqn: True
   dueling_dqn: True
+  logger: tensorboard
+
+
+c51:
+  env_id: CartPole-v0
+  algo_name: c51
+  learning_rate: 2.5e-3
+  max_timesteps: 20000
+  buffer_size: 10000
+  train_frequency: 10
+  batch_size: 128
   logger: tensorboard
