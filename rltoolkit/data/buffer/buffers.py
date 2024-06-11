@@ -151,53 +151,39 @@ class BaseBuffer(ABC):
 class EpisodeBuffer:
     """Episode buffer for DRQN agent."""
 
-    def __init__(
-        self,
-        observation_space: spaces.Space,
-        action_space: spaces.Space,
-        device: str = 'cpu',
-    ) -> None:
+    def __init__(self, device: str = 'cpu') -> None:
         self.device = device
-        self.obs_shape = get_obs_shape(observation_space)
-        self.action_dim = get_action_dim(action_space)
-        self.obs = []
-        self.action = []
-        self.reward = []
-        self.done = []
-        self.value = []
-        self.log_prob = []
+        self.transition = {
+            'obs': [],
+            'next_obs': [],
+            'action': [],
+            'reward': [],
+            'done': [],
+            'value': [],
+            'log_prob': [],
+        }
 
-    def add(
-        self,
-        obs: np.ndarray,
-        action: np.ndarray,
-        reward: np.ndarray,
-        done: np.ndarray,
-        value: torch.Tensor,
-        log_prob: torch.Tensor,
-    ) -> None:
-        self.obs.append(obs)
-        self.action.append(action)
-        self.reward.append(reward)
-        self.done.append(done)
-        self.value.append(value)
-        self.log_prob.append(log_prob)
+    def add(self, transition: Dict[str, Union[np.ndarray,
+                                              torch.Tensor]]) -> None:
+        for key, value in transition.items():
+            self.transition[key].append(value)
 
-    def sample(self, lookup_step=None, idx=None) -> Dict[str, np.ndarray]:
-        obs = np.array(self.obs)
-        action = np.array(self.action)
-        reward = np.array(self.reward)
-        done = np.array(self.done)
+    def to_torch(self, array: np.ndarray, copy: bool = True) -> torch.Tensor:
+        """
+        Convert a numpy array to a PyTorch tensor.
+        Note: it copies the data by default
 
-        obs = obs[idx:idx + lookup_step + 1]
-        action = action[idx:idx + lookup_step]
-        reward = reward[idx:idx + lookup_step]
-        done = done[idx:idx + lookup_step]
-
-        return dict(obs=obs, acts=action, rews=reward, done=done)
+        :param array:
+        :param copy: Whether to copy or not the data (may be useful to avoid changing things
+            by reference). This argument is inoperative if the device is not the CPU.
+        :return:
+        """
+        if copy:
+            return torch.tensor(array, device=self.device)
+        return torch.as_tensor(array, device=self.device)
 
     def __len__(self) -> int:
-        return len(self.action)
+        return len(self.transition['obs'])
 
 
 class OffPolicyBuffer(BaseBuffer):

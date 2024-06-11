@@ -59,7 +59,7 @@ class DQNAgent(BaseAgent):
                 hidden_dim=self.args.hidden_dim,
             ).to(device)
         self.target_qnet = copy.deepcopy(self.qnet)
-
+        self.target_qnet.eval()
         # Initialize optimizer and schedulers
         self.optimizer = torch.optim.Adam(params=self.qnet.parameters(),
                                           lr=args.learning_rate)
@@ -84,8 +84,9 @@ class DQNAgent(BaseAgent):
         Returns:
             np.ndarray: Selected action.
         """
+        # epsilon greedy policy
         if np.random.rand() <= self.eps_greedy:
-            action = np.random.randint(self.env.action_space.n)
+            action = self.env.action_space.sample()
         else:
             action = self.predict(obs)
 
@@ -126,6 +127,7 @@ class DQNAgent(BaseAgent):
         reward = batch['reward']
         done = batch['done']
 
+        action = action.to(self.device, dtype=torch.long)
         # Soft update target network
         if self.global_update_step % self.args.target_update_frequency == 0:
             soft_target_update(self.qnet, self.target_qnet,
@@ -134,7 +136,7 @@ class DQNAgent(BaseAgent):
         self.global_update_step += 1
 
         # Compute current Q values
-        current_q_values = self.qnet(obs).gather(1, action.long())
+        current_q_values = self.qnet(obs).gather(1, action)
         # Compute target Q values
         if self.args.double_dqn:
             with torch.no_grad():
@@ -143,7 +145,7 @@ class DQNAgent(BaseAgent):
                     1, greedy_action)
         else:
             with torch.no_grad():
-                next_q_values = self.target_qnet(next_obs).max(1,
+                next_q_values = self.target_qnet(next_obs).max(dim=1,
                                                                keepdim=True)[0]
 
         target_q_values = (
@@ -151,7 +153,7 @@ class DQNAgent(BaseAgent):
             (1 - done) * self.args.gamma**self.args.n_steps * next_q_values)
 
         # Compute loss
-        loss = F.mse_loss(current_q_values, target_q_values)
+        loss = F.mse_loss(current_q_values, target_q_values, reduction='mean')
 
         # Optimize the model
         self.optimizer.zero_grad()
