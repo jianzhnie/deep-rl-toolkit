@@ -1,17 +1,20 @@
+import argparse
 import os
 import random
 import sys
+from typing import Any, Dict
 
 import numpy as np
 import torch
 import tyro
+import yaml
 
-sys.path.append('../../')
 sys.path.append(os.getcwd())
 import gymnasium as gym
-from rltoolkit.cleanrl.agent import DQNAgent
+from rltoolkit.cleanrl.agent import DDPGAgent, DQNAgent
 from rltoolkit.cleanrl.offpolicy_runner import OffPolicyRunner
-from rltoolkit.cleanrl.rl_args import DQNArguments
+from rltoolkit.cleanrl.rl_args import (DDPGArguments, DQNArguments,
+                                       PPOArguments, SACArguments)
 from rltoolkit.data import SimpleReplayBuffer
 
 
@@ -26,8 +29,88 @@ def make_env(env_id, seed):
     return thunk
 
 
-if __name__ == '__main__':
-    args: DQNArguments = tyro.cli(DQNArguments)
+def load_yaml_config(file_path: str) -> Dict[str, Any]:
+    """Load configuration from a YAML file.
+
+    Args:
+        file_path (str): Path to the YAML file.
+
+    Returns:
+        Dict[str, Any]: Configuration dictionary.
+    """
+    with open(file_path, 'r', encoding='utf-8') as file:
+        config = yaml.safe_load(file)
+    return config
+
+
+def update_dataclass_from_dict(instance: Any, config: Dict[str, Any]):
+    """Update the attributes of a dataclass instance with values from a config
+    dictionary.
+
+    Args:
+        instance (Any): The dataclass instance to update.
+        config (Dict[str, Any]): The configuration dictionary.
+    """
+    for key, value in config.items():
+        if hasattr(instance, key):
+            setattr(instance, key, value)
+    return instance
+
+
+def main() -> None:
+    # Initialize ArgumentParser
+    parser = argparse.ArgumentParser(description='CleanRL Runner')
+    parser.add_argument(
+        '--algo_name',
+        type=str,
+        choices=[
+            'dqn',
+            'ddqn',
+            'dueling_dqn',
+            'dueling_ddqn',
+            'rainbow',
+            'pg',
+            'ac',
+            'a2c',
+            'ppo',
+            'ddpg',
+            'sac',
+            'td3',
+        ],
+        default='dqn',
+        help="Name of the algorithm. Defaults to 'dqn'",
+    )
+    parser.add_argument(
+        '--env_id',
+        type=str,
+        default='CartPole-v0',
+        help="The environment name. Defaults to 'CartPole-v0'",
+    )
+    curr_path = os.getcwd()
+    # Load YAML configuration
+    config_file = os.path.join(curr_path, 'examples/cleanrl/config.yaml')
+    config = load_yaml_config(config_file)
+    # Parse arguments
+    run_args = parser.parse_args()
+    if run_args.algo_name in [
+            'dqn', 'ddqn', 'dueling_dqn', 'dueling_ddqn', 'rainbow'
+    ]:
+        # Update parser with DQN configuration
+        args: DQNArguments = tyro.cli(DQNArguments)
+        Agent: DQNAgent = DQNAgent
+    elif run_args.algo_name == 'ddpg':
+        args: DDPGArguments = tyro.cli(DDPGArguments)
+        Agent: DDPGAgent = DDPGAgent
+    elif run_args.algo_name == 'ppo':
+        args: PPOArguments = tyro.cli(PPOArguments)
+    elif run_args.algo_name == 'sac':
+        args: SACArguments = tyro.cli(SACArguments)
+
+    # Extract Algo-specific settings
+    algo_config = config.get(run_args.algo_name)
+    # Update parser with YAML configuration
+    args = update_dataclass_from_dict(args, algo_config)
+
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
     np.random.seed(args.seed)
@@ -46,7 +129,7 @@ if __name__ == '__main__':
     print('Actions shape:', action_shape)
 
     # agent
-    agent = DQNAgent(
+    agent = Agent(
         args=args,
         env=train_env,
         state_shape=state_shape,
@@ -69,3 +152,7 @@ if __name__ == '__main__':
         buffer=buffer,
     )
     runner.run()
+
+
+if __name__ == '__main__':
+    main()

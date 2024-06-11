@@ -1,0 +1,41 @@
+dqn:
+  env_id: CartPole-v0
+  algo_name: dqn
+  learning_rate: 0.01
+  max_timesteps: 12000
+  buffer_size: 10000
+  batch_size: 64
+  gamma: 0.99
+
+ddqn:
+  env_id: CartPole-v0
+  algo_name: ddqn
+  learning_rate: 0.01
+  max_timesteps: 12000
+  buffer_size: 10000
+  batch_size: 64
+  double_dqn: True
+  gamma: 0.99
+
+dueling_dqn:
+  env_id: CartPole-v0
+  algo_name: dueling_dqn
+  learning_rate: 0.01
+  max_timesteps: 12000
+  buffer_size: 10000
+  batch_size: 64
+  dueling_dqn : True
+  gamma: 0.99
+  logger: tensorboard
+
+dueling_ddqn:
+  env_id: CartPole-v0
+  algo_name: dueling_ddqn
+  learning_rate: 0.01
+  max_timesteps: 12000
+  buffer_size: 10000
+  batch_size: 64
+  double_dqn: True
+  dueling_dqn: True
+  gamma: 0.99
+  logger: tensorboard
