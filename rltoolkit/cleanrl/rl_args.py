@@ -102,7 +102,7 @@ class RLArguments:
         },
     )
     learning_rate: float = field(
-        default=1e-2,
+        default=1e-3,
         metadata={
             'help': 'Learning rate used by the optimizer. Defaults to 1e-4'
         },
@@ -232,6 +232,12 @@ class DQNArguments(RLArguments):
         metadata={
             'help':
             'Number of steps to take before updating the target network. Defaults to 1'
+        },
+    )
+    target_update_frequency: int = field(
+        default=500,
+        metadata={
+            'help': 'Frequency of updating the target network. Defaults to 100'
         },
     )
 
@@ -381,5 +387,44 @@ class PPOArguments(RLArguments):
         metadata={
             'help':
             'Lambda for Generalized Advantage Estimation (GAE). Defaults to 0.95'
+        },
+    )
+
+
+@dataclass
+class SACArguments(RLArguments):
+    """SAC-specific settings."""
+
+    hidden_dim: int = field(
+        default=128,
+        metadata={
+            'help':
+            'The hidden dimension size of the neural network. Defaults to 128'
+        },
+    )
+    actor_lr: float = field(
+        default=1e-4,
+        metadata={
+            'help': 'Learning rate for the actor network. Defaults to 1e-4'
+        },
+    )
+    critic_lr: float = field(
+        default=1e-4,
+        metadata={
+            'help': 'Learning rate for the critic network. Defaults to 1e-4'
+        },
+    )
+    alpha_lr: float = field(
+        default=1e-4,
+        metadata={
+            'help':
+            'Learning rate for the temperature parameter. Defaults to 1e-4'
+        },
+    )
+    alpha: float = field(
+        default=0.2,
+        metadata={
+            'help':
+            'Initial value for the temperature parameter. Defaults to 0.2'
         },
     )
