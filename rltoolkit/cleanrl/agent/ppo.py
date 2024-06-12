@@ -72,7 +72,7 @@ class PPOAgent(BaseAgent):
         self.device = device
         self.obs_dim = int(np.prod(state_shape))
         self.action_dim = int(np.prod(action_shape))
-        self.global_update_step = 0
+        self.learner_update_step = 0
         self.target_model_update_step = 0
 
         # 策略网络
