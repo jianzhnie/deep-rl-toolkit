@@ -1,27 +1,31 @@
-import torch
-import torch.nn as nn
+from typing import Dict, List
 
 
-def build_mlp(dims: [int],
-              activation: nn = None,
-              if_raw_out: bool = True) -> nn.Sequential:
-    """build MLP (MultiLayer Perceptron)
+def calculate_mean(dict_list: List[Dict[str, float]]) -> Dict[str, float]:
+    """计算包含字典的列表中每个键的均值。
 
-    dims: the middle dimension, `dims[-1]` is the output dimension of this network
-    activation: the activation function
-    if_remove_out_layer: if remove the activation function of the output layer.
+    Args:
+        dict_list (List[Dict[str, float]]): 包含字典的列表。
+
+    Returns:
+        Dict[str, float]: 每个键的均值字典。
     """
-    if activation is None:
-        activation = nn.ReLU
-    net_list = []
-    for i in range(len(dims) - 1):
-        net_list.extend([nn.Linear(dims[i], dims[i + 1]), activation()])
-    if if_raw_out:
-        del net_list[
-            -1]  # delete the activation function of the output layer to keep raw output
-    return nn.Sequential(*net_list)
+    # 检查是否为空列表
+    if not dict_list:
+        return {}
 
+    # 初始化累加器字典
+    sum_dict = {key: 0 for key in dict_list[0].keys()}
 
-def layer_init_with_orthogonal(layer, std=1.0, bias_const=1e-6) -> None:
-    torch.nn.init.orthogonal_(layer.weight, std)
-    torch.nn.init.constant_(layer.bias, bias_const)
+    # 累加每个字典中的值
+    for d in dict_list:
+        for key, value in d.items():
+            sum_dict[key] += value
+
+    # 计算均值
+    mean_dict = {
+        key: total / len(dict_list)
+        for key, total in sum_dict.items()
+    }
+
+    return mean_dict

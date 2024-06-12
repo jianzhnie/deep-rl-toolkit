@@ -1,5 +1,5 @@
 import math
-from typing import Tuple, Union
+from typing import Optional, Tuple, Union
 
 import numpy as np
 import torch
@@ -8,10 +8,6 @@ import torch.nn.functional as F
 
 
 class QNet(nn.Module):
-    """Initialization.
-
-    只有一层隐藏层的Q网络.
-    """
 
     def __init__(
         self,
@@ -41,25 +37,28 @@ class DuelingNet(nn.Module):
         obs_dim: int,
         action_dim: int,
         hidden_dim: int = 128,
-    ):
+    ) -> None:
         """Initialization."""
         super(DuelingNet, self).__init__()
         # set common feature layer
-        self.feature_layer = nn.Sequential(nn.Linear(obs_dim, hidden_dim),
-                                           nn.ReLU())
+        self.feature_layer = nn.Sequential(
+            nn.Linear(obs_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, hidden_dim),
+        )
         # set advantage layer
         self.advantage_layer = nn.Linear(hidden_dim, action_dim)
         # set value layer
         self.value_layer = nn.Linear(hidden_dim, 1)
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
         """Forward method implementation."""
-        feature = self.feature_layer(x)
+        feature = self.feature_layer(obs)
         value = self.value_layer(feature)
         advantage = self.advantage_layer(feature)
         # Q值由V值和A值计算得到
-        q = value + advantage - advantage.mean(dim=-1, keepdim=True)
-        return q
+        q_value = value + advantage - advantage.mean(dim=-1, keepdim=True)
+        return q_value
 
 
 class NoisyLinear(nn.Module):
@@ -170,3 +169,70 @@ class NoisyNet(nn.Module):
     def reset_noise(self):
         """Reset all noisy layers."""
         self.noisy_layer.reset_noise()
+
+
+class C51Network(nn.Module):
+    """Neural network for the C51 algorithm in reinforcement learning.
+
+    Args:
+        obs_dim (int): Dimension of the observation space.
+        hidden_dim (int): Dimension of the hidden layers.
+        action_dim (int): Dimension of the action space.
+        num_atoms (int, optional): Number of atoms for the value distribution. Defaults to 101.
+        v_min (float, optional): Minimum value of the value distribution. Defaults to -100.
+        v_max (float, optional): Maximum value of the value distribution. Defaults to 100.
+    """
+
+    def __init__(
+        self,
+        obs_dim: int,
+        hidden_dim: int,
+        action_dim: int,
+        num_atoms: int = 101,
+        v_min: float = -100,
+        v_max: float = 100,
+    ) -> None:
+        super().__init__()
+        self.num_atoms = num_atoms
+        self.register_buffer('atoms',
+                             torch.linspace(v_min, v_max, steps=num_atoms))
+
+        self.action_dim = action_dim
+        self.network = nn.Sequential(
+            nn.Linear(obs_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, action_dim * num_atoms),
+        )
+
+    def forward(
+        self,
+        obs: torch.Tensor,
+        action: Optional[torch.Tensor] = None,
+    ) -> Tuple[torch.Tensor, torch.Tensor]:
+        """Forward pass through the network.
+
+        Args:
+            obs (torch.Tensor): The observation tensor of shape (batch_size, obs_dim).
+            action (Optional[torch.Tensor]): The action tensor of shape (batch_size,).
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]:
+                - The action tensor of shape (batch_size,).
+                - The probability mass function (PMF) for each action of shape (batch_size, num_atoms).
+        """
+        # Compute logits: (batch_size, action_dim * num_atoms)
+        logits = self.network(obs)
+        # Reshape logits to (batch_size, action_dim, num_atoms)
+        logits = logits.view(len(obs), self.action_dim, self.num_atoms)
+        # Compute the probability mass function (PMF) using softmax
+        pmfs = F.softmax(logits, dim=2)
+        # Compute Q-values by summing over the atoms dimension
+        q_values = (pmfs * self.atoms).sum(2)
+
+        if action is None:
+            # Select the action with the highest Q-value
+            action = torch.argmax(q_values, dim=1).to(dtype=torch.long)
+        # Return the action and the PMF of the selected action
+        return action, pmfs[torch.arange(len(obs)), action]
