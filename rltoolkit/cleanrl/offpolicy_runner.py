@@ -29,6 +29,7 @@ class OffPolicyRunner:
         self.buffer = buffer
 
         # Training
+        self.episode_cnt = 0
         self.global_step = 0
         self.start_time = time.time()
         self.eps_greedy = 0.0
@@ -80,17 +81,17 @@ class OffPolicyRunner:
             action = self.agent.get_action(obs)
             next_obs, reward, terminated, truncated, info = self.train_env.step(
                 action)
+            episode_reward += reward
+            episode_step += 1
+            self.global_step += 1
             done = terminated or truncated
             self.buffer.add(obs, next_obs, action, reward, done)
             if self.buffer.size() > self.args.warmup_learn_steps:
-                if self.episode_cnt % self.args.train_frequency == 0:
+                if self.global_step % self.args.train_frequency == 0:
                     for _ in range(self.args.gradient_steps):
                         batchs = self.buffer.sample(self.args.batch_size)
                         learn_result = self.agent.learn(batchs)
                         episode_result_info.append(learn_result)
-
-            episode_reward += reward
-            episode_step += 1
             obs = next_obs
             if done:
                 break
@@ -140,20 +141,20 @@ class OffPolicyRunner:
     def run(self) -> None:
         """Train the agent."""
         self.text_logger.info('Start Training')
-        self.episode_cnt = 0
         progress_bar = ProgressBar(self.args.max_timesteps)
         while self.global_step < self.args.max_timesteps:
             # Training logic
             train_info = self.run_train_episode()
             episode_step = train_info['episode_step']
             progress_bar.update(episode_step)
-            self.global_step += episode_step
             self.episode_cnt += 1
 
             train_info['num_episode'] = self.episode_cnt
             train_info['rpm_size'] = self.buffer.size()
             train_info['eps_greedy'] = (self.agent.eps_greedy if hasattr(
                 self.agent, 'eps_greedy') else 0.0)
+            train_info['learning_rate'] = self.agent.learning_rate
+            train_info['learner_update_step'] = self.agent.learner_update_step
             train_info[
                 'target_model_update_step'] = self.agent.target_model_update_step
 

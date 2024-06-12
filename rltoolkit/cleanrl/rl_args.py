@@ -241,11 +241,11 @@ class DQNArguments(RLArguments):
         },
     )
     train_frequency: int = field(
-        default=1,
+        default=100,
         metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
     gradient_steps: int = field(
-        default=2,
+        default=10,
         metadata={
             'help':
             'Number of times to update the learner network. Defaults to 1'
