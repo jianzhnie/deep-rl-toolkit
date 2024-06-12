@@ -181,11 +181,11 @@ class RLArguments:
         },
     )
     train_log_interval: int = field(
-        default=10,
+        default=5,
         metadata={'help': 'Logging interval during training. Defaults to 10'},
     )
     test_log_interval: int = field(
-        default=20,
+        default=10,
         metadata={
             'help': 'Logging interval during evaluation. Defaults to 20'
         },
@@ -235,17 +235,17 @@ class DQNArguments(RLArguments):
         },
     )
     target_update_frequency: int = field(
-        default=500,
+        default=100,
         metadata={
             'help': 'Frequency of updating the target network. Defaults to 100'
         },
     )
     train_frequency: int = field(
-        default=100,
+        default=20,
         metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
     gradient_steps: int = field(
-        default=10,
+        default=5,
         metadata={
             'help':
             'Number of times to update the learner network. Defaults to 1'
