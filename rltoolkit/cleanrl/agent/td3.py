@@ -124,7 +124,7 @@ class Agent(object):
         self.action_bound = action_bound
         # 目标网络软更新参数
         self.tau = tau
-        self.global_update_step = 0
+        self.learner_update_step = 0
         self.initial_random_steps = initial_random_steps
         self.policy_update_freq = policy_update_freq
 
@@ -158,7 +158,7 @@ class Agent(object):
         self.device = device
 
     def sample(self, obs: np.ndarray):
-        if self.global_update_step < self.initial_random_steps:
+        if self.learner_update_step < self.initial_random_steps:
             selected_action = self.env.action_space.sample()
         else:
             obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
@@ -223,8 +223,7 @@ class Agent(object):
         self.critic_optimizer.step()
 
         # cal policy loss
-        if self.global_update_step % self.policy_update_freq == 0:
-
+        if self.learner_update_step % self.policy_update_freq == 0:
             pi = self.actor(obs)
             q1_pi = self.critic1(obs, pi)
             actor_loss = -torch.mean(q1_pi)
@@ -243,5 +242,5 @@ class Agent(object):
         else:
             actor_loss = torch.zeros(1)
 
-        self.global_update_step += 1
+        self.learner_update_step += 1
         return actor_loss.item(), critic1_loss.item()

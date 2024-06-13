@@ -39,7 +39,7 @@ class DDPGAgent(BaseAgent):
         self.action_bound = args.action_bound
         self.obs_dim = int(np.prod(state_shape))
         self.action_dim = int(np.prod(action_shape))
-        self.global_update_step = 0
+        self.learner_update_step = 0
         self.target_model_update_step = 0
 
         # Initialize Policy Network
@@ -109,14 +109,14 @@ class DDPGAgent(BaseAgent):
         done = batch['done']
 
         # Soft update target networks
-        if self.global_update_step % self.args.target_update_frequency == 0:
+        if self.learner_update_step % self.args.target_update_frequency == 0:
             soft_target_update(self.policy_net, self.target_actor,
                                self.args.soft_update_tau)
             soft_target_update(self.critic_net, self.target_critic,
                                self.args.soft_update_tau)
             self.target_model_update_step += 1
 
-        self.global_update_step += 1
+        self.learner_update_step += 1
 
         # Current Q values
         curr_q_values = self.critic_net(obs, action)

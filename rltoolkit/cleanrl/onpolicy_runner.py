@@ -150,7 +150,7 @@ class OnPolicyRunner:
             train_info['rpm_size'] = self.buffer.size()
             train_info['eps_greedy'] = self.agent.eps_greedy
             train_info['learning_rate'] = self.agent.learning_rate
-            train_info['global_update_step'] = self.agent.global_update_step
+            train_info['learner_update_step'] = self.agent.learner_update_step
             train_info[
                 'target_model_update_step'] = self.agent.target_model_update_step
 

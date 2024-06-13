@@ -189,7 +189,7 @@ class Agent(object):
 
         self.env = env
         self.action_dim = action_dim
-        self.global_update_step = 0
+        self.learner_update_step = 0
         # 折扣因子
         self.gamma = gamma
         # 目标网络软更新参数
@@ -239,7 +239,7 @@ class Agent(object):
     def sample(self, obs: np.ndarray):
         """Select an action from the input state."""
         # if initial random action should be conducted
-        if self.global_update_step < self.initial_random_steps:
+        if self.learner_update_step < self.initial_random_steps:
             action = self.env.action_space.sample()
         else:
             obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
@@ -368,6 +368,6 @@ class Agent(object):
 
         self.soft_update(self.critic1, self.target_critic1)
         self.soft_update(self.critic2, self.target_critic2)
-        self.global_update_step += 1
+        self.learner_update_step += 1
 
         return policy_loss.item(), q_loss.item()

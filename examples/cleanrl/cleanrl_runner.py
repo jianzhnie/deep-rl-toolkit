@@ -2,14 +2,12 @@ import argparse
 import os
 import random
 import sys
-from typing import Any, Callable, Dict
+from typing import Any, Dict
 
 import numpy as np
 import torch
 import tyro
 import yaml
-from gymnasium.wrappers.record_episode_statistics import \
-    RecordEpisodeStatistics
 
 sys.path.append(os.getcwd())
 import gymnasium as gym
@@ -24,15 +22,11 @@ from rltoolkit.utils.logger.logging import get_logger
 logger = get_logger(__name__)
 
 
-def make_env(env_id, seed) -> Callable[[], RecordEpisodeStatistics]:
-
-    def thunk() -> RecordEpisodeStatistics:
-        env = gym.make(env_id)
-        env = gym.wrappers.RecordEpisodeStatistics(env)
-        env.action_space.seed(seed)
-        return env
-
-    return thunk
+def make_env(env_id: str = 'CartPole-v0', seed: int = 42):
+    env = gym.make(env_id)
+    env = gym.wrappers.RecordEpisodeStatistics(env)
+    env.action_space.seed(seed)
+    return env
 
 
 def load_yaml_config(file_path: str) -> Dict[str, Any]:
@@ -124,13 +118,14 @@ def main() -> None:
     # Extract Algo-specific settings
     if run_args.algo_name in config:
         algo_config = config.get(run_args.algo_name)
+        env_config = algo_config.get(run_args.env_id)
     else:
-        algo_config = {}
+        env_config = {}
         logger.warning(
-            f'No configuration found for {run_args.algo_name} in {config_file}. Using default settings.'
-        )
+            'No configuration found for {}, {} in {}. Using default settings.'.
+            format(run_args.algo_name, run_args.env_id, config_file))
     # Update parser with YAML configuration
-    args = update_dataclass_from_dict(algo_args, algo_config)
+    args = update_dataclass_from_dict(algo_args, env_config)
 
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
@@ -139,8 +134,8 @@ def main() -> None:
     torch.cuda.manual_seed_all(args.seed)
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
-    train_env: gym.Env = gym.make(args.env_id)
-    test_env: gym.Env = gym.make(args.env_id)
+    train_env: gym.Env = make_env(args.env_id)
+    test_env: gym.Env = make_env(args.env_id)
     state_shape = train_env.observation_space.shape or train_env.observation_space.n
     action_shape = train_env.action_space.shape or train_env.action_space.n
     args.action_bound = (train_env.action_space.high[0] if isinstance(

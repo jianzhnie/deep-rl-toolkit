@@ -38,7 +38,7 @@ class DQNAgent(BaseAgent):
         self.args = args
         self.env = env
         self.device = device
-        self.global_update_step = 0
+        self.learner_update_step = 0
         self.target_model_update_step = 0
         self.eps_greedy = args.eps_greedy_start
         self.learning_rate = args.learning_rate
@@ -129,11 +129,11 @@ class DQNAgent(BaseAgent):
 
         action = action.to(self.device, dtype=torch.long)
         # Soft update target network
-        if self.global_update_step % self.args.target_update_frequency == 0:
+        if self.learner_update_step % self.args.target_update_frequency == 0:
             soft_target_update(self.qnet, self.target_qnet,
                                self.args.soft_update_tau)
             self.target_model_update_step += 1
-        self.global_update_step += 1
+        self.learner_update_step += 1
 
         # Compute current Q values
         current_q_values = self.qnet(obs).gather(1, action)

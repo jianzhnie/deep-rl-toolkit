@@ -1,55 +1,72 @@
 dqn:
-  env_id: CartPole-v0
-  algo_name: dqn
-  learning_rate: 0.01
-  max_timesteps: 12000
-  buffer_size: 10000
-  batch_size: 64
+  CartPole-v0:
+    algo_name: dqn
+    learning_rate: 0.01
+    max_timesteps: 20000
+    buffer_size: 10000
+    batch_size: 64
+
+  CartPole-v1:
+    algo_name: dqn
+    learning_rate: 0.01
+    min_learning_rate: 1.0e-5
+    max_timesteps: 100000
+    buffer_size: 10000
+    batch_size: 64
+    n_steps: 5
 
 ddqn:
-  env_id: CartPole-v0
-  algo_name: ddqn
-  learning_rate: 0.01
-  max_timesteps: 12000
-  buffer_size: 10000
-  batch_size: 64
-  double_dqn: True
+  CartPole-v0:
+    algo_name: dqdn
+    learning_rate: 0.01
+    max_timesteps: 20000
+    buffer_size: 10000
+    batch_size: 64
+    double_dqn: True
+
+  CartPole-v1:
+    algo_name: ddqn
+    learning_rate: 0.01
+    min_learning_rate: 1.0e-5
+    max_timesteps: 100000
+    buffer_size: 10000
+    batch_size: 64
+    double_dqn: True
+    n_steps: 3
 
 dueling_dqn:
-  env_id: CartPole-v0
-  algo_name: dueling_dqn
-  learning_rate: 0.01
-  max_timesteps: 12000
-  buffer_size: 10000
-  batch_size: 64
-  dueling_dqn : True
+  CartPole-v0:
+    algo_name: dueling_dqn
+    learning_rate: 0.01
+    max_timesteps: 12000
+    buffer_size: 10000
+    batch_size: 64
+    dueling_dqn : True
 
 dueling_ddqn:
-  env_id: CartPole-v0
-  algo_name: dueling_ddqn
-  learning_rate: 0.01
-  max_timesteps: 12000
-  buffer_size: 10000
-  batch_size: 64
-  double_dqn: True
-  dueling_dqn: True
+  CartPole-v0:
+    algo_name: dueling_ddqn
+    learning_rate: 0.01
+    max_timesteps: 12000
+    buffer_size: 10000
+    batch_size: 64
+    double_dqn: True
+    dueling_dqn: True
 
 
 c51:
-  env_id: CartPole-v0
-  algo_name: c51
-  learning_rate: 2.5e-3
-  max_timesteps: 20000
-  buffer_size: 10000
-  train_frequency: 10
-  batch_size: 128
+  CartPole-v0:
+    algo_name: c51
+    learning_rate: 2.5e-3
+    max_timesteps: 20000
+    buffer_size: 10000
+    batch_size: 128
 
 ddpg:
-  env_id: Pendulum-v1
-  algo_name: ddpg
-  actor_lr: 2.5e-3
-  critic_lr: 2.5e-3
-  max_timesteps: 50000
-  buffer_size: 10000
-  train_frequency: 10
-  batch_size: 128
+    Pendulum-v1:
+    algo_name: ddpg
+    actor_lr: 2.5e-3
+    critic_lr: 2.5e-3
+    max_timesteps: 50000
+    buffer_size: 10000
+    batch_size: 128

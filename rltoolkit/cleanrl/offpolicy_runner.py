@@ -29,6 +29,7 @@ class OffPolicyRunner:
         self.buffer = buffer
 
         # Training
+        self.episode_cnt = 0
         self.global_step = 0
         self.start_time = time.time()
         self.eps_greedy = 0.0
@@ -71,8 +72,6 @@ class OffPolicyRunner:
 
     # train an episode
     def run_train_episode(self) -> dict[str, float]:
-        episode_step = 0
-        episode_reward = 0
         episode_result_info = []
         obs, _ = self.train_env.reset()
         done = False
@@ -80,21 +79,23 @@ class OffPolicyRunner:
             action = self.agent.get_action(obs)
             next_obs, reward, terminated, truncated, info = self.train_env.step(
                 action)
+            self.global_step += 1
             done = terminated or truncated
+            if info and 'episode' in info:
+                info_item = {k: v.item() for k, v in info['episode'].items()}
+                episode_reward = info_item['r']
+                episode_step = info_item['l']
             self.buffer.add(obs, next_obs, action, reward, done)
             if self.buffer.size() > self.args.warmup_learn_steps:
-                if self.episode_cnt % self.args.train_frequency == 0:
+                if self.global_step % self.args.train_frequency == 0:
                     for _ in range(self.args.gradient_steps):
                         batchs = self.buffer.sample(self.args.batch_size)
                         learn_result = self.agent.learn(batchs)
                         episode_result_info.append(learn_result)
 
-            episode_reward += reward
-            episode_step += 1
             obs = next_obs
             if done:
                 break
-
         episode_info = calculate_mean(episode_result_info)
         train_info = {
             'episode_reward': episode_reward,
@@ -117,9 +118,14 @@ class OffPolicyRunner:
                 next_obs, reward, terminated, truncated, info = self.test_env.step(
                     action)
                 obs = next_obs
-                episode_reward += reward
-                episode_step += 1
                 done = terminated or truncated
+                if info and 'episode' in info:
+                    info_item = {
+                        k: v.item()
+                        for k, v in info['episode'].items()
+                    }
+                    episode_reward = info_item['r']
+                    episode_step = info_item['l']
                 if done:
                     self.test_env.reset()
             eval_rewards.append(episode_reward)
@@ -140,20 +146,20 @@ class OffPolicyRunner:
     def run(self) -> None:
         """Train the agent."""
         self.text_logger.info('Start Training')
-        self.episode_cnt = 0
         progress_bar = ProgressBar(self.args.max_timesteps)
         while self.global_step < self.args.max_timesteps:
             # Training logic
             train_info = self.run_train_episode()
             episode_step = train_info['episode_step']
             progress_bar.update(episode_step)
-            self.global_step += episode_step
             self.episode_cnt += 1
 
             train_info['num_episode'] = self.episode_cnt
             train_info['rpm_size'] = self.buffer.size()
             train_info['eps_greedy'] = (self.agent.eps_greedy if hasattr(
                 self.agent, 'eps_greedy') else 0.0)
+            train_info['learning_rate'] = self.agent.learning_rate
+            train_info['learner_update_step'] = self.agent.learner_update_step
             train_info[
                 'target_model_update_step'] = self.agent.target_model_update_step
 
@@ -181,8 +187,9 @@ class OffPolicyRunner:
                     n_eval_episodes=self.args.eval_episodes)
                 test_info['num_episode'] = self.episode_cnt
                 self.text_logger.info(
-                    '[Eval], episode: {}, eval_rewards: {:.2f}'.format(
-                        self.episode_cnt, test_info['reward_mean']))
+                    '[Eval], global_step: {}, episode: {}, eval_rewards: {:.2f}'
+                    .format(self.global_step, self.episode_cnt,
+                            test_info['reward_mean']))
                 self.log_test_infos(test_info, self.global_step)
 
         # Save model
