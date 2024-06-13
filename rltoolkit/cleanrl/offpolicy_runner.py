@@ -72,8 +72,6 @@ class OffPolicyRunner:
 
     # train an episode
     def run_train_episode(self) -> dict[str, float]:
-        episode_step = 0
-        episode_reward = 0
         episode_result_info = []
         obs, _ = self.train_env.reset()
         done = False
@@ -81,10 +79,12 @@ class OffPolicyRunner:
             action = self.agent.get_action(obs)
             next_obs, reward, terminated, truncated, info = self.train_env.step(
                 action)
-            episode_reward += reward
-            episode_step += 1
             self.global_step += 1
             done = terminated or truncated
+            if info and 'episode' in info:
+                info_item = {k: v.item() for k, v in info['episode'].items()}
+                episode_reward = info_item['r']
+                episode_step = info_item['l']
             self.buffer.add(obs, next_obs, action, reward, done)
             if self.buffer.size() > self.args.warmup_learn_steps:
                 if self.global_step % self.args.train_frequency == 0:
@@ -92,10 +92,10 @@ class OffPolicyRunner:
                         batchs = self.buffer.sample(self.args.batch_size)
                         learn_result = self.agent.learn(batchs)
                         episode_result_info.append(learn_result)
+
             obs = next_obs
             if done:
                 break
-
         episode_info = calculate_mean(episode_result_info)
         train_info = {
             'episode_reward': episode_reward,
@@ -118,9 +118,14 @@ class OffPolicyRunner:
                 next_obs, reward, terminated, truncated, info = self.test_env.step(
                     action)
                 obs = next_obs
-                episode_reward += reward
-                episode_step += 1
                 done = terminated or truncated
+                if info and 'episode' in info:
+                    info_item = {
+                        k: v.item()
+                        for k, v in info['episode'].items()
+                    }
+                    episode_reward = info_item['r']
+                    episode_step = info_item['l']
                 if done:
                     self.test_env.reset()
             eval_rewards.append(episode_reward)
