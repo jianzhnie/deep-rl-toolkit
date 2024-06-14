@@ -39,12 +39,19 @@ class DDPGAgent(BaseAgent):
         self.action_bound = args.action_bound
         self.obs_dim = int(np.prod(state_shape))
         self.action_dim = int(np.prod(action_shape))
+        self.action_high = self.env.action_space.high
+        self.action_low = self.env.action_space.low
         self.learner_update_step = 0
         self.target_model_update_step = 0
 
         # Initialize Policy Network
-        self.policy_net = PolicyNet(self.obs_dim, self.args.hidden_dim,
-                                    self.action_dim).to(self.device)
+        self.policy_net = PolicyNet(
+            self.obs_dim,
+            self.args.hidden_dim,
+            self.action_dim,
+            self.action_high,
+            self.action_low,
+        ).to(self.device)
         # Initialize Value Network
         self.critic_net = ValueNet(self.obs_dim, self.args.hidden_dim,
                                    self.action_dim).to(self.device)
@@ -74,10 +81,8 @@ class DDPGAgent(BaseAgent):
         Returns:
             np.ndarray: Action selected by policy.
         """
-        obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        action = self.policy_net(obs).detach().cpu().numpy()
-        action = self.action_bound * np.clip(action, -1.0, 1.0)
-        return action.flatten()
+        action = self.predict(obs)
+        return action
 
     def predict(self, obs: np.ndarray) -> np.ndarray:
         """Predict action based on policy network (for evaluation).
@@ -88,10 +93,14 @@ class DDPGAgent(BaseAgent):
         Returns:
             np.ndarray: Action selected by policy.
         """
-        obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        action = self.policy_net(obs).detach().cpu().numpy().flatten()
-        action *= self.action_bound
-        return action
+        with torch.no_grad():
+            obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
+            action = self.policy_net(obs)
+            action += torch.normal(
+                0, self.policy_net.action_scale * self.args.exploration_noise)
+            action = action.cpu().numpy().clip(self.action_low,
+                                               self.action_high)
+        return action.flatten()
 
     def learn(self, batch: Dict[str, torch.Tensor]) -> float:
         """Update model with a batch of data.
