@@ -1,10 +1,30 @@
 # Copyright (c) OpenMMLab. All rights reserved.
 import logging
 import os
+import sys
+from logging import Formatter
 
 import torch.distributed as dist
+from colorama import Fore, Style
 
 logger_initialized: dict = {}
+
+
+class ColorfulFormatter(Formatter):
+    """Formatter to add coloring to log messages by log type."""
+
+    COLORS = {
+        'INFO': Fore.GREEN,
+        'WARNING': Fore.YELLOW,
+        'ERROR': Fore.RED,
+        'CRITICAL': Fore.RED + Style.BRIGHT,
+        'DEBUG': Fore.LIGHTGREEN_EX,
+    }
+
+    def format(self, record):
+        record.rank = int(os.getenv('LOCAL_RANK', '0'))
+        log_message = super().format(record)
+        return self.COLORS.get(record.levelname, '') + log_message + Fore.RESET
 
 
 def get_logger(name, log_file=None, log_level=logging.INFO, file_mode='w'):
@@ -50,7 +70,7 @@ def get_logger(name, log_file=None, log_level=logging.INFO, file_mode='w'):
         if type(handler) is logging.StreamHandler:
             handler.setLevel(logging.ERROR)
 
-    stream_handler = logging.StreamHandler()
+    stream_handler = logging.StreamHandler(sys.stdout)
     handlers = [stream_handler]
 
     if dist.is_available() and dist.is_initialized():
@@ -66,8 +86,11 @@ def get_logger(name, log_file=None, log_level=logging.INFO, file_mode='w'):
         file_handler = logging.FileHandler(log_file, file_mode)
         handlers.append(file_handler)
 
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = ColorfulFormatter(
+        '%(asctime)s, %(name)s [%(name)s.%(funcName)s:%(lineno)d] '
+        '%(levelname)s - %(message)s',
+        datefmt='%Y-%m-%d %H:%M:%S',
+    )
     for handler in handlers:
         handler.setFormatter(formatter)
         handler.setLevel(log_level)
@@ -131,7 +154,19 @@ def get_text_logger(name: str = 'rltoolkit',
     return logger
 
 
-def get_outdir(path, *paths, inc=False):
+def get_outdir(path: str, *paths, inc: bool = False) -> str:
+    """Get the output directory. If the directory does not exist, it will be
+    created. If `inc` is True, the directory will be incremented if the
+    directory already exists.
+
+    Args:
+        path (str): The root path.
+        *paths: The subdirectories.
+        inc (bool, optional): Whether to increment the directory. Defaults to False.
+
+    Returns:
+        str: The output directory.
+    """
     outdir = os.path.join(path, *paths)
     if not os.path.exists(outdir):
         os.makedirs(outdir)
