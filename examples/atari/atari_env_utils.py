@@ -1,7 +1,8 @@
+import os
 import sys
 import warnings
 
-sys.path.append('../../')
+sys.path.append(os.getcwd())
 from rltoolkit.envs import ShmemVectorEnv
 from rltoolkit.envs.atari_wrappers import wrap_deepmind
 

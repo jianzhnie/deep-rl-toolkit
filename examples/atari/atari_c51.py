@@ -9,7 +9,7 @@ import torch
 from atari_dqn import make_atari_env
 from atari_network import C51
 
-sys.path.append('../../')
+sys.path.append(os.getcwd())
 from rltoolkit.data import Collector, VectorReplayBuffer
 from rltoolkit.policy import C51Policy
 from rltoolkit.trainer import offpolicy_trainer

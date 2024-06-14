@@ -9,7 +9,7 @@ import torch
 from atari_network import DQN
 from torch.utils.tensorboard import SummaryWriter
 
-sys.path.append('../../')
+sys.path.append(os.getcwd())
 from atari_env_utils import make_atari_env
 from rltoolkit.data import Collector, VectorReplayBuffer
 from rltoolkit.policy import DQNPolicy

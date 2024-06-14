@@ -1,10 +1,11 @@
+import os
 import sys
 from typing import Any, Callable, Dict, Optional, Sequence, Tuple, Type, Union
 
 import numpy as np
 import torch
 
-sys.path.append('../../')
+sys.path.append(os.getcwd())
 from torch import nn
 from torch.nn import functional as F
 

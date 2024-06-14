@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-sys.path.append('../../')
+sys.path.append(os.getcwd())
 from rltoolkit.data import Collector, VectorReplayBuffer
 from rltoolkit.envs import DummyVectorEnv
 from rltoolkit.policy import DQNPolicy
