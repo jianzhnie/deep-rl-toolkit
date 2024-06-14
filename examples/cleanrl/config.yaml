@@ -13,11 +13,11 @@ dqn:
     max_timesteps: 100000
     buffer_size: 10000
     batch_size: 64
-    n_steps: 5
+    n_steps: 3
 
 ddqn:
   CartPole-v0:
-    algo_name: dqdn
+    algo_name: ddqn
     learning_rate: 0.01
     max_timesteps: 20000
     buffer_size: 10000
@@ -38,32 +38,50 @@ dueling_dqn:
   CartPole-v0:
     algo_name: dueling_dqn
     learning_rate: 0.01
-    max_timesteps: 12000
+    max_timesteps: 20000
     buffer_size: 10000
     batch_size: 64
     dueling_dqn : True
+
+  CartPole-v1:
+    algo_name: dueling_dqn
+    learning_rate: 0.01
+    max_timesteps: 100000
+    buffer_size: 10000
+    batch_size: 64
+    dueling_dqn : True
+    n_steps: 3
 
 dueling_ddqn:
   CartPole-v0:
     algo_name: dueling_ddqn
     learning_rate: 0.01
-    max_timesteps: 12000
+    max_timesteps: 20000
     buffer_size: 10000
     batch_size: 64
     double_dqn: True
     dueling_dqn: True
 
+  CartPole-v1:
+    algo_name: dueling_ddqn
+    learning_rate: 0.01
+    max_timesteps: 100000
+    buffer_size: 10000
+    batch_size: 64
+    double_dqn: True
+    dueling_dqn: True
+    n_steps: 3
 
 c51:
   CartPole-v0:
     algo_name: c51
-    learning_rate: 2.5e-3
+    learning_rate: 5.0e-3
     max_timesteps: 20000
     buffer_size: 10000
-    batch_size: 128
+    batch_size: 64
 
 ddpg:
-    Pendulum-v1:
+  Pendulum-v1:
     algo_name: ddpg
     actor_lr: 2.5e-3
     critic_lr: 2.5e-3

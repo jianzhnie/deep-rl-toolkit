@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
-sys.path.append('../../')
+sys.path.append(os.getcwd())
 from rltoolkit.data import Collector, VectorReplayBuffer
 from rltoolkit.envs import SubprocVectorEnv
 from rltoolkit.policy import DQNPolicy
@@ -38,7 +38,7 @@ def get_args() -> Namespace:
     parser.add_argument('--batch-size', type=int, default=64)
     parser.add_argument('--train-num', type=int, default=10)
     parser.add_argument('--test-num', type=int, default=100)
-    parser.add_argument('--logdir', type=str, default='log')
+    parser.add_argument('--logdir', type=str, default='work_dir')
     parser.add_argument('--render', type=float, default=0.0)
     parser.add_argument('--device',
                         type=str,

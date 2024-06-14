@@ -17,7 +17,7 @@ import numpy as np
 import torch
 from pettingzoo.classic import tictactoe_v3
 
-sys.path.append('../../')
+sys.path.append(os.getcwd())
 from rltoolkit.data import Collector, VectorReplayBuffer
 from rltoolkit.envs import DummyVectorEnv
 from rltoolkit.envs.pettingzoo_env import PettingZooEnv
