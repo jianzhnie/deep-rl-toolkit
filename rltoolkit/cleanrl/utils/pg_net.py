@@ -1,7 +1,6 @@
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.distributions.categorical import Categorical
 
 
 def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
@@ -22,15 +21,9 @@ class PPOPolicyNet(nn.Module):
             layer_init(nn.Linear(hidden_dim, action_dim), std=0.01),
         )
 
-    def forward(self,
-                obs: torch.Tensor,
-                action: torch.Tensor = None) -> torch.Tensor:
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
         logits = self.net(obs)
-        probs = Categorical(logits=logits)
-        if action is None:
-            action = probs.sample()
-
-        return (action, probs.log_prob(action), probs.entropy())
+        return logits
 
 
 class PPOValueNet(nn.Module):
