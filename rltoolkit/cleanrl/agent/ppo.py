@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import gymnasium as gym
 import numpy as np
@@ -73,25 +73,20 @@ class PPOAgent(BaseAgent):
         advantage_list.reverse()
         return torch.tensor(advantage_list, dtype=torch.float)
 
-    def learn(self, transition_dict) -> Tuple[float, float]:
+    def learn(self, batch: Dict[str, torch.Tensor]) -> Tuple[float, float]:
         """Update the model by TD actor-critic."""
-        obs = torch.tensor(transition_dict['obs'],
-                           dtype=torch.float).to(self.device)
-        actions = torch.tensor(transition_dict['actions']).view(-1, 1).to(
-            self.device)
-        rewards = (torch.tensor(transition_dict['rewards'],
-                                dtype=torch.float).view(-1, 1).to(self.device))
-        next_obs = torch.tensor(transition_dict['next_obs'],
-                                dtype=torch.float).to(self.device)
-        dones = (torch.tensor(transition_dict['dones'],
-                              dtype=torch.float).view(-1, 1).to(self.device))
+        obs = batch['obs']
+        next_obs = batch['next_obs']
+        actions = batch['actions']
+        rewards = batch['rewards']
+        dones = batch['dones']
 
-        pred_value = self.critic(obs)
+        current_value = self.critic(obs)
         # 时序差分目标
         td_target = rewards + self.args.gamma * self.critic(next_obs) * (1 -
                                                                          dones)
         # 时序差分误差
-        td_delta = td_target - pred_value
+        td_delta = td_target - current_value
 
         advantage = self.compute_advantage(self.args.gamma, self.args.lmbda,
                                            td_delta.cpu()).to(self.device)
