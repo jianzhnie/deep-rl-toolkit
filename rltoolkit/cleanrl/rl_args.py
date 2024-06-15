@@ -121,6 +121,30 @@ class RLArguments:
             "Method used for learning rate scheduling. Defaults to 'linear'"
         },
     )
+    n_steps: int = field(
+        default=1,
+        metadata={
+            'help':
+            'Number of steps to take before updating the target network. Defaults to 1'
+        },
+    )
+    norm_reward: bool = field(
+        default=False,
+        metadata={
+            'help':
+            'Flag indicating whether to normalize the rewards. Defaults to False'
+        },
+    )
+    clip_reward: float = field(
+        default=10.0,
+        metadata={'help': 'Value to clip the rewards. Defaults to 10.0'},
+    )
+    epsilon: float = field(
+        default=1e-5,
+        metadata={
+            'help': 'Small value to avoid division by zero. Defaults to 1e-5'
+        },
+    )
     clip_weights: bool = field(
         default=False,
         metadata={

@@ -101,7 +101,10 @@ class RunningMeanStd(object):
             data_array = np.clip(data_array, -self.clip_max, self.clip_max)
         return data_array
 
-    def update(self, data_array: np.ndarray) -> None:
+    def update(
+        self, data_array: Union[Number, np.number, list, np.ndarray,
+                                torch.Tensor]
+    ) -> None:
         """Add a batch of item into RMS with the same shape, modify
         mean/var/count."""
         batch_mean, batch_var = np.mean(data_array, axis=0), np.var(data_array,

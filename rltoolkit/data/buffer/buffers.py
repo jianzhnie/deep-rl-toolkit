@@ -7,7 +7,9 @@ from typing import Any, Deque, Dict, Generator, List, Optional, Tuple, Union
 import numpy as np
 import torch
 from gymnasium import spaces
+from rltoolkit.cleanrl.rl_args import RLArguments
 from rltoolkit.data.utils.segment_tree import MinSegmentTree, SumSegmentTree
+from rltoolkit.utils.statistics import RunningMeanStd
 from stable_baselines3.common.preprocessing import (get_action_dim,
                                                     get_obs_shape)
 from stable_baselines3.common.type_aliases import (ReplayBufferSamples,
@@ -612,33 +614,31 @@ class SimpleReplayBuffer:
 
     def __init__(
         self,
-        buffer_size: int,
+        args: RLArguments,
         observation_space: spaces.Space,
         action_space: spaces.Space,
-        n_steps: int = 3,
-        gamma: float = 0.99,
         device: str = 'cpu',
     ) -> None:
-        self.buffer_size = buffer_size
+        self.args: RLArguments = args
+        self.buffer_size = args.buffer_size
         self.obs_shape = get_obs_shape(observation_space)
         self.action_dim = get_action_dim(action_space)
 
-        self.observations = np.zeros((buffer_size, ) + self.obs_shape,
+        self.observations = np.zeros((self.buffer_size, ) + self.obs_shape,
                                      dtype=np.float32)
-        self.next_observations = np.zeros((buffer_size, ) + self.obs_shape,
-                                          dtype=np.float32)
-        self.actions = np.zeros((buffer_size, self.action_dim),
+        self.next_observations = np.zeros(
+            (self.buffer_size, ) + self.obs_shape, dtype=np.float32)
+        self.actions = np.zeros((self.buffer_size, self.action_dim),
                                 dtype=action_space.dtype)
-        self.rewards = np.zeros((buffer_size, 1), dtype=np.float32)
-        self.dones = np.zeros((buffer_size, 1), dtype=np.float32)
+        self.rewards = np.zeros((self.buffer_size, 1), dtype=np.float32)
+        self.dones = np.zeros((self.buffer_size, 1), dtype=np.float32)
 
         # for N-step Learning
-        assert (isinstance(n_steps, int) and
-                n_steps > 0), 'N-step should be an integer and greater than 0.'
+        assert (isinstance(args.n_steps, int) and args.n_steps > 0
+                ), 'N-step should be an integer and greater than 0.'
 
-        self.n_step_buffer = deque(maxlen=n_steps)
-        self.n_steps = n_steps
-        self.gamma = gamma
+        self.n_step_buffer = deque(maxlen=args.n_steps)
+        self.running_mean_std = RunningMeanStd(clip_max=args.clip_reward)
 
         self.curr_ptr = 0
         self.curr_size = 0
@@ -661,7 +661,7 @@ class SimpleReplayBuffer:
             reward (np.ndarray): The reward received.
             done (np.ndarray): Whether the episode is done.
         """
-        if self.n_steps > 1:
+        if self.args.n_steps > 1:
             transition = (obs, action, next_obs, reward, done)
             self.n_step_buffer.append(transition)
 
@@ -670,7 +670,7 @@ class SimpleReplayBuffer:
             obs, action = self.n_step_buffer[0][:2]
             # get the next_obs, reward, terminal in n_step_buffer deque
             next_obs, reward, done = self.get_n_step_info(
-                self.n_step_buffer, self.gamma)
+                self.n_step_buffer, self.args.gamma)
 
         self.observations[self.curr_ptr] = np.array(obs).copy()
         self.next_observations[self.curr_ptr] = np.array(next_obs).copy()
@@ -707,8 +707,8 @@ class SimpleReplayBuffer:
             torch.Tensor: The PyTorch tensor.
         """
         if copy:
-            return torch.tensor(array).to(self.device)
-        return torch.as_tensor(array).to(self.device)
+            return torch.tensor(array, dtype=torch.float32).to(self.device)
+        return torch.as_tensor(array, dtype=torch.float32).to(self.device)
 
     def sample(self, batch_size: int) -> Dict[str, torch.Tensor]:
         """Sample a batch of experiences from the replay buffer.
@@ -717,14 +717,21 @@ class SimpleReplayBuffer:
             batch_size (int): The number of samples to return.
 
         Returns:
-            Dict[str, torch.Tensor]: A dictionary containing sampled observations, actions, rewards, next observations, dones, and indices.
+            Dict[str, torch.Tensor]: A dictionary containing sampled observations, actions, rewards,
+            next observations, dones, and indices.
         """
         idxs = np.random.randint(self.curr_size, size=batch_size)
+        reward = self.rewards[idxs]
+
+        if self.args.norm_reward:
+            self.running_mean_std.update(reward)
+            reward = self.running_mean_std.norm(reward)
+
         batch = dict(
             obs=self.observations[idxs],
             next_obs=self.next_observations[idxs],
             action=self.actions[idxs],
-            reward=self.rewards[idxs],
+            reward=reward,
             done=self.dones[idxs],
             indices=idxs,
         )
