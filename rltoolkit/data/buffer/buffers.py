@@ -819,10 +819,11 @@ class SimpleRolloutBuffer:
                                 dtype=np.float32)
         self.rewards = np.zeros((self.buffer_size, 1), dtype=np.float32)
         self.returns = np.zeros((self.buffer_size, 1), dtype=np.float32)
-        self.episode_starts = np.zeros((self.buffer_size, 1), dtype=np.float32)
         self.values = np.zeros((self.buffer_size, 1), dtype=np.float32)
+        self.dones = np.zeros((self.buffer_size, 1), dtype=np.float32)
         self.log_probs = np.zeros((self.buffer_size, 1), dtype=np.float32)
         self.advantages = np.zeros((self.buffer_size, 1), dtype=np.float32)
+
         self.curr_ptr = 0
         self.curr_size = 0
 
@@ -843,7 +844,7 @@ class SimpleRolloutBuffer:
                 next_non_terminal = 1.0 - dones
                 next_values = last_values
             else:
-                next_non_terminal = 1.0 - self.episode_starts[step + 1]
+                next_non_terminal = 1.0 - self.dones[step + 1]
                 next_values = self.values[step + 1]
 
             delta = (self.rewards[step] +
@@ -861,7 +862,7 @@ class SimpleRolloutBuffer:
         obs: np.ndarray,
         action: np.ndarray,
         reward: float,
-        episode_start: bool,
+        done: bool,
         value: torch.Tensor,
         log_prob: torch.Tensor,
     ) -> None:
@@ -871,17 +872,14 @@ class SimpleRolloutBuffer:
             obs (np.ndarray): Observation.
             action (np.ndarray): Action.
             reward (float): Reward.
-            episode_start (bool): True if the episode started at this step.
+            done (bool): Whether the episode is done.
             value (torch.Tensor): Estimated value of the current state.
             log_prob (torch.Tensor): Log probability of the action.
         """
-        if len(log_prob.shape) == 0:
-            log_prob = log_prob.reshape(-1, 1)
-
         self.observations[self.curr_ptr] = np.array(obs)
         self.actions[self.curr_ptr] = np.array(action)
         self.rewards[self.curr_ptr] = np.array(reward)
-        self.episode_starts[self.curr_ptr] = np.array(episode_start)
+        self.dones[self.curr_ptr] = np.array(done)
         self.values[self.curr_ptr] = value.clone().cpu().numpy().flatten()
         self.log_probs[self.curr_ptr] = log_prob.clone().cpu().numpy()
 
