@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import C51Arguments
-from rltoolkit.cleanrl.utils.discrete_action import C51Network
+from rltoolkit.cleanrl.utils.qlearing_net import C51Network
 from rltoolkit.utils import LinearDecayScheduler, soft_target_update
 
 
@@ -128,6 +128,7 @@ class C51Agent(BaseAgent):
             next_atoms = reward + self.args.gamma * self.target_qnet.atoms * (
                 1 - done)
 
+            # projection of the next state distribution onto the current atoms
             delta_z = self.target_qnet.atoms[1] - self.target_qnet.atoms[0]
             tz = next_atoms.clamp(self.args.v_min, self.args.v_max)
             b = (tz - self.args.v_min) / delta_z

@@ -7,8 +7,7 @@ import torch
 import torch.nn.functional as F
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import DDPGArguments
-from rltoolkit.cleanrl.utils.continous_action import (OUNoise, PolicyNet,
-                                                      ValueNet)
+from rltoolkit.cleanrl.utils.ac_net import OUNoise, PolicyNet, ValueNet
 from rltoolkit.utils import soft_target_update
 
 
@@ -39,12 +38,19 @@ class DDPGAgent(BaseAgent):
         self.action_bound = args.action_bound
         self.obs_dim = int(np.prod(state_shape))
         self.action_dim = int(np.prod(action_shape))
+        self.action_high = self.env.action_space.high
+        self.action_low = self.env.action_space.low
         self.learner_update_step = 0
         self.target_model_update_step = 0
 
         # Initialize Policy Network
-        self.policy_net = PolicyNet(self.obs_dim, self.args.hidden_dim,
-                                    self.action_dim).to(self.device)
+        self.policy_net = PolicyNet(
+            self.obs_dim,
+            self.args.hidden_dim,
+            self.action_dim,
+            self.action_high,
+            self.action_low,
+        ).to(self.device)
         # Initialize Value Network
         self.critic_net = ValueNet(self.obs_dim, self.args.hidden_dim,
                                    self.action_dim).to(self.device)
@@ -59,6 +65,8 @@ class DDPGAgent(BaseAgent):
             theta=self.args.ou_noise_theta,
         )
 
+        # loss function
+        self.loss_fn = F.smooth_l1_loss if self.args.use_smooth_l1_loss else F.mse_loss
         # Optimizers
         self.actor_optimizer = torch.optim.Adam(self.policy_net.parameters(),
                                                 lr=self.args.actor_lr)
@@ -74,10 +82,8 @@ class DDPGAgent(BaseAgent):
         Returns:
             np.ndarray: Action selected by policy.
         """
-        obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        action = self.policy_net(obs).detach().cpu().numpy()
-        action = self.action_bound * np.clip(action, -1.0, 1.0)
-        return action.flatten()
+        action = self.predict(obs)
+        return action
 
     def predict(self, obs: np.ndarray) -> np.ndarray:
         """Predict action based on policy network (for evaluation).
@@ -88,10 +94,14 @@ class DDPGAgent(BaseAgent):
         Returns:
             np.ndarray: Action selected by policy.
         """
-        obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        action = self.policy_net(obs).detach().cpu().numpy().flatten()
-        action *= self.action_bound
-        return action
+        with torch.no_grad():
+            obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
+            action = self.policy_net(obs)
+            action += torch.normal(
+                0, self.policy_net.action_scale * self.args.exploration_noise)
+            action = action.cpu().numpy().clip(self.action_low,
+                                               self.action_high)
+        return action.flatten()
 
     def learn(self, batch: Dict[str, torch.Tensor]) -> float:
         """Update model with a batch of data.
@@ -127,21 +137,23 @@ class DDPGAgent(BaseAgent):
         # Temporal difference target
         q_targets = reward + self.args.gamma * next_q_values * (1 - done)
         # Mean squared error loss
-        value_loss = F.mse_loss(curr_q_values, q_targets)
+        value_loss = self.loss_fn(curr_q_values, q_targets)
 
         # Update value network
         self.critic_optimizer.zero_grad()
         value_loss.backward()
         self.critic_optimizer.step()
 
-        # Calculate policy loss
-        pred_action = self.policy_net(obs)
-        policy_loss = -torch.mean(self.critic_net(obs, pred_action))
+        policy_loss = torch.tensor(0.0).to(self.device)
+        if self.learner_update_step % self.args.policy_frequency == 0:
+            # Calculate policy loss
+            pred_action = self.policy_net(obs)
+            policy_loss = -torch.mean(self.critic_net(obs, pred_action))
 
-        # Update policy network
-        self.actor_optimizer.zero_grad()
-        policy_loss.backward()
-        self.actor_optimizer.step()
+            # Update policy network
+            self.actor_optimizer.zero_grad()
+            policy_loss.backward()
+            self.actor_optimizer.step()
 
         result = {
             'policy_loss': policy_loss.item(),

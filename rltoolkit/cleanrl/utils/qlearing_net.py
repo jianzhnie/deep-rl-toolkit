@@ -229,7 +229,7 @@ class C51Network(nn.Module):
         # Compute the probability mass function (PMF) using softmax
         pmfs = F.softmax(logits, dim=2)
         # Compute Q-values by summing over the atoms dimension
-        q_values = (pmfs * self.atoms).sum(2)
+        q_values = (pmfs * self.atoms).sum(dim=2)
 
         if action is None:
             # Select the action with the highest Q-value

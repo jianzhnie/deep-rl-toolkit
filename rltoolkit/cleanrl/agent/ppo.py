@@ -3,44 +3,12 @@ from typing import List, Optional, Tuple, Union
 import gymnasium as gym
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import PPOArguments
+from rltoolkit.cleanrl.utils.pg_net import PPOPolicyNet, PPOValueNet
 from torch.distributions import Categorical
 from torch.distributions.kl import kl_divergence
-
-
-class PolicyNet(nn.Module):
-
-    def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int):
-        super(PolicyNet, self).__init__()
-        self.fc1 = nn.Linear(obs_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, action_dim)
-        self.relu = nn.ReLU(inplace=True)
-        self.softmax = nn.Softmax(dim=1)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.fc1(x)
-        x = self.relu(x)
-        x = self.fc2(x)
-        x = self.softmax(x)
-        return x
-
-
-class ValueNet(nn.Module):
-
-    def __init__(self, obs_dim: int, hidden_dim: int):
-        super(ValueNet, self).__init__()
-        self.fc1 = nn.Linear(obs_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, 1)
-        self.relu = nn.ReLU(inplace=True)
-
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x = self.fc1(x)
-        x = self.relu(x)
-        x = self.fc2(x)
-        return x
 
 
 class PPOAgent(BaseAgent):
@@ -66,7 +34,7 @@ class PPOAgent(BaseAgent):
         state_shape: Union[int, List[int]] = None,
         action_shape: Union[int, List[int]] = None,
         device: Optional[Union[str, torch.device]] = None,
-    ):
+    ) -> None:
         self.args = args
         self.env = env
         self.device = device
@@ -76,10 +44,11 @@ class PPOAgent(BaseAgent):
         self.target_model_update_step = 0
 
         # 策略网络
-        self.actor = PolicyNet(self.obs_dim, self.args.hidden_dim,
-                               self.action_dim).to(device)
+        self.actor = PPOPolicyNet(self.obs_dim, self.args.hidden_dim,
+                                  self.action_dim).to(device)
         # 价值网络
-        self.critic = ValueNet(self.obs_dim, self.args.hidden_dim).to(device)
+        self.critic = PPOValueNet(self.obs_dim,
+                                  self.args.hidden_dim).to(device)
 
         # 策略网络优化器
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
@@ -87,14 +56,11 @@ class PPOAgent(BaseAgent):
         # 价值网络优化器
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
                                                  lr=self.args.critic_lr)
-        # 折扣因子
         self.device = device
 
     def get_action(self, obs: np.ndarray) -> Tuple[int, float]:
         obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        prob = self.actor(obs)
-        action_dist = Categorical(prob)
-        action = action_dist.sample()
+        (action, log_prob, _) = self.actor(obs)
         return action.item()
 
     def compute_advantage(self, gamma, lmbda, td_delta):

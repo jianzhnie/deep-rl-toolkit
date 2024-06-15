@@ -121,6 +121,30 @@ class RLArguments:
             "Method used for learning rate scheduling. Defaults to 'linear'"
         },
     )
+    n_steps: int = field(
+        default=1,
+        metadata={
+            'help':
+            'Number of steps to take before updating the target network. Defaults to 1'
+        },
+    )
+    norm_reward: bool = field(
+        default=False,
+        metadata={
+            'help':
+            'Flag indicating whether to normalize the rewards. Defaults to False'
+        },
+    )
+    clip_reward: float = field(
+        default=10.0,
+        metadata={'help': 'Value to clip the rewards. Defaults to 10.0'},
+    )
+    epsilon: float = field(
+        default=1e-5,
+        metadata={
+            'help': 'Small value to avoid division by zero. Defaults to 1e-5'
+        },
+    )
     clip_weights: bool = field(
         default=False,
         metadata={
@@ -131,6 +155,13 @@ class RLArguments:
     max_grad_norm: float = field(
         default=1.0,
         metadata={'help': 'Maximum gradient norm. Defaults to 1.0'},
+    )
+    use_smooth_l1_loss: bool = field(
+        default=False,
+        metadata={
+            'help':
+            'Flag indicating whether to use the smooth L1 loss. Defaults to False'
+        },
     )
     warmup_learn_steps: int = field(
         default=1000,
@@ -291,8 +322,14 @@ class C51Arguments(RLArguments):
             'Maximum value for the value distribution in C51. Defaults to 100.0'
         },
     )
+    target_update_frequency: int = field(
+        default=100,
+        metadata={
+            'help': 'Frequency of updating the target network. Defaults to 100'
+        },
+    )
     train_frequency: int = field(
-        default=1,
+        default=10,
         metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
     gradient_steps: int = field(
@@ -308,15 +345,14 @@ class C51Arguments(RLArguments):
 class DDPGArguments(RLArguments):
     """DDPG-specific settings."""
 
-    hidden_dim: int = field(
-        default=128,
+    target_update_frequency: int = field(
+        default=100,
         metadata={
-            'help':
-            'The hidden dimension size of the neural network. Defaults to 128'
+            'help': 'Frequency of updating the target network. Defaults to 100'
         },
     )
     train_frequency: int = field(
-        default=1,
+        default=10,
         metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
     gradient_steps: int = field(
@@ -326,28 +362,36 @@ class DDPGArguments(RLArguments):
             'Number of times to update the learner network. Defaults to 1'
         },
     )
-    n_steps: int = field(
-        default=1,
+    policy_frequency: int = field(
+        default=2,
+        metadata={
+            'help': 'Frequency of updating the policy network. Defaults to 2'
+        },
+    )
+    hidden_dim: int = field(
+        default=128,
         metadata={
             'help':
-            'Number of steps to take before updating the target network. Defaults to 1'
+            'The hidden dimension size of the neural network. Defaults to 128'
         },
     )
     actor_lr: float = field(
-        default=1e-4,
+        default=1e-3,
         metadata={
             'help': 'Learning rate for the actor network. Defaults to 1e-4'
         },
     )
     critic_lr: float = field(
-        default=1e-4,
+        default=1e-3,
         metadata={
             'help': 'Learning rate for the critic network. Defaults to 1e-4'
         },
     )
-    action_bound: float = field(
-        default=2.0,
-        metadata={'help': 'Action bound for the environment. Defaults to 2.0'},
+    exploration_noise: float = field(
+        default=0.1,
+        metadata={
+            'help': 'The scale of the exploration noise. Defaults to 0.1'
+        },
     )
     ou_noise_sigma: float = field(
         default=0.3,
