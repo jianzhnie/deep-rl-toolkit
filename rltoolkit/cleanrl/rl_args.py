@@ -483,15 +483,38 @@ class PPOArguments(RLArguments):
             'help': 'Learning rate for the critic network. Defaults to 1e-4'
         },
     )
-    action_bound: float = field(
-        default=2.0,
-        metadata={'help': 'Action bound for the environment. Defaults to 2.0'},
-    )
-    lmbda: float = field(
+    gae_lmbda: float = field(
         default=0.95,
         metadata={
             'help':
             'Lambda for Generalized Advantage Estimation (GAE). Defaults to 0.95'
+        },
+    )
+    value_loss_coef: float = field(
+        default=0.5,
+        metadata={
+            'help':
+            'Coefficient for the value loss in the PPO algorithm. Defaults to 0.5'
+        },
+    )
+    entropy_coef: float = field(
+        default=0.01,
+        metadata={
+            'help':
+            'Coefficient for the entropy term in the PPO algorithm. Defaults to 0.01'
+        },
+    )
+    clip_param: float = field(
+        default=0.2,
+        metadata={
+            'help': 'Clip parameter for the PPO algorithm. Defaults to 0.2'
+        },
+    )
+    use_clipped_value_loss: bool = field(
+        default=False,
+        metadata={
+            'help':
+            'Flag indicating whether to use the clipped value loss. Defaults to False'
         },
     )
 

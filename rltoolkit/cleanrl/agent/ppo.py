@@ -3,12 +3,10 @@ from typing import Dict, List, Optional, Tuple, Union
 import gymnasium as gym
 import numpy as np
 import torch
-import torch.nn.functional as F
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import PPOArguments
 from rltoolkit.cleanrl.utils.pg_net import PPOPolicyNet, PPOValueNet
 from torch.distributions import Categorical
-from torch.distributions.kl import kl_divergence
 
 
 class PPOAgent(BaseAgent):
@@ -58,10 +56,45 @@ class PPOAgent(BaseAgent):
                                                  lr=self.args.critic_lr)
         self.device = device
 
-    def get_action(self, obs: np.ndarray) -> Tuple[int, float]:
+    def get_action_value(self, obs: np.ndarray) -> Tuple[int, float]:
+        """Define the sampling process. This function returns the action
+        according to action distribution.
+
+        Args:
+            obs (torch tensor): observation, shape([batch_size] + obs_shape)
+        Returns:
+            value (torch tensor): value, shape([batch_size, 1])
+            action (torch tensor): action, shape([batch_size] , action_shape)
+            action_log_probs (torch tensor): action log probs, shape([batch_size])
+            action_entropy (torch tensor): action entropy, shape([batch_size])
+        """
         obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        (action, log_prob, _) = self.actor(obs)
-        return action.item()
+        value = self.critic(obs)
+        logits = self.actor(obs)
+        dist = Categorical(logits=logits)
+        action = dist.sample()
+        action_log_prob = dist.log_prob(action)
+        action_entropy = dist.entropy()
+        return value, action, action_log_prob, action_entropy
+
+    def get_value(self, obs: np.ndarray) -> float:
+        """Use the critic model to predict obs values.
+
+        Args:
+            obs (torch tensor): observation, shape([batch_size] + obs_shape)
+        Returns:
+            value (torch tensor): value of obs, shape([batch_size])
+        """
+        obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
+        value = self.critic(obs)
+        return value
+
+    def predict(self, obs: np.array):
+        obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
+        logits = self.actor(obs)
+        dist = Categorical(logits=logits)
+        action = dist.probs.argmax(dim=1, keepdim=True)
+        return action
 
     def compute_advantage(self, gamma, lmbda, td_delta):
         td_delta = td_delta.detach().numpy()
@@ -76,56 +109,55 @@ class PPOAgent(BaseAgent):
     def learn(self, batch: Dict[str, torch.Tensor]) -> Tuple[float, float]:
         """Update the model by TD actor-critic."""
         obs = batch['obs']
-        next_obs = batch['next_obs']
         actions = batch['actions']
-        rewards = batch['rewards']
-        dones = batch['dones']
+        old_values = batch['values']
+        returns = batch['returns']
+        log_probs = batch['log_probs']
+        advantages = batch['advantages']
 
-        current_value = self.critic(obs)
-        # 时序差分目标
-        td_target = rewards + self.args.gamma * self.critic(next_obs) * (1 -
-                                                                         dones)
-        # 时序差分误差
-        td_delta = td_target - current_value
+        new_values = self.critic(obs)
+        logits = self.actor(obs)
+        dist = Categorical(logits=logits)
+        action_log_probs = dist.log_prob(actions)
+        dist_entropy = dist.entropy()
 
-        advantage = self.compute_advantage(self.args.gamma, self.args.lmbda,
-                                           td_delta.cpu()).to(self.device)
-        old_log_probs = torch.log(self.actor(obs).gather(1, actions)).detach()
-        old_action_dists = Categorical(self.actor(obs).detach())
+        # Entropy Loss
+        entropy_loss = dist_entropy.mean()
 
-        for _ in range(self.args.policy_net_iters):
-            log_probs = torch.log(self.actor(obs).gather(1, actions))
-            ratio = torch.exp(log_probs - old_log_probs)
-            surr1 = ratio * advantage
-            # 截断
-            surr2 = (torch.clamp(ratio, 1 - self.args.clip_param,
-                                 1 + self.args.clip_param) * advantage)
-            # PPO损失函数
-            policy_loss = torch.mean(-torch.min(surr1, surr2))
+        # actor Loss
+        ratio = torch.exp(action_log_probs - log_probs)
+        surr1 = ratio * advantages
+        surr2 = (torch.clamp(ratio, 1.0 - self.args.clip_param,
+                             1.0 + self.args.clip_param) * advantages)
+        actor_loss = -torch.min(surr1, surr2).mean()
 
-            # K-L dist
-            new_action_dists = Categorical(self.actor(obs))
-            # A sample estimate for KL-divergence, easy to compute
-            # approx_kl = (old_log_probs - log_probs).mean()
-            kl_div = torch.mean(
-                kl_divergence(old_action_dists, new_action_dists))
-            # Early stopping at step i due to reaching max kl
-            if kl_div > 1.5 * self.args.target_kl:
-                print(
-                    'Early stopping, due to current kl_div: %3f reaching max kl %3f'
-                    % (kl_div, self.args.target_kl))
-                break
-            # update policy
-            self.actor_optimizer.zero_grad()
-            policy_loss.backward()  # 计算策略网络的梯度
-            self.actor_optimizer.step()  # 更新策略网络的参数
+        # value Loss
+        if self.args.use_clipped_value_loss:
+            value_pred_clipped = old_values + torch.clamp(
+                new_values - old_values,
+                -self.args.clip_param,
+                self.args.clip_param,
+            )
+            value_losses = (new_values - returns).pow(2)
+            value_losses_clipped = (value_pred_clipped - returns).pow(2)
+            value_loss = 0.5 * torch.max(value_losses,
+                                         value_losses_clipped).mean()
+        else:
+            value_loss = 0.5 * (returns - new_values).pow(2).mean()
 
-        for _ in range(self.args.critic_net_iters):
-            # value loss
-            value_loss = F.mse_loss(self.critic(obs), td_target.detach())
-            # update value
-            self.critic_optimizer.zero_grad()
-            value_loss.backward()
-            self.critic_optimizer.step()
+        loss = (value_loss * self.args.value_loss_coef + actor_loss -
+                entropy_loss * self.args.entropy_coef)
+        self.actor_optimizer.zero_grad()
+        loss.backward()
+        if self.args.max_grad_norm is not None:
+            torch.nn.utils.clip_grad_norm_(self.actor.parameters(),
+                                           self.args.max_grad_norm)
+        self.actor_optimizer.step()
 
-        return policy_loss.item(), value_loss.item()
+        result = {
+            'value_loss': value_loss.item(),
+            'actor_loss': actor_loss.item(),
+            'entropy_loss': entropy_loss.item(),
+        }
+
+        return result
