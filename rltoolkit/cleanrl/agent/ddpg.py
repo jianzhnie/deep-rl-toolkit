@@ -66,6 +66,8 @@ class DDPGAgent(BaseAgent):
             theta=self.args.ou_noise_theta,
         )
 
+        # loss function
+        self.loss_fn = F.smooth_l1_loss if self.args.use_smooth_l1_loss else F.mse_loss
         # Optimizers
         self.actor_optimizer = torch.optim.Adam(self.policy_net.parameters(),
                                                 lr=self.args.actor_lr)
@@ -136,21 +138,23 @@ class DDPGAgent(BaseAgent):
         # Temporal difference target
         q_targets = reward + self.args.gamma * next_q_values * (1 - done)
         # Mean squared error loss
-        value_loss = F.mse_loss(curr_q_values, q_targets)
+        value_loss = self.loss_fn(curr_q_values, q_targets)
 
         # Update value network
         self.critic_optimizer.zero_grad()
         value_loss.backward()
         self.critic_optimizer.step()
 
-        # Calculate policy loss
-        pred_action = self.policy_net(obs)
-        policy_loss = -torch.mean(self.critic_net(obs, pred_action))
+        policy_loss = torch.tensor(0.0).to(self.device)
+        if self.learner_update_step % self.args.policy_frequency == 0:
+            # Calculate policy loss
+            pred_action = self.policy_net(obs)
+            policy_loss = -torch.mean(self.critic_net(obs, pred_action))
 
-        # Update policy network
-        self.actor_optimizer.zero_grad()
-        policy_loss.backward()
-        self.actor_optimizer.step()
+            # Update policy network
+            self.actor_optimizer.zero_grad()
+            policy_loss.backward()
+            self.actor_optimizer.step()
 
         result = {
             'policy_loss': policy_loss.item(),
