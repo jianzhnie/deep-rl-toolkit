@@ -7,8 +7,7 @@ import torch
 import torch.nn.functional as F
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import DDPGArguments
-from rltoolkit.cleanrl.utils.continous_action import (OUNoise, PolicyNet,
-                                                      ValueNet)
+from rltoolkit.cleanrl.utils.ac_net import OUNoise, PolicyNet, ValueNet
 from rltoolkit.utils import soft_target_update
 
 

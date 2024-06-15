@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import DQNArguments
-from rltoolkit.cleanrl.utils.discrete_action import DuelingNet, QNet
+from rltoolkit.cleanrl.utils.qlearing_net import DuelingNet, QNet
 from rltoolkit.utils import LinearDecayScheduler, soft_target_update
 
 
