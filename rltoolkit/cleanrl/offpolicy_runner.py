@@ -139,10 +139,11 @@ class OffPolicyRunner(BaseRunner):
                 test_info = self.run_evaluate_episodes(
                     n_eval_episodes=self.args.eval_episodes)
                 test_info['num_episode'] = self.episode_cnt
-                self.text_logger.info(
+                log_message = (
                     '[Eval], global_step: {}, episode: {}, eval_rewards: {:.2f}'
                     .format(self.global_step, self.episode_cnt,
                             test_info['reward_mean']))
+                self.text_logger.info(log_message)
                 self.log_test_infos(test_info, self.global_step)
 
         # Save model
