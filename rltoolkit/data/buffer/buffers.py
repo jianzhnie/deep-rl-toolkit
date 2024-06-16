@@ -9,11 +9,11 @@ import torch
 from gymnasium import spaces
 from rltoolkit.cleanrl.rl_args import RLArguments
 from rltoolkit.data.utils.segment_tree import MinSegmentTree, SumSegmentTree
+from rltoolkit.data.utils.type_aliases import (ReplayBufferSamples,
+                                               RolloutBufferSamples)
 from rltoolkit.utils.statistics import RunningMeanStd
 from stable_baselines3.common.preprocessing import (get_action_dim,
                                                     get_obs_shape)
-from stable_baselines3.common.type_aliases import (ReplayBufferSamples,
-                                                   RolloutBufferSamples)
 from stable_baselines3.common.utils import get_device
 from stable_baselines3.common.vec_env import VecNormalize
 
@@ -783,6 +783,161 @@ class SimpleReplayBuffer:
         self.dones[:self.curr_size] = data['terminal'][:self.curr_size]
         self.next_observations[:self.curr_size] = data['next_obs'][:self.
                                                                    curr_size]
+
+
+class SimpleRolloutBuffer:
+    """Rollout buffer used in on-policy algorithms like A2C/PPO. This buffer
+    stores `buffer_size` transitions collected using the current policy. The
+    experience is discarded after the policy update.
+
+    Args:
+        args (RLArguments): Hyperparameters for the buffer and algorithms.
+        observation_space (spaces.Space): Observation space.
+        action_space (spaces.Space): Action space.
+        device (Union[torch.device, str]): PyTorch device.
+    """
+
+    def __init__(
+        self,
+        args: RLArguments,
+        observation_space: spaces.Space,
+        action_space: spaces.Space,
+        device: Union[torch.device, str] = 'auto',
+    ) -> None:
+        self.args = args
+        self.buffer_size = args.buffer_size
+        self.obs_shape = get_obs_shape(observation_space)
+        self.action_dim = get_action_dim(action_space)
+        self.device = device
+        self.reset()
+
+    def reset(self) -> None:
+        """Reset the rollout buffer by clearing all stored transitions."""
+        self.observations = np.zeros((self.buffer_size, *self.obs_shape),
+                                     dtype=np.float32)
+        self.actions = np.zeros((self.buffer_size, self.action_dim),
+                                dtype=np.float32)
+        self.rewards = np.zeros((self.buffer_size, 1), dtype=np.float32)
+        self.returns = np.zeros((self.buffer_size, 1), dtype=np.float32)
+        self.values = np.zeros((self.buffer_size, 1), dtype=np.float32)
+        self.dones = np.zeros((self.buffer_size, 1), dtype=np.float32)
+        self.log_probs = np.zeros((self.buffer_size, 1), dtype=np.float32)
+        self.advantages = np.zeros((self.buffer_size, 1), dtype=np.float32)
+
+        self.curr_ptr = 0
+        self.curr_size = 0
+
+    def compute_returns_and_advantage(self, last_values: Union[float,
+                                                               np.ndarray],
+                                      dones: np.ndarray) -> None:
+        """Compute the lambda-return (TD(lambda) estimate) and GAE(lambda)
+        advantage.
+
+        Args:
+            last_values (torch.Tensor): State value estimation for the last step (one for each env).
+            dones (np.ndarray): Boolean array indicating if the last step was terminal.
+        """
+        last_gae_lam = 0
+
+        for step in reversed(range(self.buffer_size)):
+            if step == self.buffer_size - 1:
+                next_non_terminal = 1.0 - dones
+                next_values = last_values
+            else:
+                next_non_terminal = 1.0 - self.dones[step + 1]
+                next_values = self.values[step + 1]
+
+            delta = (self.rewards[step] +
+                     self.args.gamma * next_values * next_non_terminal -
+                     self.values[step])
+
+            last_gae_lam = (delta + self.args.gamma * self.args.gae_lambda *
+                            next_non_terminal * last_gae_lam)
+            self.advantages[step] = last_gae_lam
+
+        self.returns = self.advantages + self.values
+
+    def add(
+        self,
+        obs: np.ndarray,
+        action: np.ndarray,
+        reward: float,
+        done: bool,
+        value: Union[float, np.ndarray],
+        log_prob: Union[float, np.ndarray],
+    ) -> None:
+        """Add a new transition to the buffer.
+
+        Args:
+            obs (np.ndarray): Observation.
+            action (np.ndarray): Action.
+            reward (float): Reward.
+            done (bool): Whether the episode is done.
+            value (torch.Tensor): Estimated value of the current state.
+            log_prob (torch.Tensor): Log probability of the action.
+        """
+        self.observations[self.curr_ptr] = np.array(obs)
+        self.actions[self.curr_ptr] = np.array(action)
+        self.rewards[self.curr_ptr] = np.array(reward)
+        self.dones[self.curr_ptr] = np.array(done)
+        self.values[self.curr_ptr] = np.array(value)
+        self.log_probs[self.curr_ptr] = np.array(log_prob)
+
+        self.curr_ptr = (self.curr_ptr + 1) % self.buffer_size
+        self.curr_size = min(self.curr_size + 1, self.buffer_size)
+
+    def sample(
+        self,
+        batch_size: Optional[int] = None
+    ) -> Generator[RolloutBufferSamples, None, None]:
+        """Sample transitions from the buffer.
+
+        Args:
+            batch_size (Optional[int]): Batch size. If None, the entire buffer is used.
+
+        Yields:
+            RolloutBufferSamples: Sampled batch of transitions.
+        """
+        assert self.curr_size == self.buffer_size, 'Buffer not full'
+        indices = np.random.permutation(self.buffer_size)
+
+        if batch_size is None:
+            batch_size = self.buffer_size
+        return self._get_samples(indices[:batch_size])
+
+    def _get_samples(self, batch_inds: np.ndarray) -> RolloutBufferSamples:
+        """Get a batch of samples based on provided indices.
+
+        Args:
+            batch_inds (np.ndarray): Indices for sampling.
+
+        Returns:
+            RolloutBufferSamples: Batch of samples as tensors.
+        """
+        data = (
+            self.observations[batch_inds],
+            self.actions[batch_inds],
+            self.values[batch_inds],
+            self.log_probs[batch_inds],
+            self.advantages[batch_inds],
+            self.returns[batch_inds],
+        )
+        samples = RolloutBufferSamples(*tuple(map(self.to_torch, data)))
+        return samples
+
+    def to_torch(self, array: np.ndarray, copy: bool = True) -> torch.Tensor:
+        """Convert a numpy array to a PyTorch tensor.
+
+        Args:
+            array (np.ndarray): The numpy array to convert.
+            copy (bool, optional): Whether to copy the data. Defaults to True.
+
+        Returns:
+            torch.Tensor: The PyTorch tensor.
+        """
+        if copy:
+            return torch.tensor(array, dtype=torch.float32).to(self.device)
+        return torch.as_tensor(array, dtype=torch.float32).to(self.device)
 
 
 class PrioritizedReplayBuffer(SimpleReplayBuffer):

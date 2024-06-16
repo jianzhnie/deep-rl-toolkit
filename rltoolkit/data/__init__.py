@@ -8,6 +8,7 @@ from rltoolkit.data.buffer.buffers import (
     OffPolicyBuffer,
     RolloutBuffer,
     SimpleReplayBuffer,
+    SimpleRolloutBuffer,
 )
 from rltoolkit.data.buffer.cached import CachedReplayBuffer
 from rltoolkit.data.buffer.her import HERReplayBuffer
@@ -50,4 +51,5 @@ __all__ = [
     'SegmentTree',
     'HERVectorReplayBuffer',
     'PrioritizedVectorReplayBuffer',
+    'SimpleRolloutBuffer',
 ]
