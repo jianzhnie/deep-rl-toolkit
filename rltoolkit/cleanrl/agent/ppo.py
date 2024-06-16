@@ -101,9 +101,10 @@ class PPOAgent(BaseAgent):
             int: The predicted action.
         """
         obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        logits = self.actor(obs_tensor)
-        dist = Categorical(logits=logits)
-        action = dist.probs.argmax(dim=1, keepdim=True)
+        with torch.no_grad():
+            logits = self.actor(obs_tensor)
+            dist = Categorical(logits=logits)
+            action = dist.probs.argmax(dim=1, keepdim=True)
         return action.item()
 
     def learn(self, batch: RolloutBufferSamples) -> Tuple[float, float]:
@@ -144,6 +145,7 @@ class PPOAgent(BaseAgent):
 
         # Compute value loss
         if self.args.clip_vloss:
+            assert self.args.clip_param is not None, 'clip_param must be set'
             value_pred_clipped = old_values + torch.clamp(
                 new_values - old_values, -self.args.clip_param,
                 self.args.clip_param)
