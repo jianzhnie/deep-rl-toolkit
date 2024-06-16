@@ -11,104 +11,112 @@ from torch.distributions import Categorical
 
 
 class PPOAgent(BaseAgent):
-    """Agent interacting with environment. The “Critic” estimates the value
-    function. This could be the action-value (the Q value) or state-value (the
-    V value). The “Actor” updates the policy distribution in the direction
-    suggested by the Critic (such as with policy gradients).
+    """Proximal Policy Optimization (PPO) Agent.
 
-    Attribute:
-        gamma (float): discount factor
-        entropy_weight (float): rate of weighting entropy into the loss function
-        actor (nn.Module): target actor model to select actions
-        critic (nn.Module): critic model to predict state values
-        actor_optimizer (optim.Optimizer) : optimizer of actor
-        critic_optimizer (optim.Optimizer) : optimizer of critic
-        device (torch.device): cpu / gpu
+    The agent interacts with the environment using an actor-critic model.
+    The actor updates the policy distribution based on the critic's feedback.
+
+    Args:
+        args (PPOArguments): Configuration arguments for PPO.
+        env (gym.Env): Environment to interact with.
+        state_shape (Union[int, List[int]]): Shape of the state space.
+        action_shape (Union[int, List[int]]): Shape of the action space.
+        device (Optional[Union[str, torch.device]]): Device for computations.
     """
 
     def __init__(
         self,
         args: PPOArguments,
         env: gym.Env,
-        state_shape: Union[int, List[int]] = None,
-        action_shape: Union[int, List[int]] = None,
+        state_shape: Union[int, List[int]],
+        action_shape: Union[int, List[int]],
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
+
         self.args = args
         self.env = env
-        self.device = device
+        self.device = device if device is not None else torch.device('cpu')
         self.obs_dim = int(np.prod(state_shape))
         self.action_dim = int(np.prod(action_shape))
-        self.learner_update_step = 0
-        self.target_model_update_step = 0
 
-        # 策略网络
+        # Initialize actor and critic networks
         self.actor = PPOPolicyNet(self.obs_dim, self.args.hidden_dim,
-                                  self.action_dim).to(device)
-        # 价值网络
+                                  self.action_dim).to(self.device)
         self.critic = PPOValueNet(self.obs_dim,
-                                  self.args.hidden_dim).to(device)
+                                  self.args.hidden_dim).to(self.device)
 
-        # 策略网络优化器
+        # Initialize optimizers
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
                                                 lr=self.args.actor_lr)
-        # 价值网络优化器
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
                                                  lr=self.args.critic_lr)
-
         self.optimizer = torch.optim.Adam(
             list(self.actor.parameters()) + list(self.critic.parameters()),
             lr=self.args.learning_rate,
         )
-        self.device = device
 
-    def get_action(self, obs: np.ndarray) -> Tuple[int, float]:
-        """Define the sampling process. This function returns the action
-        according to action distribution.
+    def sample(self, obs: np.ndarray) -> Tuple[float, int, float, float]:
+        """Sample an action from the policy given an observation.
 
         Args:
-            obs (torch tensor): observation, shape([batch_size] + obs_shape)
+            obs (np.ndarray): The observation from the environment.
+
         Returns:
-            value (torch tensor): value, shape([batch_size, 1])
-            action (torch tensor): action, shape([batch_size] , action_shape)
-            action_log_probs (torch tensor): action log probs, shape([batch_size])
-            action_entropy (torch tensor): action entropy, shape([batch_size])
+            Tuple[float, int, float, float]: A tuple containing:
+                - value (float): The value estimate from the critic.
+                - action (int): The sampled action.
+                - log_prob (float): The log probability of the sampled action.
+                - entropy (float): The entropy of the action distribution.
         """
-        obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        value = self.critic(obs)
-        logits = self.actor(obs)
+        obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
+        value = self.critic(obs_tensor)
+        logits = self.actor(obs_tensor)
         dist = Categorical(logits=logits)
         action = dist.sample()
         log_prob = dist.log_prob(action)
         entropy = dist.entropy()
-        return (
-            value.item(),
-            action.item(),
-            log_prob.item(),
-            entropy.item(),
-        )
+        return value.item(), action.item(), log_prob.item(), entropy.item()
 
     def get_value(self, obs: np.ndarray) -> float:
-        """Use the critic model to predict obs values.
+        """Use the critic model to predict the value of an observation.
 
         Args:
-            obs (torch tensor): observation, shape([batch_size] + obs_shape)
-        Returns:
-            value (torch tensor): value of obs, shape([batch_size])
-        """
-        obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        value = self.critic(obs)
-        return value
+            obs (np.ndarray): The observation from the environment.
 
-    def predict(self, obs: np.array):
-        obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        logits = self.actor(obs)
+        Returns:
+            float: The predicted value of the observation.
+        """
+        obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
+        value = self.critic(obs_tensor)
+        return value.item()
+
+    def predict(self, obs: np.ndarray) -> int:
+        """Predict the action with the highest probability given an
+        observation.
+
+        Args:
+            obs (np.ndarray): The observation from the environment.
+
+        Returns:
+            int: The predicted action.
+        """
+        obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
+        logits = self.actor(obs_tensor)
         dist = Categorical(logits=logits)
         action = dist.probs.argmax(dim=1, keepdim=True)
         return action.item()
 
     def learn(self, batch: RolloutBufferSamples) -> Tuple[float, float]:
-        """Update the model by TD actor-critic."""
+        """Update the model using a batch of sampled experiences.
+
+        Args:
+            batch (RolloutBufferSamples): A batch of sampled experiences.
+
+        Returns:
+            Tuple[float, float]: A tuple containing:
+                - value_loss (float): The loss for the value function.
+                - actor_loss (float): The loss for the policy function.
+        """
         obs = batch.obs
         actions = batch.actions
         old_values = batch.old_values
@@ -116,17 +124,17 @@ class PPOAgent(BaseAgent):
         advantages = batch.advantages
         returns = batch.returns
 
-        # Compute the value, action log probs, and entropy
+        # Compute new values, log probs, and entropy
         new_values = self.critic(obs)
         logits = self.actor(obs)
         dist = Categorical(logits=logits)
         new_log_probs = dist.log_prob(actions)
         entropy = dist.entropy()
 
-        # entropy Loss
+        # Compute entropy loss
         entropy_loss = entropy.mean()
 
-        # actor Loss
+        # Compute actor loss
         log_ratio = new_log_probs - old_log_probs
         ratio = torch.exp(log_ratio)
         surr1 = ratio * advantages
@@ -134,13 +142,11 @@ class PPOAgent(BaseAgent):
                              1.0 + self.args.clip_param) * advantages)
         actor_loss = -torch.min(surr1, surr2).mean()
 
-        # value Loss
+        # Compute value loss
         if self.args.clip_vloss:
             value_pred_clipped = old_values + torch.clamp(
-                new_values - old_values,
-                -self.args.clip_param,
-                self.args.clip_param,
-            )
+                new_values - old_values, -self.args.clip_param,
+                self.args.clip_param)
             value_losses_unclipped = (new_values - returns).pow(2)
             value_losses_clipped = (value_pred_clipped - returns).pow(2)
             value_loss = (
@@ -149,8 +155,11 @@ class PPOAgent(BaseAgent):
         else:
             value_loss = 0.5 * (new_values - returns).pow(2).mean()
 
+        # Total loss
         loss = (value_loss * self.args.value_loss_coef + actor_loss -
                 entropy_loss * self.args.entropy_coef)
+
+        # Backpropagation
         self.optimizer.zero_grad()
         loss.backward()
         if self.args.max_grad_norm is not None:
@@ -158,13 +167,14 @@ class PPOAgent(BaseAgent):
                                            self.args.max_grad_norm)
         self.optimizer.step()
 
+        # Calculate KL divergence metrics
         with torch.no_grad():
             old_approx_kl = (-log_ratio).mean()
             approx_kl = ((ratio - 1) - log_ratio).mean()
-            clipfrac = (abs(
-                (ratio - 1.0)) > self.args.clip_param).float().mean().item()
+            clipfrac = (abs(ratio - 1.0) >
+                        self.args.clip_param).float().mean().item()
 
-        result = {
+        return {
             'value_loss': value_loss.item(),
             'actor_loss': actor_loss.item(),
             'entropy_loss': entropy_loss.item(),
@@ -172,5 +182,3 @@ class PPOAgent(BaseAgent):
             'approx_kl': approx_kl.item(),
             'clipfrac': clipfrac,
         }
-
-        return result
