@@ -38,6 +38,7 @@ class PPOAgent(BaseAgent):
         self.device = device if device is not None else torch.device('cpu')
         self.obs_dim = int(np.prod(state_shape))
         self.action_dim = int(np.prod(action_shape))
+        self.learner_update_step = 0
 
         # Initialize actor and critic networks
         self.actor = PPOPolicyNet(self.obs_dim, self.args.hidden_dim,
@@ -101,9 +102,10 @@ class PPOAgent(BaseAgent):
             int: The predicted action.
         """
         obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        logits = self.actor(obs_tensor)
-        dist = Categorical(logits=logits)
-        action = dist.probs.argmax(dim=1, keepdim=True)
+        with torch.no_grad():
+            logits = self.actor(obs_tensor)
+            dist = Categorical(logits=logits)
+            action = dist.probs.argmax(dim=1, keepdim=True)
         return action.item()
 
     def learn(self, batch: RolloutBufferSamples) -> Tuple[float, float]:
@@ -144,6 +146,7 @@ class PPOAgent(BaseAgent):
 
         # Compute value loss
         if self.args.clip_vloss:
+            assert self.args.clip_param is not None, 'clip_param must be set'
             value_pred_clipped = old_values + torch.clamp(
                 new_values - old_values, -self.args.clip_param,
                 self.args.clip_param)
@@ -166,6 +169,7 @@ class PPOAgent(BaseAgent):
             torch.nn.utils.clip_grad_norm_(self.actor.parameters(),
                                            self.args.max_grad_norm)
         self.optimizer.step()
+        self.learner_update_step += 1
 
         # Calculate KL divergence metrics
         with torch.no_grad():

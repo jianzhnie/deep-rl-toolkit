@@ -901,9 +901,10 @@ class SimpleRolloutBuffer:
         assert self.curr_size == self.buffer_size, 'Buffer not full'
         indices = np.random.permutation(self.buffer_size)
 
-        if batch_size is None:
-            batch_size = self.buffer_size
-        return self._get_samples(indices[:batch_size])
+        start_idx = 0
+        while start_idx < self.buffer_size:
+            yield self._get_samples(indices[start_idx:start_idx + batch_size])
+            start_idx += self.args.batch_size
 
     def _get_samples(self, batch_inds: np.ndarray) -> RolloutBufferSamples:
         """Get a batch of samples based on provided indices.
