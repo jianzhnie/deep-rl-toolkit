@@ -38,6 +38,7 @@ class PPOAgent(BaseAgent):
         self.device = device if device is not None else torch.device('cpu')
         self.obs_dim = int(np.prod(state_shape))
         self.action_dim = int(np.prod(action_shape))
+        self.learner_update_step = 0
 
         # Initialize actor and critic networks
         self.actor = PPOPolicyNet(self.obs_dim, self.args.hidden_dim,
@@ -168,6 +169,7 @@ class PPOAgent(BaseAgent):
             torch.nn.utils.clip_grad_norm_(self.actor.parameters(),
                                            self.args.max_grad_norm)
         self.optimizer.step()
+        self.learner_update_step += 1
 
         # Calculate KL divergence metrics
         with torch.no_grad():

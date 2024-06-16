@@ -26,33 +26,6 @@ class OnPolicyRunner(BaseRunner):
         self.test_env = test_env
         self.buffer: SimpleRolloutBuffer = buffer
 
-    def run_train_episode(self, obs: np.array) -> dict[str, float]:
-        # Training logic
-        episode_result_info = []
-        for step in range(self.args.rollout_length):
-            self.global_step += 1
-            (
-                value,
-                action,
-                log_prob,
-                entropy,
-            ) = self.agent.get_action(obs)
-            next_obs, reward, terminations, truncations, infos = self.train_env.step(
-                action)
-            obs = next_obs
-            done = np.logical_or(terminations, truncations)
-            self.buffer.add(obs, action, reward, done, value, log_prob)
-
-        # Bootstrap value if not done
-        last_value = self.agent.get_value(obs)
-        self.buffer.compute_returns_and_advantage(last_value, done)
-        for batch_data in self.buffer.sample(self.args.batch_size):
-            learn_info = self.agent.learn(batch_data)
-            episode_result_info.append(learn_info)
-
-        episode_info = calculate_mean(episode_result_info)
-        return episode_info
-
     def run_evaluate_episodes(self,
                               n_eval_episodes: int = 5) -> dict[str, float]:
         eval_rewards = []
@@ -96,9 +69,33 @@ class OnPolicyRunner(BaseRunner):
         progress_bar = ProgressBar(total_steps)
         for self.episode_cnt in range(1, self.args.num_episode + 1):
             self.global_step += self.args.rollout_length
-            progress_bar.update(self.args.rollout_length)
-            train_info = self.run_train_episode(obs)
+            for step in range(self.args.rollout_length):
+                progress_bar.update(1)
+                self.global_step += 1
+                (
+                    value,
+                    action,
+                    log_prob,
+                    entropy,
+                ) = self.agent.get_action(obs)
+                next_obs, reward, terminations, truncations, infos = (
+                    self.train_env.step(action))
+                obs = next_obs
+                done = np.logical_or(terminations, truncations)
+                self.buffer.add(obs, action, reward, done, value, log_prob)
+
+            # Bootstrap value if not done
+            last_value = self.agent.get_value(obs)
+            self.buffer.compute_returns_and_advantage(last_value, done)
+            episode_learn_info = []
+            for batch_data in self.buffer.sample(self.args.batch_size):
+                learn_info = self.agent.learn(batch_data)
+                episode_learn_info.append(learn_info)
+
+            train_info = calculate_mean(episode_learn_info)
+
             train_info['num_episode'] = self.episode_cnt
+            train_info['num_steps'] = self.global_step
 
             # Calculate training FPS
             train_fps = int(self.global_step / (time.time() - self.start_time))
