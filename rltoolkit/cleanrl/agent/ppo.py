@@ -55,7 +55,7 @@ class PPOAgent(BaseAgent):
             lr=self.args.learning_rate,
         )
 
-    def sample(self, obs: np.ndarray) -> Tuple[float, int, float, float]:
+    def get_action(self, obs: np.ndarray) -> Tuple[float, int, float, float]:
         """Sample an action from the policy given an observation.
 
         Args:
