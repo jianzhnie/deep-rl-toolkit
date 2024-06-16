@@ -9,11 +9,11 @@ import torch
 from gymnasium import spaces
 from rltoolkit.cleanrl.rl_args import RLArguments
 from rltoolkit.data.utils.segment_tree import MinSegmentTree, SumSegmentTree
+from rltoolkit.data.utils.type_aliases import (ReplayBufferSamples,
+                                               RolloutBufferSamples)
 from rltoolkit.utils.statistics import RunningMeanStd
 from stable_baselines3.common.preprocessing import (get_action_dim,
                                                     get_obs_shape)
-from stable_baselines3.common.type_aliases import (ReplayBufferSamples,
-                                                   RolloutBufferSamples)
 from stable_baselines3.common.utils import get_device
 from stable_baselines3.common.vec_env import VecNormalize
 
@@ -827,7 +827,8 @@ class SimpleRolloutBuffer:
         self.curr_ptr = 0
         self.curr_size = 0
 
-    def compute_returns_and_advantage(self, last_values: torch.Tensor,
+    def compute_returns_and_advantage(self, last_values: Union[float,
+                                                               np.ndarray],
                                       dones: np.ndarray) -> None:
         """Compute the lambda-return (TD(lambda) estimate) and GAE(lambda)
         advantage.
@@ -836,7 +837,6 @@ class SimpleRolloutBuffer:
             last_values (torch.Tensor): State value estimation for the last step (one for each env).
             dones (np.ndarray): Boolean array indicating if the last step was terminal.
         """
-        last_values = last_values.clone().cpu().numpy().flatten()
         last_gae_lam = 0
 
         for step in reversed(range(self.buffer_size)):
@@ -863,8 +863,8 @@ class SimpleRolloutBuffer:
         action: np.ndarray,
         reward: float,
         done: bool,
-        value: torch.Tensor,
-        log_prob: torch.Tensor,
+        value: Union[float, np.ndarray],
+        log_prob: Union[float, np.ndarray],
     ) -> None:
         """Add a new transition to the buffer.
 
@@ -880,10 +880,10 @@ class SimpleRolloutBuffer:
         self.actions[self.curr_ptr] = np.array(action)
         self.rewards[self.curr_ptr] = np.array(reward)
         self.dones[self.curr_ptr] = np.array(done)
-        self.values[self.curr_ptr] = value.clone().cpu().numpy().flatten()
-        self.log_probs[self.curr_ptr] = log_prob.clone().cpu().numpy()
+        self.values[self.curr_ptr] = np.array(value)
+        self.log_probs[self.curr_ptr] = np.array(log_prob)
 
-        self.curr_ptr += 1
+        self.curr_ptr = (self.curr_ptr + 1) % self.buffer_size
         self.curr_size = min(self.curr_size + 1, self.buffer_size)
 
     def sample(
@@ -903,11 +903,7 @@ class SimpleRolloutBuffer:
 
         if batch_size is None:
             batch_size = self.buffer_size
-
-        start_idx = 0
-        while start_idx < self.buffer_size:
-            yield self._get_samples(indices[start_idx:start_idx + batch_size])
-            start_idx += batch_size
+        return self._get_samples(indices[:batch_size])
 
     def _get_samples(self, batch_inds: np.ndarray) -> RolloutBufferSamples:
         """Get a batch of samples based on provided indices.
@@ -918,16 +914,16 @@ class SimpleRolloutBuffer:
         Returns:
             RolloutBufferSamples: Batch of samples as tensors.
         """
-        data = {
-            'obs': self.observations[batch_inds],
-            'action': self.actions[batch_inds],
-            'value': self.values[batch_inds],
-            'log_prob': self.log_probs[batch_inds],
-            'advantage': self.advantages[batch_inds],
-            'returns': self.returns[batch_inds],
-        }
-        data = {key: self.to_torch(val) for key, val in data.items()}
-        return data
+        data = (
+            self.observations[batch_inds],
+            self.actions[batch_inds],
+            self.values[batch_inds],
+            self.log_probs[batch_inds],
+            self.advantages[batch_inds],
+            self.returns[batch_inds],
+        )
+        samples = RolloutBufferSamples(*tuple(map(self.to_torch, data)))
+        return samples
 
     def to_torch(self, array: np.ndarray, copy: bool = True) -> torch.Tensor:
         """Convert a numpy array to a PyTorch tensor.
