@@ -1,4 +1,4 @@
-from typing import Dict, List, Optional, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import gymnasium as gym
 import numpy as np
@@ -6,6 +6,7 @@ import torch
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import PPOArguments
 from rltoolkit.cleanrl.utils.pg_net import PPOPolicyNet, PPOValueNet
+from rltoolkit.data.utils.type_aliases import RolloutBufferSamples
 from torch.distributions import Categorical
 
 
@@ -56,7 +57,7 @@ class PPOAgent(BaseAgent):
                                                  lr=self.args.critic_lr)
         self.device = device
 
-    def get_action_value(self, obs: np.ndarray) -> Tuple[int, float]:
+    def get_action(self, obs: np.ndarray) -> Tuple[int, float]:
         """Define the sampling process. This function returns the action
         according to action distribution.
 
@@ -75,7 +76,12 @@ class PPOAgent(BaseAgent):
         action = dist.sample()
         action_log_prob = dist.log_prob(action)
         action_entropy = dist.entropy()
-        return value, action, action_log_prob, action_entropy
+        return (
+            value.item(),
+            action.item(),
+            action_log_prob.item(),
+            action_entropy.item(),
+        )
 
     def get_value(self, obs: np.ndarray) -> float:
         """Use the critic model to predict obs values.
@@ -94,7 +100,7 @@ class PPOAgent(BaseAgent):
         logits = self.actor(obs)
         dist = Categorical(logits=logits)
         action = dist.probs.argmax(dim=1, keepdim=True)
-        return action
+        return action.item()
 
     def compute_advantage(self, gamma, lmbda, td_delta):
         td_delta = td_delta.detach().numpy()
@@ -106,14 +112,14 @@ class PPOAgent(BaseAgent):
         advantage_list.reverse()
         return torch.tensor(advantage_list, dtype=torch.float)
 
-    def learn(self, batch: Dict[str, torch.Tensor]) -> Tuple[float, float]:
+    def learn(self, batch: RolloutBufferSamples) -> Tuple[float, float]:
         """Update the model by TD actor-critic."""
-        obs = batch['obs']
-        actions = batch['actions']
-        old_values = batch['values']
-        returns = batch['returns']
-        log_probs = batch['log_probs']
-        advantages = batch['advantages']
+        obs = batch.obs
+        actions = batch.actions
+        old_values = batch.old_values
+        old_log_probs = batch.old_log_prob
+        advantages = batch.advantages
+        returns = batch.returns
 
         new_values = self.critic(obs)
         logits = self.actor(obs)
@@ -125,7 +131,7 @@ class PPOAgent(BaseAgent):
         entropy_loss = dist_entropy.mean()
 
         # actor Loss
-        ratio = torch.exp(action_log_probs - log_probs)
+        ratio = torch.exp(action_log_probs - old_log_probs)
         surr1 = ratio * advantages
         surr2 = (torch.clamp(ratio, 1.0 - self.args.clip_param,
                              1.0 + self.args.clip_param) * advantages)
