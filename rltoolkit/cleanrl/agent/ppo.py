@@ -55,6 +55,11 @@ class PPOAgent(BaseAgent):
         # 价值网络优化器
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
                                                  lr=self.args.critic_lr)
+
+        self.optimizer = torch.optim.Adam(
+            list(self.actor.parameters()) + list(self.critic.parameters()),
+            lr=self.args.learning_rate,
+        )
         self.device = device
 
     def get_action(self, obs: np.ndarray) -> Tuple[int, float]:
@@ -74,13 +79,13 @@ class PPOAgent(BaseAgent):
         logits = self.actor(obs)
         dist = Categorical(logits=logits)
         action = dist.sample()
-        action_log_prob = dist.log_prob(action)
-        action_entropy = dist.entropy()
+        log_prob = dist.log_prob(action)
+        entropy = dist.entropy()
         return (
             value.item(),
             action.item(),
-            action_log_prob.item(),
-            action_entropy.item(),
+            log_prob.item(),
+            entropy.item(),
         )
 
     def get_value(self, obs: np.ndarray) -> float:
@@ -102,16 +107,6 @@ class PPOAgent(BaseAgent):
         action = dist.probs.argmax(dim=1, keepdim=True)
         return action.item()
 
-    def compute_advantage(self, gamma, lmbda, td_delta):
-        td_delta = td_delta.detach().numpy()
-        advantage_list = []
-        advantage = 0.0
-        for delta in td_delta[::-1]:
-            advantage = gamma * lmbda * advantage + delta
-            advantage_list.append(advantage)
-        advantage_list.reverse()
-        return torch.tensor(advantage_list, dtype=torch.float)
-
     def learn(self, batch: RolloutBufferSamples) -> Tuple[float, float]:
         """Update the model by TD actor-critic."""
         obs = batch.obs
@@ -121,49 +116,61 @@ class PPOAgent(BaseAgent):
         advantages = batch.advantages
         returns = batch.returns
 
+        # Compute the value, action log probs, and entropy
         new_values = self.critic(obs)
         logits = self.actor(obs)
         dist = Categorical(logits=logits)
-        action_log_probs = dist.log_prob(actions)
-        dist_entropy = dist.entropy()
+        new_log_probs = dist.log_prob(actions)
+        entropy = dist.entropy()
 
-        # Entropy Loss
-        entropy_loss = dist_entropy.mean()
+        # entropy Loss
+        entropy_loss = entropy.mean()
 
         # actor Loss
-        ratio = torch.exp(action_log_probs - old_log_probs)
+        log_ratio = new_log_probs - old_log_probs
+        ratio = torch.exp(log_ratio)
         surr1 = ratio * advantages
         surr2 = (torch.clamp(ratio, 1.0 - self.args.clip_param,
                              1.0 + self.args.clip_param) * advantages)
         actor_loss = -torch.min(surr1, surr2).mean()
 
         # value Loss
-        if self.args.use_clipped_value_loss:
+        if self.args.clip_vloss:
             value_pred_clipped = old_values + torch.clamp(
                 new_values - old_values,
                 -self.args.clip_param,
                 self.args.clip_param,
             )
-            value_losses = (new_values - returns).pow(2)
+            value_losses_unclipped = (new_values - returns).pow(2)
             value_losses_clipped = (value_pred_clipped - returns).pow(2)
-            value_loss = 0.5 * torch.max(value_losses,
-                                         value_losses_clipped).mean()
+            value_loss = (
+                0.5 *
+                torch.max(value_losses_unclipped, value_losses_clipped).mean())
         else:
-            value_loss = 0.5 * (returns - new_values).pow(2).mean()
+            value_loss = 0.5 * (new_values - returns).pow(2).mean()
 
         loss = (value_loss * self.args.value_loss_coef + actor_loss -
                 entropy_loss * self.args.entropy_coef)
-        self.actor_optimizer.zero_grad()
+        self.optimizer.zero_grad()
         loss.backward()
         if self.args.max_grad_norm is not None:
             torch.nn.utils.clip_grad_norm_(self.actor.parameters(),
                                            self.args.max_grad_norm)
-        self.actor_optimizer.step()
+        self.optimizer.step()
+
+        with torch.no_grad():
+            old_approx_kl = (-log_ratio).mean()
+            approx_kl = ((ratio - 1) - log_ratio).mean()
+            clipfrac = (abs(
+                (ratio - 1.0)) > self.args.clip_param).float().mean().item()
 
         result = {
             'value_loss': value_loss.item(),
             'actor_loss': actor_loss.item(),
             'entropy_loss': entropy_loss.item(),
+            'old_approx_kl': old_approx_kl.item(),
+            'approx_kl': approx_kl.item(),
+            'clipfrac': clipfrac,
         }
 
         return result
