@@ -1,4 +1,5 @@
 import time
+from typing import Dict
 
 import gymnasium as gym
 import numpy as np
@@ -11,6 +12,7 @@ from rltoolkit.utils import ProgressBar
 
 
 class OnPolicyRunner(BaseRunner):
+    """Runner for on-policy training and evaluation."""
 
     def __init__(
         self,
@@ -20,21 +22,40 @@ class OnPolicyRunner(BaseRunner):
         agent: BaseAgent,
         buffer: SimpleRolloutBuffer,
     ) -> None:
+        """Initialize the OnPolicyRunner.
+
+        Args:
+            args (RLArguments): Configuration arguments for RL.
+            train_env (gym.Env): Training environment.
+            test_env (gym.Env): Testing environment.
+            agent (BaseAgent): Agent to be trained and evaluated.
+            buffer (SimpleRolloutBuffer): Buffer for storing rollouts.
+        """
         super().__init__(args, train_env, test_env, agent, buffer)
         self.args = args
         self.train_env = train_env
         self.test_env = test_env
-        self.buffer: SimpleRolloutBuffer = buffer
+        self.buffer = buffer
 
     def run_evaluate_episodes(self,
-                              n_eval_episodes: int = 5) -> dict[str, float]:
+                              n_eval_episodes: int = 5) -> Dict[str, float]:
+        """Run evaluation episodes and collect statistics.
+
+        Args:
+            n_eval_episodes (int): Number of evaluation episodes.
+
+        Returns:
+            Dict[str, float]: A dictionary with evaluation statistics.
+        """
         eval_rewards = []
         eval_steps = []
+
         for _ in range(n_eval_episodes):
             obs, info = self.test_env.reset()
             done = False
             episode_reward = 0.0
             episode_step = 0
+
             while not done:
                 action = self.agent.predict(obs)
                 next_obs, reward, terminated, truncated, info = self.test_env.step(
@@ -43,22 +64,16 @@ class OnPolicyRunner(BaseRunner):
                 episode_reward += reward
                 episode_step += 1
                 done = terminated or truncated
-                if done:
-                    self.test_env.reset()
+
             eval_rewards.append(episode_reward)
             eval_steps.append(episode_step)
 
-        reward_mean = np.mean(eval_rewards)
-        reward_std = np.std(eval_rewards)
-        length_mean = np.mean(eval_steps)
-        length_std = np.std(eval_steps)
-        test_info = {
-            'reward_mean': reward_mean,
-            'reward_std': reward_std,
-            'length_mean': length_mean,
-            'length_std': length_std,
+        return {
+            'reward_mean': np.mean(eval_rewards),
+            'reward_std': np.std(eval_rewards),
+            'length_mean': np.mean(eval_steps),
+            'length_std': np.std(eval_steps),
         }
-        return test_info
 
     def run(self) -> None:
         """Train the agent."""
@@ -67,17 +82,16 @@ class OnPolicyRunner(BaseRunner):
         obs, _ = self.train_env.reset()
         total_steps = self.args.num_episode * self.args.rollout_length
         progress_bar = ProgressBar(total_steps)
+        self.start_time = time.time()
+
         for self.episode_cnt in range(1, self.args.num_episode + 1):
             self.global_step += self.args.rollout_length
+
             for step in range(self.args.rollout_length):
                 progress_bar.update(1)
                 self.global_step += 1
-                (
-                    value,
-                    action,
-                    log_prob,
-                    entropy,
-                ) = self.agent.get_action(obs)
+
+                value, action, log_prob, entropy = self.agent.get_action(obs)
                 next_obs, reward, terminations, truncations, infos = (
                     self.train_env.step(action))
                 obs = next_obs
@@ -87,13 +101,14 @@ class OnPolicyRunner(BaseRunner):
             # Bootstrap value if not done
             last_value = self.agent.get_value(obs)
             self.buffer.compute_returns_and_advantage(last_value, done)
+
+            # Learn from the collected rollout data
             episode_learn_info = []
             for batch_data in self.buffer.sample(self.args.batch_size):
                 learn_info = self.agent.learn(batch_data)
                 episode_learn_info.append(learn_info)
 
             train_info = calculate_mean(episode_learn_info)
-
             train_info['num_episode'] = self.episode_cnt
             train_info['num_steps'] = self.global_step
 
@@ -104,8 +119,8 @@ class OnPolicyRunner(BaseRunner):
             # Log training information
             if self.episode_cnt % self.args.train_log_interval == 0:
                 log_message = (
-                    '[Train], global_step: {}, episode: {}, train_fps: {}, '
-                ).format(self.global_step, self.episode_cnt, train_fps)
+                    '[Train], global_step: {}, episode: {}, train_fps: {}'.
+                    format(self.global_step, self.episode_cnt, train_fps))
                 self.text_logger.info(log_message)
                 self.log_train_infos(train_info, self.global_step)
 
