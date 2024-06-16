@@ -62,12 +62,6 @@ class RLArguments:
             'Size of the mini-batches sampled from the replay buffer during training. Defaults to 32'
         },
     )
-    max_timesteps: int = field(
-        default=12000,
-        metadata={
-            'help': 'Maximum number of training steps. Defaults to 12000'
-        },
-    )
     gamma: float = field(
         default=0.99,
         metadata={
@@ -145,6 +139,12 @@ class DQNArguments(RLArguments):
             'Number of steps to take before updating the target network. Defaults to 1'
         },
     )
+    max_timesteps: int = field(
+        default=12000,
+        metadata={
+            'help': 'Maximum number of training steps. Defaults to 12000'
+        },
+    )
     learning_rate: float = field(
         default=1e-3,
         metadata={
@@ -197,11 +197,9 @@ class DQNArguments(RLArguments):
         default=10.0,
         metadata={'help': 'Value to clip the rewards. Defaults to 10.0'},
     )
-    epsilon: float = field(
-        default=1e-5,
-        metadata={
-            'help': 'Small value to avoid division by zero. Defaults to 1e-5'
-        },
+    max_grad_norm: float = field(
+        default=None,
+        metadata={'help': 'Maximum gradient norm. Defaults to 1.0'},
     )
     use_smooth_l1_loss: bool = field(
         default=False,

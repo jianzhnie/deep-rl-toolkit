@@ -158,7 +158,7 @@ class DQNAgent(BaseAgent):
         # Optimize the model
         self.optimizer.zero_grad()
 
-        if self.args.clip_weights and self.args.max_grad_norm > 0:
+        if self.args.max_grad_norm:
             torch.nn.utils.clip_grad_norm_(self.qnet.parameters(),
                                            self.args.max_grad_norm)
         loss.backward()
