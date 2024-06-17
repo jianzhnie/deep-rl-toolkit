@@ -7,7 +7,7 @@ import torch
 import torch.nn.functional as F
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import DDPGArguments
-from rltoolkit.cleanrl.utils.ac_net import OUNoise, PolicyNet, ValueNet
+from rltoolkit.cleanrl.utils.ac_net import DDPGActor, DDPGCritic, OUNoise
 from rltoolkit.data.utils.type_aliases import ReplayBufferSamples
 from rltoolkit.utils import soft_target_update
 
@@ -20,7 +20,6 @@ class DDPGAgent(BaseAgent):
         env (gym.Env): Environment to interact with.
         state_shape (Union[int, List[int]]): Shape of state space.
         action_shape (Union[int, List[int]]): Shape of action space.
-        action_bound (float): Bound for action space.
         device (torch.device): Device (CPU/GPU).
     """
 
@@ -36,7 +35,6 @@ class DDPGAgent(BaseAgent):
         self.args = args
         self.env = env
         self.device = device
-        self.action_bound = args.action_bound
         self.obs_dim = int(np.prod(state_shape))
         self.action_dim = int(np.prod(action_shape))
         self.action_high = self.env.action_space.high
@@ -45,7 +43,7 @@ class DDPGAgent(BaseAgent):
         self.target_model_update_step = 0
 
         # Initialize Policy Network
-        self.policy_net = PolicyNet(
+        self.actor = DDPGActor(
             self.obs_dim,
             self.args.hidden_dim,
             self.action_dim,
@@ -53,12 +51,12 @@ class DDPGAgent(BaseAgent):
             self.action_low,
         ).to(self.device)
         # Initialize Value Network
-        self.critic_net = ValueNet(self.obs_dim, self.args.hidden_dim,
-                                   self.action_dim).to(self.device)
+        self.critic = DDPGCritic(self.obs_dim, self.args.hidden_dim,
+                                 self.action_dim).to(self.device)
 
         # Target Networks
-        self.target_actor = copy.deepcopy(self.policy_net)
-        self.target_critic = copy.deepcopy(self.critic_net)
+        self.target_actor = copy.deepcopy(self.actor)
+        self.target_critic = copy.deepcopy(self.critic)
 
         self.noiser = OUNoise(
             mu=0.0,
@@ -69,9 +67,9 @@ class DDPGAgent(BaseAgent):
         # loss function
         self.loss_fn = F.smooth_l1_loss if self.args.use_smooth_l1_loss else F.mse_loss
         # Optimizers
-        self.actor_optimizer = torch.optim.Adam(self.policy_net.parameters(),
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
                                                 lr=self.args.actor_lr)
-        self.critic_optimizer = torch.optim.Adam(self.critic_net.parameters(),
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
                                                  lr=self.args.critic_lr)
 
     def get_action(self, obs: np.ndarray) -> np.ndarray:
@@ -97,9 +95,9 @@ class DDPGAgent(BaseAgent):
         """
         with torch.no_grad():
             obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-            action = self.policy_net(obs)
+            action = self.actor(obs)
             action += torch.normal(
-                0, self.policy_net.action_scale * self.args.exploration_noise)
+                0, self.actor.action_scale * self.args.exploration_noise)
             action = action.cpu().numpy().clip(self.action_low,
                                                self.action_high)
         return action.flatten()
@@ -121,16 +119,16 @@ class DDPGAgent(BaseAgent):
 
         # Soft update target networks
         if self.learner_update_step % self.args.target_update_frequency == 0:
-            soft_target_update(self.policy_net, self.target_actor,
+            soft_target_update(self.actor, self.target_actor,
                                self.args.soft_update_tau)
-            soft_target_update(self.critic_net, self.target_critic,
+            soft_target_update(self.critic, self.target_critic,
                                self.args.soft_update_tau)
             self.target_model_update_step += 1
 
         self.learner_update_step += 1
 
         # Current Q values
-        curr_q_values = self.critic_net(obs, action)
+        curr_q_values = self.critic(obs, action)
         with torch.no_grad():
             next_actions = self.target_actor(next_obs)
             next_q_values = self.target_critic(next_obs, next_actions)
@@ -148,8 +146,8 @@ class DDPGAgent(BaseAgent):
         policy_loss = torch.tensor(0.0).to(self.device)
         if self.learner_update_step % self.args.policy_frequency == 0:
             # Calculate policy loss
-            pred_action = self.policy_net(obs)
-            policy_loss = -torch.mean(self.critic_net(obs, pred_action))
+            pred_action = self.actor(obs)
+            policy_loss = -torch.mean(self.critic(obs, pred_action))
 
             # Update policy network
             self.actor_optimizer.zero_grad()
