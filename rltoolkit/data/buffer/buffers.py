@@ -11,7 +11,6 @@ from rltoolkit.cleanrl.rl_args import RLArguments
 from rltoolkit.data.utils.segment_tree import MinSegmentTree, SumSegmentTree
 from rltoolkit.data.utils.type_aliases import (ReplayBufferSamples,
                                                RolloutBufferSamples)
-from rltoolkit.utils.statistics import RunningMeanStd
 from stable_baselines3.common.preprocessing import (get_action_dim,
                                                     get_obs_shape)
 from stable_baselines3.common.utils import get_device
@@ -148,44 +147,6 @@ class BaseBuffer(ABC):
         if env is not None:
             return env.normalize_reward(reward).astype(np.float32)
         return reward
-
-
-class EpisodeBuffer:
-    """Episode buffer for DRQN agent."""
-
-    def __init__(self, device: str = 'cpu') -> None:
-        self.device = device
-        self.transition = {
-            'obs': [],
-            'next_obs': [],
-            'action': [],
-            'reward': [],
-            'done': [],
-            'value': [],
-            'log_prob': [],
-        }
-
-    def add(self, transition: Dict[str, Union[np.ndarray,
-                                              torch.Tensor]]) -> None:
-        for key, value in transition.items():
-            self.transition[key].append(value)
-
-    def to_torch(self, array: np.ndarray, copy: bool = True) -> torch.Tensor:
-        """
-        Convert a numpy array to a PyTorch tensor.
-        Note: it copies the data by default
-
-        :param array:
-        :param copy: Whether to copy or not the data (may be useful to avoid changing things
-            by reference). This argument is inoperative if the device is not the CPU.
-        :return:
-        """
-        if copy:
-            return torch.tensor(array, device=self.device)
-        return torch.as_tensor(array, device=self.device)
-
-    def __len__(self) -> int:
-        return len(self.transition['obs'])
 
 
 class OffPolicyBuffer(BaseBuffer):
@@ -624,7 +585,7 @@ class SimpleReplayBuffer:
         self.obs_shape = get_obs_shape(observation_space)
         self.action_dim = get_action_dim(action_space)
 
-        self.observations = np.zeros((self.buffer_size, ) + self.obs_shape,
+        self.observations = np.zeros((self.buffer_size, *self.obs_shape),
                                      dtype=np.float32)
         self.next_observations = np.zeros(
             (self.buffer_size, ) + self.obs_shape, dtype=np.float32)
@@ -638,7 +599,6 @@ class SimpleReplayBuffer:
                 ), 'N-step should be an integer and greater than 0.'
 
         self.n_step_buffer = deque(maxlen=args.n_steps)
-        self.running_mean_std = RunningMeanStd(clip_max=args.clip_reward)
 
         self.curr_ptr = 0
         self.curr_size = 0
@@ -720,23 +680,18 @@ class SimpleReplayBuffer:
             Dict[str, torch.Tensor]: A dictionary containing sampled observations, actions, rewards,
             next observations, dones, and indices.
         """
-        idxs = np.random.randint(self.curr_size, size=batch_size)
-        reward = self.rewards[idxs]
+        batch_inds = np.random.randint(self.curr_size, size=batch_size)
+        return self._get_samples(batch_inds)
 
-        if self.args.norm_reward:
-            self.running_mean_std.update(reward)
-            reward = self.running_mean_std.norm(reward)
-
-        batch = dict(
-            obs=self.observations[idxs],
-            next_obs=self.next_observations[idxs],
-            action=self.actions[idxs],
-            reward=reward,
-            done=self.dones[idxs],
-            indices=idxs,
+    def _get_samples(self, batch_inds: np.ndarray) -> ReplayBufferSamples:
+        data = (
+            self.observations[batch_inds, :],
+            self.actions[batch_inds, :],
+            self.next_observations[batch_inds, :],
+            self.dones[batch_inds],
+            self.rewards[batch_inds],
         )
-        batch = {key: self.to_torch(val) for key, val in batch.items()}
-        return batch
+        return ReplayBufferSamples(*tuple(map(self.to_torch, data)))
 
     def size(self) -> int:
         """Get the current size of the replay buffer.
