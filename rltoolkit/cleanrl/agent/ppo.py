@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import PPOArguments
-from rltoolkit.cleanrl.utils.pg_net import PPOPolicyNet, PPOValueNet
+from rltoolkit.cleanrl.utils.pg_net import PPONet
 from rltoolkit.data.utils.type_aliases import RolloutBufferSamples
 from torch.distributions import Categorical
 
@@ -35,25 +35,19 @@ class PPOAgent(BaseAgent):
 
         self.args = args
         self.env = env
-        self.device = device if device is not None else torch.device('cpu')
         self.obs_dim = int(np.prod(state_shape))
         self.action_dim = int(np.prod(action_shape))
         self.learner_update_step = 0
+        self.device = device if device is not None else torch.device('cpu')
 
         # Initialize actor and critic networks
-        self.actor = PPOPolicyNet(self.obs_dim, self.args.hidden_dim,
-                                  self.action_dim).to(self.device)
-        self.critic = PPOValueNet(self.obs_dim,
-                                  self.args.hidden_dim).to(self.device)
-        # All Parameters
-        self.all_parameters = list(self.actor.parameters()) + list(
-            self.critic.parameters())
+        self.actor_critic = PPONet(self.obs_dim, self.args.hidden_dim,
+                                   self.action_dim).to(self.device)
 
-        # Initialize optimizers
-        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
-                                                lr=self.args.actor_lr)
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
-                                                 lr=self.args.critic_lr)
+        # All Parameters
+        self.all_parameters = self.actor_critic.parameters()
+
+        # Optimizer
         self.optimizer = torch.optim.Adam(self.all_parameters,
                                           lr=self.args.learning_rate,
                                           eps=self.args.epsilon)
@@ -72,8 +66,8 @@ class PPOAgent(BaseAgent):
                 - entropy (float): The entropy of the action distribution.
         """
         obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        value = self.critic(obs_tensor)
-        logits = self.actor(obs_tensor)
+        value = self.actor_critic.get_value(obs_tensor)
+        logits = self.actor_critic.get_action(obs_tensor)
         dist = Categorical(logits=logits)
         action = dist.sample()
         log_prob = dist.log_prob(action)
@@ -90,7 +84,7 @@ class PPOAgent(BaseAgent):
             float: The predicted value of the observation.
         """
         obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        value = self.critic(obs_tensor)
+        value = self.actor_critic.get_value(obs_tensor)
         return value.item()
 
     def predict(self, obs: np.ndarray) -> int:
@@ -105,7 +99,7 @@ class PPOAgent(BaseAgent):
         """
         obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
         with torch.no_grad():
-            logits = self.actor(obs_tensor)
+            logits = self.actor_critic.get_action(obs_tensor)
             dist = Categorical(logits=logits)
             action = dist.probs.argmax(dim=1, keepdim=True)
         return action.item()
@@ -140,8 +134,8 @@ class PPOAgent(BaseAgent):
         returns = batch.returns
 
         # Compute new values, log probs, and entropy
-        new_values = self.critic(obs)
-        logits = self.actor(obs)
+        new_values = self.actor_critic.get_value(obs)
+        logits = self.actor_critic.get_action(obs)
         dist = Categorical(logits=logits)
         new_log_probs = dist.log_prob(actions)
         entropy = dist.entropy()
@@ -149,13 +143,17 @@ class PPOAgent(BaseAgent):
         # Compute entropy loss
         entropy_loss = entropy.mean()
 
+        if self.args.norm_advantages:
+            advantages = (advantages - advantages.mean()) / (
+                advantages.std() + 1e-8).to(self.device)
+
         # Compute actor loss
         log_ratio = new_log_probs - old_log_probs
         ratio = torch.exp(log_ratio)
         surr1 = ratio * advantages
         surr2 = (torch.clamp(ratio, 1.0 - self.args.clip_param,
                              1.0 + self.args.clip_param) * advantages)
-        actor_loss = -torch.min(surr1, surr2).mean()
+        actor_loss = torch.max(surr1, surr2).mean()
 
         # Compute value loss
         if self.args.clip_vloss:
@@ -171,7 +169,7 @@ class PPOAgent(BaseAgent):
             value_loss = 0.5 * (new_values - returns).pow(2).mean()
 
         # Total loss
-        loss = (value_loss * self.args.value_loss_coef + actor_loss -
+        loss = (actor_loss + value_loss * self.args.value_loss_coef -
                 entropy_loss * self.args.entropy_coef)
 
         # Backpropagation
