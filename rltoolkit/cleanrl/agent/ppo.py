@@ -143,6 +143,7 @@ class PPOAgent(BaseAgent):
         # Compute entropy loss
         entropy_loss = entropy.mean()
 
+        # Normalize advantages
         if self.args.norm_advantages:
             advantages = (advantages - advantages.mean()) / (
                 advantages.std() + 1e-8).to(self.device)
@@ -153,7 +154,7 @@ class PPOAgent(BaseAgent):
         surr1 = ratio * advantages
         surr2 = (torch.clamp(ratio, 1.0 - self.args.clip_param,
                              1.0 + self.args.clip_param) * advantages)
-        actor_loss = torch.max(surr1, surr2).mean()
+        actor_loss = -torch.min(surr1, surr2).mean()
 
         # Compute value loss
         if self.args.clip_vloss:
@@ -189,6 +190,7 @@ class PPOAgent(BaseAgent):
                         self.args.clip_param).float().mean().item()
 
         return {
+            'loss': loss.item(),
             'value_loss': value_loss.item(),
             'actor_loss': actor_loss.item(),
             'entropy_loss': entropy_loss.item(),

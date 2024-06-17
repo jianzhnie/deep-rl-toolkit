@@ -64,15 +64,19 @@ class OnPolicyRunner(BaseRunner):
             done = False
             episode_reward = 0.0
             episode_step = 0
-
             while not done:
                 action = self.agent.predict(obs)
                 next_obs, reward, terminated, truncated, info = self.test_env.step(
                     action)
                 obs = next_obs
-                episode_reward += reward
-                episode_step += 1
                 done = terminated or truncated
+                if info and 'episode' in info:
+                    info_item = {
+                        k: v.item()
+                        for k, v in info['episode'].items()
+                    }
+                    episode_reward = info_item['r']
+                    episode_step = info_item['l']
 
             eval_rewards.append(episode_reward)
             eval_steps.append(episode_step)
@@ -102,10 +106,18 @@ class OnPolicyRunner(BaseRunner):
                     value, action, log_prob, entropy = self.agent.get_action(
                         obs)
 
-                next_obs, reward, terminations, truncations, infos = (
-                    self.train_env.step(action))
+                next_obs, reward, terminated, truncated, info = self.train_env.step(
+                    action)
+                if info and 'episode' in info:
+                    info_item = {
+                        k: v.item()
+                        for k, v in info['episode'].items()
+                    }
+                    episode_reward = info_item['r']
+                    episode_step = info_item['l']
+
                 obs = next_obs
-                done = np.logical_or(terminations, truncations)
+                done = np.logical_or(terminated, truncated)
                 self.buffer.add(obs, action, reward, done, value, log_prob)
 
             # Bootstrap value if not done
@@ -123,6 +135,8 @@ class OnPolicyRunner(BaseRunner):
             train_info = calculate_mean(episode_learn_info)
             train_info['num_episode'] = self.episode_cnt
             train_info['num_steps'] = self.global_step
+            train_info['episode_reward'] = episode_reward
+            train_info['episode_length'] = episode_step
 
             # Calculate training FPS
             train_fps = int(self.global_step / (time.time() - self.start_time))
@@ -130,9 +144,10 @@ class OnPolicyRunner(BaseRunner):
 
             # Log training information
             if self.episode_cnt % self.args.train_log_interval == 0:
-                log_message = (
-                    '[Train], global_step: {}, episode: {}, train_fps: {}'.
-                    format(self.global_step, self.episode_cnt, train_fps))
+                log_message = '[Train], global_step: {}, episode: {}, episode reward: {},  train_fps: {}'.format(
+                    self.global_step, self.episode_cnt, episode_reward,
+                    train_fps)
+                log_message += ', train_fps: {}'.format(train_fps)
                 self.text_logger.info(log_message)
                 self.log_train_infos(train_info, self.global_step)
 

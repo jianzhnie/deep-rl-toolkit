@@ -422,14 +422,14 @@ class PPOArguments(RLArguments):
     """PPO-specific settings."""
 
     hidden_dim: int = field(
-        default=128,
+        default=64,
         metadata={
             'help':
             'The hidden dimension size of the neural network. Defaults to 128'
         },
     )
     learning_rate: float = field(
-        default=1e-4,
+        default=1e-2,
         metadata={'help': 'Learning rate for the optimizer. Defaults to 1e-4'},
     )
     actor_lr: float = field(
@@ -492,13 +492,6 @@ class PPOArguments(RLArguments):
     max_grad_norm: float = field(
         default=1.0,
         metadata={'help': 'Maximum gradient norm. Defaults to 1.0'},
-    )
-    target_kl: float = field(
-        default=None,
-        metadata={
-            'help':
-            'Target KL divergence for the PPO algorithm. Defaults to 0.01'
-        },
     )
     num_episode: int = field(
         default=1000,
