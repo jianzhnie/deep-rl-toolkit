@@ -1,4 +1,3 @@
-import random
 import warnings
 from abc import ABC, abstractmethod
 from collections import deque
@@ -8,13 +7,13 @@ import numpy as np
 import torch
 from gymnasium import spaces
 from rltoolkit.cleanrl.rl_args import RLArguments
-from rltoolkit.data.utils.segment_tree import MinSegmentTree, SumSegmentTree
 from rltoolkit.data.utils.type_aliases import (ReplayBufferSamples,
                                                RolloutBufferSamples)
 from stable_baselines3.common.preprocessing import (get_action_dim,
                                                     get_obs_shape)
 from stable_baselines3.common.utils import get_device
 from stable_baselines3.common.vec_env import VecNormalize
+from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
 try:
     # Check memory used by replay buffer when possible
@@ -881,6 +880,35 @@ class SimpleRolloutBuffer:
         samples = RolloutBufferSamples(*tuple(map(self.to_torch, data)))
         return samples
 
+    def data_generator(self,
+                       num_mini_batch: int = None,
+                       mini_batch_size: int = None
+                       ) -> Generator[RolloutBufferSamples, Any, None]:
+        if mini_batch_size is None:
+            assert self.buffer_size >= num_mini_batch, (
+                'PPO requires the number of buffer_size ({}) '
+                'to be greater than or equal to the number of PPO mini batches ({}).'
+                ''.format(
+                    self.buffer_size,
+                    num_mini_batch,
+                ))
+            mini_batch_size = self.buffer_size // num_mini_batch
+        indices = np.arange(self.buffer_size)
+        sampler = BatchSampler(SubsetRandomSampler(indices),
+                               mini_batch_size,
+                               drop_last=True)
+        for batch_inds in sampler:
+            data = (
+                self.observations[batch_inds],
+                self.actions[batch_inds],
+                self.values[batch_inds],
+                self.log_probs[batch_inds],
+                self.advantages[batch_inds],
+                self.returns[batch_inds],
+            )
+            samples = RolloutBufferSamples(*tuple(map(self.to_torch, data)))
+            yield samples
+
     def to_torch(self, array: np.ndarray, copy: bool = True) -> torch.Tensor:
         """Convert a numpy array to a PyTorch tensor.
 
@@ -894,125 +922,3 @@ class SimpleRolloutBuffer:
         if copy:
             return torch.tensor(array, dtype=torch.float32).to(self.device)
         return torch.as_tensor(array, dtype=torch.float32).to(self.device)
-
-
-class PrioritizedReplayBuffer(SimpleReplayBuffer):
-    """Prioritized Replay buffer.
-
-    Attributes:
-        max_priority (float): max priority
-        tree_ptr (int): next index of tree
-        alpha (float): alpha parameter for prioritized replay buffer
-        sum_tree (SumSegmentTree): sum tree for prior
-        min_tree (MinSegmentTree): min tree for min prior to get max weight
-    """
-
-    def __init__(
-        self,
-        obs_dim: int,
-        buffer_size: int,
-        batch_size: int = 32,
-        n_step: int = 1,
-        gamma: float = 0.99,
-        alpha: float = 0.6,
-    ):
-        """Initialization."""
-        assert alpha >= 0
-
-        super(PrioritizedReplayBuffer,
-              self).__init__(obs_dim, buffer_size, batch_size, n_step, gamma)
-        # for Prioritized Replay buffer
-        self.max_priority = 1.0
-        self.tree_ptr = 0
-
-        self.alpha = alpha
-
-        # capacity must be positive and a power of 2.
-        tree_capacity = 1
-        while tree_capacity < self.buffer_size:
-            tree_capacity *= 2
-
-        self.sum_tree = SumSegmentTree(tree_capacity)
-        self.min_tree = MinSegmentTree(tree_capacity)
-
-    def apeend(
-        self,
-        obs: np.ndarray,
-        act: int,
-        rew: float,
-        next_obs: np.ndarray,
-        terminal: bool,
-    ) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray, bool]:
-        """Store experience and priority."""
-        transition = super().append(obs, act, rew, next_obs, terminal)
-
-        if transition:
-            self.sum_tree[self.tree_ptr] = self.max_priority**self.alpha
-            self.min_tree[self.tree_ptr] = self.max_priority**self.alpha
-            self.tree_ptr = (self.tree_ptr + 1) % self.buffer_size
-        return transition
-
-    def sample_batch(self, beta: float = 0.4) -> Dict[str, np.ndarray]:
-        """Sample a batch of experiences."""
-        assert len(self) >= self.batch_size
-        assert beta > 0
-
-        indices = self._sample_proportional()
-
-        obs = self.observations[indices]
-        next_obs = self.next_observations[indices]
-        action = self.actions[indices]
-        reward = self.rewards[indices]
-        terminal = self.dones[indices]
-        weights = np.array([self._calculate_weight(i, beta) for i in indices])
-
-        return dict(
-            obs=obs,
-            next_obs=next_obs,
-            action=action,
-            reward=reward,
-            terminal=terminal,
-            weights=weights,
-            indices=indices,
-        )
-
-    def update_priorities(self, indices: List[int], priorities: np.ndarray):
-        """Update priorities of sampled transitions."""
-        assert len(indices) == len(priorities)
-
-        for idx, priority in zip(indices, priorities):
-            assert priority > 0
-            assert 0 <= idx < len(self)
-
-            self.sum_tree[idx] = priority**self.alpha
-            self.min_tree[idx] = priority**self.alpha
-
-            self.max_priority = max(self.max_priority, priority)
-
-    def _sample_proportional(self) -> List[int]:
-        """Sample indices based on proportions."""
-        indices = []
-        p_total = self.sum_tree.sum(0, len(self) - 1)
-        segment = p_total / self.batch_size
-
-        for i in range(self.batch_size):
-            a = segment * i
-            b = segment * (i + 1)
-            upperbound = random.uniform(a, b)
-            idx = self.sum_tree.retrieve(upperbound)
-            indices.append(idx)
-
-        return indices
-
-    def _calculate_weight(self, idx: int, beta: float):
-        """Calculate the weight of the experience at idx."""
-        # get max weight
-        p_min = self.min_tree.min() / self.sum_tree.sum()
-        max_weight = (p_min * len(self))**(-beta)
-
-        # calculate weights
-        p_sample = self.sum_tree[idx] / self.sum_tree.sum()
-        weight = (p_sample * len(self))**(-beta)
-        weight = weight / max_weight
-
-        return weight
