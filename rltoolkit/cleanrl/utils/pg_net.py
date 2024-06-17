@@ -47,11 +47,11 @@ class PPOPolicyNet(nn.Module):
     def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int):
         super(PPOPolicyNet, self).__init__()
         self.net = nn.Sequential(
-            layer_init(nn.Linear(obs_dim, hidden_dim)),
-            nn.Tanh(),
-            layer_init(nn.Linear(hidden_dim, hidden_dim)),
-            nn.Tanh(),
-            layer_init(nn.Linear(hidden_dim, action_dim), std=0.01),
+            nn.Linear(obs_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, action_dim),
         )
 
     def forward(self, obs: torch.Tensor) -> torch.Tensor:
@@ -64,11 +64,11 @@ class PPOValueNet(nn.Module):
     def __init__(self, obs_dim: int, hidden_dim: int):
         super(PPOValueNet, self).__init__()
         self.net = nn.Sequential(
-            layer_init(nn.Linear(obs_dim, hidden_dim)),
-            nn.Tanh(),
-            layer_init(nn.Linear(hidden_dim, hidden_dim)),
-            nn.Tanh(),
-            layer_init(nn.Linear(hidden_dim, 1), std=1.0),
+            nn.Linear(obs_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            nn.Linear(hidden_dim, 1),
         )
 
     def forward(self, obs: torch.Tensor) -> torch.Tensor:
