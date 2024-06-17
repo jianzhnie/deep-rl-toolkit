@@ -455,6 +455,13 @@ class PPOArguments(RLArguments):
             'Lambda for Generalized Advantage Estimation (GAE). Defaults to 0.95'
         },
     )
+    norm_advantages: bool = field(
+        default=True,
+        metadata={
+            'help':
+            'Flag indicating whether to normalize the advantages. Defaults to True'
+        },
+    )
     value_loss_coef: float = field(
         default=0.5,
         metadata={
@@ -504,6 +511,12 @@ class PPOArguments(RLArguments):
         metadata={
             'help':
             'Number of steps to take before updating the target network. Defaults to 10'
+        },
+    )
+    update_epochs: int = field(
+        default=1,
+        metadata={
+            'help': 'Number of epochs to run for training. Defaults to 10'
         },
     )
 

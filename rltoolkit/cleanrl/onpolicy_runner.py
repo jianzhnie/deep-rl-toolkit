@@ -98,7 +98,10 @@ class OnPolicyRunner(BaseRunner):
                 progress_bar.update(1)
                 self.global_step += 1
 
-                value, action, log_prob, entropy = self.agent.get_action(obs)
+                with torch.no_grad():
+                    value, action, log_prob, entropy = self.agent.get_action(
+                        obs)
+
                 next_obs, reward, terminations, truncations, infos = (
                     self.train_env.step(action))
                 obs = next_obs
@@ -106,14 +109,16 @@ class OnPolicyRunner(BaseRunner):
                 self.buffer.add(obs, action, reward, done, value, log_prob)
 
             # Bootstrap value if not done
-            last_value = self.agent.get_value(obs)
+            with torch.no_grad():
+                last_value = self.agent.get_value(obs)
             self.buffer.compute_returns_and_advantage(last_value, done)
 
-            # Learn from the collected rollout data
             episode_learn_info = []
-            for batch_data in self.buffer.sample(self.args.batch_size):
-                learn_info = self.agent.learn(batch_data)
-                episode_learn_info.append(learn_info)
+            for epoch in range(self.args.update_epochs):
+                # Learn from the collected rollout data
+                for batch_data in self.buffer.sample(self.args.batch_size):
+                    learn_info = self.agent.learn(batch_data)
+                    episode_learn_info.append(learn_info)
 
             train_info = calculate_mean(episode_learn_info)
             train_info['num_episode'] = self.episode_cnt
