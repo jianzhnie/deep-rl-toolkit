@@ -5,12 +5,12 @@ import numpy as np
 import torch
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import PPOArguments
-from rltoolkit.cleanrl.utils.pg_net import PPONet
+from rltoolkit.cleanrl.utils.pg_net import PPOPolicyNet, PPOValueNet
 from rltoolkit.data.utils.type_aliases import RolloutBufferSamples
 from torch.distributions import Categorical
 
 
-class PPOAgent(BaseAgent):
+class PPOPenaltyAgent(BaseAgent):
     """Proximal Policy Optimization (PPO) Agent.
 
     The agent interacts with the environment using an actor-critic model.
@@ -32,7 +32,6 @@ class PPOAgent(BaseAgent):
         action_shape: Union[int, List[int]],
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
-
         self.args = args
         self.env = env
         self.obs_dim = int(np.prod(state_shape))
@@ -41,16 +40,16 @@ class PPOAgent(BaseAgent):
         self.device = device if device is not None else torch.device('cpu')
 
         # Initialize actor and critic networks
-        self.actor_critic = PPONet(self.obs_dim, self.args.hidden_dim,
-                                   self.action_dim).to(self.device)
+        self.actor = PPOPolicyNet(self.obs_dim, self.args.hidden_dim,
+                                  self.action_dim).to(self.device)
+        self.critic = PPOValueNet(self.obs_dim,
+                                  self.args.hidden_dim).to(self.device)
 
-        # All Parameters
-        self.all_parameters = self.actor_critic.parameters()
-
-        # Optimizer
-        self.optimizer = torch.optim.Adam(self.all_parameters,
-                                          lr=self.args.learning_rate,
-                                          eps=self.args.epsilon)
+        # Initialize optimizers
+        self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
+                                                lr=self.args.actor_lr)
+        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
+                                                 lr=self.args.critic_lr)
 
     def get_action(self, obs: np.ndarray) -> Tuple[float, int, float, float]:
         """Sample an action from the policy given an observation.
@@ -66,8 +65,8 @@ class PPOAgent(BaseAgent):
                 - entropy (float): The entropy of the action distribution.
         """
         obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        value = self.actor_critic.get_value(obs_tensor)
-        logits = self.actor_critic.get_action(obs_tensor)
+        value = self.critic(obs_tensor)
+        logits = self.actor(obs_tensor)
         dist = Categorical(logits=logits)
         action = dist.sample()
         log_prob = dist.log_prob(action)
@@ -84,7 +83,7 @@ class PPOAgent(BaseAgent):
             float: The predicted value of the observation.
         """
         obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        value = self.actor_critic.get_value(obs_tensor)
+        value = self.critic(obs_tensor)
         return value.item()
 
     def predict(self, obs: np.ndarray) -> int:
@@ -99,7 +98,7 @@ class PPOAgent(BaseAgent):
         """
         obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
         with torch.no_grad():
-            logits = self.actor_critic.get_action(obs_tensor)
+            logits = self.actor(obs_tensor)
             dist = Categorical(logits=logits)
             action = dist.probs.argmax(dim=1, keepdim=True)
         return action.item()
@@ -122,9 +121,8 @@ class PPOAgent(BaseAgent):
             - value_loss (float): The value loss of the critic.
             - actor_loss (float): The actor loss of the policy.
             - entropy_loss (float): The entropy loss of the policy.
-            - old_approx_kl (float): The old approximate KL divergence.
             - approx_kl (float): The approximate KL divergence.
-            - clipfrac (float): The fraction of clipped actions.
+            - clipped_frac (float): The fraction of clipped actions.
         """
         obs = batch.obs
         actions = batch.actions
@@ -134,8 +132,8 @@ class PPOAgent(BaseAgent):
         returns = batch.returns
 
         # Compute new values, log probs, and entropy
-        new_values = self.actor_critic.get_value(obs)
-        logits = self.actor_critic.get_action(obs)
+        new_values = self.critic(obs)
+        logits = self.actor(obs)
         dist = Categorical(logits=logits)
         new_log_probs = dist.log_prob(actions)
         entropy = dist.entropy()
@@ -154,7 +152,10 @@ class PPOAgent(BaseAgent):
         surr1 = ratio * advantages
         surr2 = (torch.clamp(ratio, 1.0 - self.args.clip_param,
                              1.0 + self.args.clip_param) * advantages)
-        actor_loss = -torch.min(surr1, surr2).mean()
+        actor_loss = -(torch.min(surr1, surr2)).mean()
+
+        # Add the KL divergence penalty
+        actor_loss -= self.args.entropy_coef * entropy_loss
 
         # Compute value loss
         if self.args.clip_vloss:
@@ -173,28 +174,36 @@ class PPOAgent(BaseAgent):
         loss = (actor_loss + value_loss * self.args.value_loss_coef -
                 entropy_loss * self.args.entropy_coef)
 
-        # Backpropagation
-        self.optimizer.zero_grad()
-        loss.backward()
+        # Actor Model Update
+        self.actor_optimizer.zero_grad()
+        actor_loss.backward()
         if self.args.max_grad_norm is not None:
-            torch.nn.utils.clip_grad_norm_(self.all_parameters,
+            torch.nn.utils.clip_grad_norm_(self.actor.parameters(),
                                            self.args.max_grad_norm)
-        self.optimizer.step()
+        self.actor_optimizer.step()
+
+        # Critic Model Update
+        self.critic_optimizer.zero_grad()
+        value_loss.backward()
+        if self.args.max_grad_norm is not None:
+            torch.nn.utils.clip_grad_norm_(self.critic.parameters(),
+                                           self.args.max_grad_norm)
+        self.critic_optimizer.step()
+
         self.learner_update_step += 1
 
-        # Calculate KL divergence metrics
+        # Useful extra info
         with torch.no_grad():
-            old_approx_kl = (-log_ratio).mean()
-            approx_kl = ((ratio - 1) - log_ratio).mean()
-            clipfrac = (abs(ratio - 1.0) >
-                        self.args.clip_param).float().mean().item()
+            clipped = ratio.gt(1 + self.args.clip_param) | ratio.lt(
+                1 - self.args.clip_param)
+            approx_kl = (-log_ratio).mean()
+            clipped_frac = torch.as_tensor(clipped, dtype=torch.float32).mean()
 
         return {
             'loss': loss.item(),
             'value_loss': value_loss.item(),
             'actor_loss': actor_loss.item(),
             'entropy_loss': entropy_loss.item(),
-            'old_approx_kl': old_approx_kl.item(),
             'approx_kl': approx_kl.item(),
-            'clipfrac': clipfrac,
+            'clip_frac': clipped_frac.item(),
         }
