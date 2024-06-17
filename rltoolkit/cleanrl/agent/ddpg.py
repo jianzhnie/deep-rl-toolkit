@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import DDPGArguments
 from rltoolkit.cleanrl.utils.ac_net import OUNoise, PolicyNet, ValueNet
+from rltoolkit.data.utils.type_aliases import ReplayBufferSamples
 from rltoolkit.utils import soft_target_update
 
 
@@ -103,20 +104,20 @@ class DDPGAgent(BaseAgent):
                                                self.action_high)
         return action.flatten()
 
-    def learn(self, batch: Dict[str, torch.Tensor]) -> float:
-        """Update model with a batch of data.
+    def learn(self, batch: ReplayBufferSamples) -> Dict[str, float]:
+        """Perform a learning step.
 
         Args:
             batch (Dict[str, torch.Tensor]): Batch of experience.
 
         Returns:
-            Tuple[float, float]: Policy loss and value loss.
+            float: Loss value.
         """
-        obs = batch['obs']
-        next_obs = batch['next_obs']
-        action = batch['action']
-        reward = batch['reward']
-        done = batch['done']
+        obs = batch.obs
+        next_obs = batch.next_obs
+        action = batch.actions
+        reward = batch.rewards
+        done = batch.dones
 
         # Soft update target networks
         if self.learner_update_step % self.args.target_update_frequency == 0:
