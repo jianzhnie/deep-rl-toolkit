@@ -81,6 +81,9 @@ git clone https://github.com/jianzhnie/deep-rl-toolkit.git
 
 # Run the DQN algorithm on the CartPole-v0 environment
 python examples/cleanrl/cleanrl_runner.py --env CartPole-v0 --algo dqn
+python examples/cleanrl/cleanrl_runner.py --env CartPole-v0 --algo ddqn
+python examples/cleanrl/cleanrl_runner.py --env CartPole-v0 --algo dueling_dqn
+python examples/cleanrl/cleanrl_runner.py --env CartPole-v0 --algo dueling_ddqn
 
 # Run the C51 algorithm on the CartPole-v0 environment
 python examples/cleanrl/cleanrl_runner.py --env CartPole-v0 --algo c51
