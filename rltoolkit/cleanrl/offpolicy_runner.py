@@ -22,6 +22,12 @@ class OffPolicyRunner(BaseRunner):
     ) -> None:
         super().__init__(args, train_env, test_env, agent, buffer)
 
+        # Training
+        self.episode_cnt = 0
+        self.global_step = 0
+        self.start_time = time.time()
+        self.eps_greedy = 0.0
+
     # train an episode
     def run_train_episode(self) -> dict[str, float]:
         episode_result_info = []

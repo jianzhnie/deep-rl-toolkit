@@ -32,10 +32,11 @@ class OnPolicyRunner(BaseRunner):
             buffer (SimpleRolloutBuffer): Buffer for storing rollouts.
         """
         super().__init__(args, train_env, test_env, agent, buffer)
-        self.args = args
-        self.train_env = train_env
-        self.test_env = test_env
-        self.buffer = buffer
+
+        # Training
+        self.episode_cnt = 0
+        self.global_step = 0
+        self.start_time = time.time()
 
     def run_evaluate_episodes(self,
                               n_eval_episodes: int = 5) -> Dict[str, float]:
@@ -78,15 +79,13 @@ class OnPolicyRunner(BaseRunner):
     def run(self) -> None:
         """Train the agent."""
         self.text_logger.info('Start Training')
-        self.global_step = 0
-        obs, _ = self.train_env.reset()
         total_steps = self.args.num_episode * self.args.rollout_length
         progress_bar = ProgressBar(total_steps)
         self.start_time = time.time()
-
+        obs, _ = self.train_env.reset()
         for self.episode_cnt in range(1, self.args.num_episode + 1):
-            self.global_step += self.args.rollout_length
-
+            # Collect rollout data
+            self.buffer.reset()
             for step in range(self.args.rollout_length):
                 progress_bar.update(1)
                 self.global_step += 1

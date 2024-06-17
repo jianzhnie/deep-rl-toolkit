@@ -45,16 +45,17 @@ class PPOAgent(BaseAgent):
                                   self.action_dim).to(self.device)
         self.critic = PPOValueNet(self.obs_dim,
                                   self.args.hidden_dim).to(self.device)
+        # All Parameters
+        self.all_parameters = list(self.actor.parameters()) + list(
+            self.critic.parameters())
 
         # Initialize optimizers
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
                                                 lr=self.args.actor_lr)
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
                                                  lr=self.args.critic_lr)
-        self.optimizer = torch.optim.Adam(
-            list(self.actor.parameters()) + list(self.critic.parameters()),
-            lr=self.args.learning_rate,
-        )
+        self.optimizer = torch.optim.Adam(self.all_parameters,
+                                          lr=self.args.learning_rate)
 
     def get_action(self, obs: np.ndarray) -> Tuple[float, int, float, float]:
         """Sample an action from the policy given an observation.
@@ -166,7 +167,7 @@ class PPOAgent(BaseAgent):
         self.optimizer.zero_grad()
         loss.backward()
         if self.args.max_grad_norm is not None:
-            torch.nn.utils.clip_grad_norm_(self.actor.parameters(),
+            torch.nn.utils.clip_grad_norm_(self.all_parameters,
                                            self.args.max_grad_norm)
         self.optimizer.step()
         self.learner_update_step += 1
