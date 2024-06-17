@@ -1,8 +1,9 @@
 import time
-from typing import Dict
+from typing import Dict, Optional, Union
 
 import gymnasium as gym
 import numpy as np
+import torch
 from rltoolkit.cleanrl.agent import BaseAgent
 from rltoolkit.cleanrl.base_runner import BaseRunner
 from rltoolkit.cleanrl.rl_args import RLArguments
@@ -20,7 +21,7 @@ class OnPolicyRunner(BaseRunner):
         train_env: gym.Env,
         test_env: gym.Env,
         agent: BaseAgent,
-        buffer: SimpleRolloutBuffer,
+        device: Optional[Union[str, torch.device]] = None,
     ) -> None:
         """Initialize the OnPolicyRunner.
 
@@ -29,14 +30,21 @@ class OnPolicyRunner(BaseRunner):
             train_env (gym.Env): Training environment.
             test_env (gym.Env): Testing environment.
             agent (BaseAgent): Agent to be trained and evaluated.
-            buffer (SimpleRolloutBuffer): Buffer for storing rollouts.
+            device (Optional[Union[str, torch.device]]): Device to use.
         """
-        super().__init__(args, train_env, test_env, agent, buffer)
+        super().__init__(args, train_env, test_env, agent)
 
+        self.buffer = SimpleRolloutBuffer(
+            args=args,
+            observation_space=train_env.observation_space,
+            action_space=train_env.action_space,
+            device=device,
+        )
         # Training
         self.episode_cnt = 0
         self.global_step = 0
         self.start_time = time.time()
+        self.device = device if device is not None else torch.device('cpu')
 
     def run_evaluate_episodes(self,
                               n_eval_episodes: int = 5) -> Dict[str, float]:

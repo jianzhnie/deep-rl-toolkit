@@ -1,4 +1,4 @@
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import gymnasium as gym
 import numpy as np
@@ -55,7 +55,8 @@ class PPOAgent(BaseAgent):
         self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
                                                  lr=self.args.critic_lr)
         self.optimizer = torch.optim.Adam(self.all_parameters,
-                                          lr=self.args.learning_rate)
+                                          lr=self.args.learning_rate,
+                                          eps=self.args.epsilon)
 
     def get_action(self, obs: np.ndarray) -> Tuple[float, int, float, float]:
         """Sample an action from the policy given an observation.
@@ -109,16 +110,27 @@ class PPOAgent(BaseAgent):
             action = dist.probs.argmax(dim=1, keepdim=True)
         return action.item()
 
-    def learn(self, batch: RolloutBufferSamples) -> Tuple[float, float]:
+    def learn(self, batch: RolloutBufferSamples) -> Dict[str, float]:
         """Update the model using a batch of sampled experiences.
 
         Args:
             batch (RolloutBufferSamples): A batch of sampled experiences.
+            RolloutBufferSamples contains the following fields:
+            - obs (torch.Tensor): The observations from the environment.
+            - actions (torch.Tensor): The actions taken by the agent.
+            - old_values (torch.Tensor): The value estimates from the critic.
+            - old_log_prob (torch.Tensor): The log probabilities of the actions.
+            - advantages (torch.Tensor): The advantages of the actions.
+            - returns (torch.Tensor): The returns from the environment.
 
         Returns:
-            Tuple[float, float]: A tuple containing:
-                - value_loss (float): The loss for the value function.
-                - actor_loss (float): The loss for the policy function.
+            Dict[str, float]: A dictionary containing the following metrics:
+            - value_loss (float): The value loss of the critic.
+            - actor_loss (float): The actor loss of the policy.
+            - entropy_loss (float): The entropy loss of the policy.
+            - old_approx_kl (float): The old approximate KL divergence.
+            - approx_kl (float): The approximate KL divergence.
+            - clipfrac (float): The fraction of clipped actions.
         """
         obs = batch.obs
         actions = batch.actions
@@ -147,7 +159,6 @@ class PPOAgent(BaseAgent):
 
         # Compute value loss
         if self.args.clip_vloss:
-            assert self.args.clip_param is not None, 'clip_param must be set'
             value_pred_clipped = old_values + torch.clamp(
                 new_values - old_values, -self.args.clip_param,
                 self.args.clip_param)
