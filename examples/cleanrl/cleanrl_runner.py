@@ -11,19 +11,30 @@ import yaml
 
 sys.path.append(os.getcwd())
 import gymnasium as gym
-from rltoolkit.cleanrl.agent import C51Agent, DDPGAgent, DQNAgent
+from rltoolkit.cleanrl.agent import C51Agent, DDPGAgent, DQNAgent, PPOAgent
 from rltoolkit.cleanrl.offpolicy_runner import OffPolicyRunner
+from rltoolkit.cleanrl.onpolicy_runner import OnPolicyRunner
 from rltoolkit.cleanrl.rl_args import (C51Arguments, DDPGArguments,
                                        DQNArguments, PPOArguments,
                                        SACArguments)
-from rltoolkit.data import SimpleReplayBuffer
 from rltoolkit.utils.logger.logging import get_logger
 
 logger = get_logger(__name__)
 
 
-def make_env(env_id: str = 'CartPole-v0', seed: int = 42):
-    env = gym.make(env_id)
+def make_env(
+    env_id: str,
+    seed: int = 42,
+    capture_video: bool = False,
+    save_video_dir: str = 'work_dir',
+    save_video_name: str = 'test',
+):
+    if capture_video:
+        env = gym.make(env_id, render_mode='rgb_array')
+        env = gym.wrappers.RecordVideo(env,
+                                       f'{save_video_dir}/{save_video_name}')
+    else:
+        env = gym.make(env_id)
     env = gym.wrappers.RecordEpisodeStatistics(env)
     env.action_space.seed(seed)
     return env
@@ -112,6 +123,7 @@ def main() -> None:
         Agent: DDPGAgent = DDPGAgent
     elif run_args.algo_name == 'ppo':
         algo_args: PPOArguments = tyro.cli(PPOArguments)
+        Agent: PPOAgent = PPOAgent
     elif run_args.algo_name == 'sac':
         algo_args: SACArguments = tyro.cli(SACArguments)
 
@@ -150,7 +162,7 @@ def main() -> None:
     print('Action Shape:', action_shape)
     print('Action Bound:', args.action_bound)
     print('---------------------------------------')
-
+    print(args)
     # agent
     agent = Agent(
         args=args,
@@ -159,21 +171,22 @@ def main() -> None:
         action_shape=action_shape,
         device=device,
     )
-    buffer = SimpleReplayBuffer(
-        buffer_size=args.buffer_size,
-        observation_space=train_env.observation_space,
-        action_space=train_env.action_space,
-        n_steps=args.n_steps,
-        gamma=args.gamma,
-        device=device,
-    )
-    runner = OffPolicyRunner(
-        args,
-        train_env=train_env,
-        test_env=test_env,
-        agent=agent,
-        buffer=buffer,
-    )
+    if args.algo_name in ['dqn', 'ddqn', 'ddpg', 'c51']:
+        runner = OffPolicyRunner(
+            args,
+            train_env=train_env,
+            test_env=test_env,
+            agent=agent,
+            device=device,
+        )
+    elif args.algo_name in ['ppo', 'pg', 'trpo']:
+        runner = OnPolicyRunner(
+            args,
+            train_env=train_env,
+            test_env=test_env,
+            agent=agent,
+            device=device,
+        )
     runner.run()
 
 

@@ -444,6 +444,10 @@ class PPOArguments(RLArguments):
             'help': 'Learning rate for the critic network. Defaults to 1e-4'
         },
     )
+    epsilon: float = field(
+        default=1e-5,
+        metadata={'help': 'Epsilon for the PPO algorithm. Defaults to 1e-5'},
+    )
     gae_lambda: float = field(
         default=0.95,
         metadata={
@@ -466,7 +470,7 @@ class PPOArguments(RLArguments):
         },
     )
     clip_vloss: bool = field(
-        default=False,
+        default=True,
         metadata={
             'help':
             'Flag indicating whether to clip the value loss. Defaults to False'

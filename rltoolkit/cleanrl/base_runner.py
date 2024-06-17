@@ -5,9 +5,8 @@ from abc import ABC
 import gymnasium as gym
 from rltoolkit.cleanrl.agent import BaseAgent
 from rltoolkit.cleanrl.rl_args import RLArguments
-from rltoolkit.data import SimpleReplayBuffer as ReplayBuffer
-from rltoolkit.utils import (ProgressBar, TensorboardLogger, WandbLogger,
-                             get_outdir, get_text_logger)
+from rltoolkit.utils import (TensorboardLogger, WandbLogger, get_outdir,
+                             get_text_logger)
 from torch.utils.tensorboard import SummaryWriter
 
 
@@ -19,19 +18,11 @@ class BaseRunner(ABC):
         train_env: gym.Env,
         test_env: gym.Env,
         agent: BaseAgent,
-        buffer: ReplayBuffer,
     ) -> None:
         self.args = args
         self.train_env = train_env
         self.test_env = test_env
         self.agent = agent
-        self.buffer = buffer
-
-        # Training
-        self.episode_cnt = 0
-        self.global_step = 0
-        self.start_time = time.time()
-        self.eps_greedy = 0.0
 
         # Logs and Visualizations
         timestamp = time.strftime('%Y%m%d_%H%M%S', time.localtime())
@@ -63,8 +54,6 @@ class BaseRunner(ABC):
         else:  # wandb
             self.vis_logger.load(self.writer)
 
-        # ProgressBar
-        self.progress_bar = ProgressBar(args.max_timesteps)
         # Video Save
         self.video_save_dir = get_outdir(work_dir, 'video_dir')
         self.model_save_dir = get_outdir(work_dir, 'model_dir')

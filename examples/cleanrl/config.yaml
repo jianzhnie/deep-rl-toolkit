@@ -75,16 +75,36 @@ dueling_ddqn:
 c51:
   CartPole-v0:
     algo_name: c51
-    learning_rate: 5.0e-3
-    max_timesteps: 20000
+    learning_rate: 1.0e-4
+    max_timesteps: 30000
     buffer_size: 10000
-    batch_size: 64
+    target_update_frequency: 100
+    train_frequency: 10
+    gradient_steps: 5
+    batch_size: 128
 
 ddpg:
   Pendulum-v1:
     algo_name: ddpg
-    actor_lr: 2.5e-3
-    critic_lr: 2.5e-3
-    max_timesteps: 50000
-    buffer_size: 10000
-    batch_size: 128
+    actor_lr: 1.0e-2
+    critic_lr: 1.0e-3
+    max_timesteps: 200000
+    buffer_size: 20000
+    norm_reward: False
+    use_smooth_l1_loss: True
+    target_update_frequency: 1
+    soft_update_tau: 0.01
+    train_frequency: 10
+    gradient_steps: 5
+    batch_size: 256
+    logger: wandb
+
+ppo:
+  CartPole-v0:
+    algo_name: ppo
+    learning_rate: 1.0e-3
+    num_episode: 500
+    buffer_size: 128
+    rollout_length: 128
+    batch_size: 32
+    logger: tensorboard

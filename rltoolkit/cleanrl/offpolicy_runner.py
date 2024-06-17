@@ -1,12 +1,14 @@
 import time
+from typing import Optional, Union
 
 import gymnasium as gym
 import numpy as np
+import torch
 from rltoolkit.cleanrl.agent import BaseAgent
 from rltoolkit.cleanrl.base_runner import BaseRunner
 from rltoolkit.cleanrl.rl_args import RLArguments
 from rltoolkit.cleanrl.utils.utils import calculate_mean
-from rltoolkit.data import SimpleReplayBuffer as ReplayBuffer
+from rltoolkit.data import SimpleReplayBuffer
 from rltoolkit.utils import ProgressBar
 
 
@@ -18,9 +20,22 @@ class OffPolicyRunner(BaseRunner):
         train_env: gym.Env,
         test_env: gym.Env,
         agent: BaseAgent,
-        buffer: ReplayBuffer,
+        device: Optional[Union[str, torch.device]] = None,
     ) -> None:
-        super().__init__(args, train_env, test_env, agent, buffer)
+        super().__init__(args, train_env, test_env, agent)
+
+        self.buffer = SimpleReplayBuffer(
+            args=args,
+            observation_space=train_env.observation_space,
+            action_space=train_env.action_space,
+            device=device,
+        )
+        # Training
+        self.episode_cnt = 0
+        self.global_step = 0
+        self.start_time = time.time()
+        self.eps_greedy = 0.0
+        self.device = device if device is not None else torch.device('cpu')
 
     # train an episode
     def run_train_episode(self) -> dict[str, float]:
