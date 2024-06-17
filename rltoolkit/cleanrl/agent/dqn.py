@@ -8,6 +8,7 @@ import torch.nn.functional as F
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import DQNArguments
 from rltoolkit.cleanrl.utils.qlearing_net import DuelingNet, QNet
+from rltoolkit.data.utils.type_aliases import ReplayBufferSamples
 from rltoolkit.utils import LinearDecayScheduler, soft_target_update
 
 
@@ -112,7 +113,7 @@ class DQNAgent(BaseAgent):
         action = torch.argmax(q_values, dim=1).item()
         return action
 
-    def learn(self, batch: Dict[str, torch.Tensor]) -> float:
+    def learn(self, batch: ReplayBufferSamples) -> Dict[str, float]:
         """Perform a learning step.
 
         Args:
@@ -121,11 +122,11 @@ class DQNAgent(BaseAgent):
         Returns:
             float: Loss value.
         """
-        obs = batch['obs']
-        next_obs = batch['next_obs']
-        action = batch['action']
-        reward = batch['reward']
-        done = batch['done']
+        obs = batch.obs
+        next_obs = batch.next_obs
+        action = batch.actions
+        reward = batch.rewards
+        done = batch.dones
 
         action = action.to(self.device, dtype=torch.long)
         # Soft update target network

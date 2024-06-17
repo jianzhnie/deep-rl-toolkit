@@ -7,6 +7,7 @@ import torch
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import C51Arguments
 from rltoolkit.cleanrl.utils.qlearing_net import C51Network
+from rltoolkit.data.utils.type_aliases import ReplayBufferSamples
 from rltoolkit.utils import LinearDecayScheduler, soft_target_update
 
 
@@ -99,8 +100,8 @@ class C51Agent(BaseAgent):
         action, _ = self.qnet(obs)
         return action.item()
 
-    def learn(self, batch: Dict[str, torch.Tensor]) -> float:
-        """Update the model based on a batch of experience.
+    def learn(self, batch: ReplayBufferSamples) -> Dict[str, float]:
+        """Perform a learning step.
 
         Args:
             batch (Dict[str, torch.Tensor]): Batch of experience.
@@ -108,11 +109,11 @@ class C51Agent(BaseAgent):
         Returns:
             float: Loss value.
         """
-        obs = batch['obs']
-        next_obs = batch['next_obs']
-        action = batch['action']
-        reward = batch['reward']
-        done = batch['done']
+        obs = batch.obs
+        next_obs = batch.next_obs
+        action = batch.actions
+        reward = batch.rewards
+        done = batch.dones
 
         if self.learner_update_step % self.args.target_update_frequency == 0:
             soft_target_update(self.qnet,

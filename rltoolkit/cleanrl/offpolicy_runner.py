@@ -98,17 +98,12 @@ class OffPolicyRunner(BaseRunner):
             eval_rewards.append(episode_reward)
             eval_steps.append(episode_step)
 
-        reward_mean = np.mean(eval_rewards)
-        reward_std = np.std(eval_rewards)
-        length_mean = np.mean(eval_steps)
-        length_std = np.std(eval_steps)
-        test_info = {
-            'reward_mean': reward_mean,
-            'reward_std': reward_std,
-            'length_mean': length_mean,
-            'length_std': length_std,
+        return {
+            'reward_mean': np.mean(eval_rewards),
+            'reward_std': np.std(eval_rewards),
+            'length_mean': np.mean(eval_steps),
+            'length_std': np.std(eval_steps),
         }
-        return test_info
 
     def run(self) -> None:
         """Train the agent."""
