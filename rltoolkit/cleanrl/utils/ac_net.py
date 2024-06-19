@@ -15,6 +15,39 @@ def init_layer_uniform(layer: nn.Linear, init_w: float = 3e-3) -> nn.Linear:
     return layer
 
 
+class ActorNet(nn.Module):
+
+    def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int) -> None:
+        super(ActorNet, self).__init__()
+        self.net = nn.Sequential(
+            nn.Linear(obs_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, action_dim),
+        )
+
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        logits = self.net(obs)
+        return logits
+
+
+class CriticNet(nn.Module):
+
+    def __init__(self, obs_dim: int, hidden_dim: int, action_dim):
+        super(CriticNet, self).__init__()
+        self.net = nn.Sequential(
+            nn.Linear(obs_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, action_dim),
+        )
+
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        return self.net(obs)
+
+
 class SACActor(nn.Module):
 
     def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int):

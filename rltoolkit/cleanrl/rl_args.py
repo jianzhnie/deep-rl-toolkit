@@ -619,3 +619,40 @@ class SACArguments(RLArguments):
             'Initial value for the temperature parameter. Defaults to 0.2'
         },
     )
+    target_entropy: float = field(
+        default=None,
+        metadata={
+            'help': 'Target entropy for the SAC algorithm. Defaults to None'
+        },
+    )
+    warmup_learn_steps: int = field(
+        default=1000,
+        metadata={
+            'help':
+            'Number of steps before starting to update the model. Defaults to 1000'
+        },
+    )
+    target_update_frequency: int = field(
+        default=100,
+        metadata={
+            'help': 'Frequency of updating the target network. Defaults to 100'
+        },
+    )
+    soft_update_tau: float = field(
+        default=1.0,
+        metadata={
+            'help':
+            'Interpolation parameter for soft target updates. Defaults to 1.0'
+        },
+    )
+    train_frequency: int = field(
+        default=10,
+        metadata={'help': 'Frequency of training updates. Defaults to 1'},
+    )
+    gradient_steps: int = field(
+        default=2,
+        metadata={
+            'help':
+            'Number of times to update the learner network. Defaults to 1'
+        },
+    )
