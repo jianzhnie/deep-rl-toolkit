@@ -5,6 +5,7 @@ dqn:
     max_timesteps: 20000
     buffer_size: 10000
     batch_size: 64
+    logger: tensorboard
 
   CartPole-v1:
     algo_name: dqn
@@ -90,21 +91,51 @@ ddpg:
     critic_lr: 1.0e-3
     max_timesteps: 200000
     buffer_size: 20000
-    norm_reward: False
     use_smooth_l1_loss: True
     target_update_frequency: 1
     soft_update_tau: 0.01
     train_frequency: 10
     gradient_steps: 5
     batch_size: 256
+    logger: tensorboard
+
+ppo_clip:
+  CartPole-v0:
+    algo_name: ppo_clip
+    max_timesteps: 50000
+    learning_rate: 1.0e-3
+    buffer_size: 128
+    rollout_steps: 128
+    batch_size: 32
     logger: wandb
 
-ppo:
-  CartPole-v0:
-    algo_name: ppo
+  CartPole-v1:
+    algo_name: ppo_clip
+    max_timesteps: 300000
     learning_rate: 1.0e-3
-    num_episode: 500
     buffer_size: 128
-    rollout_length: 128
+    rollout_steps: 128
     batch_size: 32
-    logger: tensorboard
+    logger: wandb
+
+
+ppo_penalty:
+  CartPole-v0:
+    algo_name: ppo_penalty
+    max_timesteps: 50000
+    actor_lr: 1.0e-3
+    critic_lr: 1.0e-2
+    buffer_size: 128
+    rollout_steps: 128
+    batch_size: 32
+    logger: wandb
+
+  CartPole-v1:
+    algo_name: ppo_penalty
+    max_timesteps: 300000
+    actor_lr: 1.0e-3
+    critic_lr: 1.0e-2
+    buffer_size: 128
+    rollout_steps: 128
+    batch_size: 32
+    logger: wandb

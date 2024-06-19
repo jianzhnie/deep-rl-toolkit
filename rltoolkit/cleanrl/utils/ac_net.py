@@ -4,6 +4,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.distributions import Normal
 
 
 def init_layer_uniform(layer: nn.Linear, init_w: float = 3e-3) -> nn.Linear:
@@ -14,39 +15,91 @@ def init_layer_uniform(layer: nn.Linear, init_w: float = 3e-3) -> nn.Linear:
     return layer
 
 
-class PolicyNet_(nn.Module):
-    """Policy Network for Actor-Critic method.
+class ActorNet(nn.Module):
 
-    Args:
-        obs_dim (int): Dimension of observation space.
-        hidden_dim (int): Dimension of hidden layer.
-        action_dim (int): Dimension of action space.
-    """
-
-    def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int):
-        super(PolicyNet_, self).__init__()
-        self.fc1 = nn.Linear(obs_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, action_dim)
-        self.relu = nn.ReLU(inplace=True)
-        self.fc2 = init_layer_uniform(self.fc2)
+    def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int) -> None:
+        super(ActorNet, self).__init__()
+        self.net = nn.Sequential(
+            nn.Linear(obs_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, action_dim),
+        )
 
     def forward(self, obs: torch.Tensor) -> torch.Tensor:
-        """Forward pass.
+        logits = self.net(obs)
+        return logits
 
-        Args:
-            obs (torch.Tensor): Observation tensor.
 
-        Returns:
-            torch.Tensor: Action tensor mapped to the range [-1, 1].
-        """
+class CriticNet(nn.Module):
+
+    def __init__(self, obs_dim: int, hidden_dim: int, action_dim):
+        super(CriticNet, self).__init__()
+        self.net = nn.Sequential(
+            nn.Linear(obs_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, action_dim),
+        )
+
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        return self.net(obs)
+
+
+class SACActor(nn.Module):
+
+    def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int):
+        super(SACActor, self).__init__()
+        self.fc1 = nn.Linear(obs_dim, hidden_dim)
+        self.relu = nn.ReLU()
+        # set log_std layer
+        self.std_layer = nn.Linear(hidden_dim, action_dim)
+        # set mean layer
+        self.mu_layer = nn.Linear(hidden_dim, action_dim)
+
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
         out = self.fc1(obs)
         out = self.relu(out)
+        # get mean
+        mu = self.mu_layer(out)
+        # get std
+        std = F.softplus(self.std_layer(out))
+        # sample actions
+        dist = Normal(mu, std)
+        # Reparameterization trick (mean + std * N(0,1))
+        x_t = dist.rsample()
+
+        pi = torch.tanh(x_t)
+        # normalize action and log_prob
+        log_pi = dist.log_prob(x_t)
+        # Enforcing Action Bound
+        log_pi = log_pi - torch.log(1 - pi.pow(2) + 1e-7)
+        return pi, log_pi
+
+
+class SACCritic(nn.Module):
+
+    def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int):
+        super(SACCritic, self).__init__()
+        self.fc1 = nn.Linear(obs_dim + action_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3 = nn.Linear(hidden_dim, action_dim)
+        self.relu = nn.ReLU()
+
+    def forward(self, x: torch.Tensor, a: torch.Tensor) -> torch.Tensor:
+        # 拼接状态和动作
+        cat = torch.cat([x, a], dim=1)
+        out = self.fc1(cat)
+        out = self.relu(out)
         out = self.fc2(out)
-        out = torch.tanh(out)  # Map to [-1, 1]
+        out = self.relu(out)
+        out = self.fc3(out)
         return out
 
 
-class PolicyNet(nn.Module):
+class DDPGActor(nn.Module):
 
     def __init__(
         self,
@@ -83,7 +136,7 @@ class PolicyNet(nn.Module):
         return x * self.action_scale + self.action_bias
 
 
-class ValueNet(nn.Module):
+class DDPGCritic(nn.Module):
     """Value Network for Critic in Actor-Critic method.
 
     Args:
@@ -93,7 +146,7 @@ class ValueNet(nn.Module):
     """
 
     def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int) -> None:
-        super(ValueNet, self).__init__()
+        super(DDPGCritic, self).__init__()
         self.fc1 = nn.Linear(obs_dim + action_dim, hidden_dim)
         self.fc2 = nn.Linear(hidden_dim, 1)
         self.relu = nn.ReLU(inplace=True)

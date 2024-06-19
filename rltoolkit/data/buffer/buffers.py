@@ -1,4 +1,3 @@
-import random
 import warnings
 from abc import ABC, abstractmethod
 from collections import deque
@@ -8,13 +7,13 @@ import numpy as np
 import torch
 from gymnasium import spaces
 from rltoolkit.cleanrl.rl_args import RLArguments
-from rltoolkit.data.utils.segment_tree import MinSegmentTree, SumSegmentTree
 from rltoolkit.data.utils.type_aliases import (ReplayBufferSamples,
                                                RolloutBufferSamples)
 from stable_baselines3.common.preprocessing import (get_action_dim,
                                                     get_obs_shape)
 from stable_baselines3.common.utils import get_device
 from stable_baselines3.common.vec_env import VecNormalize
+from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
 try:
     # Check memory used by replay buffer when possible
@@ -881,6 +880,35 @@ class SimpleRolloutBuffer:
         samples = RolloutBufferSamples(*tuple(map(self.to_torch, data)))
         return samples
 
+    def data_generator(self,
+                       num_mini_batch: int = None,
+                       mini_batch_size: int = None
+                       ) -> Generator[RolloutBufferSamples, Any, None]:
+        if mini_batch_size is None:
+            assert self.buffer_size >= num_mini_batch, (
+                'PPO requires the number of buffer_size ({}) '
+                'to be greater than or equal to the number of PPO mini batches ({}).'
+                ''.format(
+                    self.buffer_size,
+                    num_mini_batch,
+                ))
+            mini_batch_size = self.buffer_size // num_mini_batch
+        indices = np.arange(self.buffer_size)
+        sampler = BatchSampler(SubsetRandomSampler(indices),
+                               mini_batch_size,
+                               drop_last=True)
+        for batch_inds in sampler:
+            data = (
+                self.observations[batch_inds],
+                self.actions[batch_inds],
+                self.values[batch_inds],
+                self.log_probs[batch_inds],
+                self.advantages[batch_inds],
+                self.returns[batch_inds],
+            )
+            samples = RolloutBufferSamples(*tuple(map(self.to_torch, data)))
+            yield samples
+
     def to_torch(self, array: np.ndarray, copy: bool = True) -> torch.Tensor:
         """Convert a numpy array to a PyTorch tensor.
 
@@ -896,123 +924,163 @@ class SimpleRolloutBuffer:
         return torch.as_tensor(array, dtype=torch.float32).to(self.device)
 
 
-class PrioritizedReplayBuffer(SimpleReplayBuffer):
-    """Prioritized Replay buffer.
+class ListRolloutBuffer:
+    """Rollout buffer used in on-policy algorithms like A2C/PPO. This buffer
+    stores `buffer_size` transitions collected using the current policy. The
+    experience is discarded after the policy update.
 
-    Attributes:
-        max_priority (float): max priority
-        tree_ptr (int): next index of tree
-        alpha (float): alpha parameter for prioritized replay buffer
-        sum_tree (SumSegmentTree): sum tree for prior
-        min_tree (MinSegmentTree): min tree for min prior to get max weight
+    Args:
+        args (RLArguments): Hyperparameters for the buffer and algorithms.
+        observation_space (spaces.Space): Observation space.
+        action_space (spaces.Space): Action space.
+        device (Union[torch.device, str]): PyTorch device.
     """
 
     def __init__(
         self,
-        obs_dim: int,
-        buffer_size: int,
-        batch_size: int = 32,
-        n_step: int = 1,
-        gamma: float = 0.99,
-        alpha: float = 0.6,
-    ):
-        """Initialization."""
-        assert alpha >= 0
+        args: RLArguments,
+        observation_space: spaces.Space,
+        action_space: spaces.Space,
+        device: Union[torch.device, str] = 'auto',
+    ) -> None:
+        self.args = args
+        self.buffer_size = args.buffer_size
+        self.obs_shape = get_obs_shape(observation_space)
+        self.action_dim = get_action_dim(action_space)
+        self.device = device
 
-        super(PrioritizedReplayBuffer,
-              self).__init__(obs_dim, buffer_size, batch_size, n_step, gamma)
-        # for Prioritized Replay buffer
-        self.max_priority = 1.0
-        self.tree_ptr = 0
+    def reset(self) -> None:
+        """Reset the rollout buffer by clearing all stored transitions."""
+        self.obs = []
+        self.actions = []
+        self.rewards = []
+        self.values = []
+        self.dones = []
+        self.log_probs = []
 
-        self.alpha = alpha
+        self.curr_ptr = 0
+        self.curr_size = 0
 
-        # capacity must be positive and a power of 2.
-        tree_capacity = 1
-        while tree_capacity < self.buffer_size:
-            tree_capacity *= 2
+    def to_array(self) -> None:
+        self.obs = np.array(self.obs)
+        self.actions = np.array(self.actions)
+        self.rewards = np.array(self.rewards)
+        self.values = np.array(self.values)
+        self.dones = np.array(self.dones)
+        self.log_probs = np.array(self.log_probs)
 
-        self.sum_tree = SumSegmentTree(tree_capacity)
-        self.min_tree = MinSegmentTree(tree_capacity)
+    def compute_returns_and_advantage(self, last_values: Union[float,
+                                                               np.ndarray],
+                                      dones: np.ndarray) -> None:
+        """Compute the lambda-return (TD(lambda) estimate) and GAE(lambda)
+        advantage.
 
-    def apeend(
+        Args:
+            last_values (torch.Tensor): State value estimation for the last step (one for each env).
+            dones (np.ndarray): Boolean array indicating if the last step was terminal.
+        """
+        last_gae_lam = 0
+        self.to_array()
+        self.advantages = np.zeros_like(self.rewards)
+        for step in reversed(range(self.buffer_size)):
+            if step == self.buffer_size - 1:
+                next_non_terminal = 1.0 - dones
+                next_values = last_values
+            else:
+                next_non_terminal = 1.0 - self.dones[step + 1]
+                next_values = self.values[step + 1]
+
+            delta = (self.rewards[step] +
+                     self.args.gamma * next_values * next_non_terminal -
+                     self.values[step])
+
+            last_gae_lam = (delta + self.args.gamma * self.args.gae_lambda *
+                            next_non_terminal * last_gae_lam)
+
+            self.advantages[step] = last_gae_lam
+        self.returns = self.advantages + self.values
+
+    def add(
         self,
-        obs: np.ndarray,
-        act: int,
-        rew: float,
-        next_obs: np.ndarray,
-        terminal: bool,
-    ) -> Tuple[np.ndarray, np.ndarray, float, np.ndarray, bool]:
-        """Store experience and priority."""
-        transition = super().append(obs, act, rew, next_obs, terminal)
+        obs: Union[List[float], np.ndarray],
+        action: int,
+        reward: float,
+        done: bool,
+        value: float,
+        log_prob: float,
+    ) -> None:
+        """Add a new transition to the buffer.
 
-        if transition:
-            self.sum_tree[self.tree_ptr] = self.max_priority**self.alpha
-            self.min_tree[self.tree_ptr] = self.max_priority**self.alpha
-            self.tree_ptr = (self.tree_ptr + 1) % self.buffer_size
-        return transition
+        Args:
+            obs (np.ndarray): Observation.
+            action (np.ndarray): Action.
+            reward (float): Reward.
+            done (bool): Whether the episode is done.
+            value (torch.Tensor): Estimated value of the current state.
+            log_prob (torch.Tensor): Log probability of the action.
+        """
+        self.obs.append(obs)
+        self.actions.append(action)
+        self.rewards.append(reward)
+        self.dones.append(done)
+        self.values.append(value)
+        self.log_probs.append(log_prob)
 
-    def sample_batch(self, beta: float = 0.4) -> Dict[str, np.ndarray]:
-        """Sample a batch of experiences."""
-        assert len(self) >= self.batch_size
-        assert beta > 0
+        self.curr_ptr = (self.curr_ptr + 1) % self.buffer_size
+        self.curr_size = min(self.curr_size + 1, self.buffer_size)
 
-        indices = self._sample_proportional()
-
-        obs = self.observations[indices]
-        next_obs = self.next_observations[indices]
-        action = self.actions[indices]
-        reward = self.rewards[indices]
-        terminal = self.dones[indices]
-        weights = np.array([self._calculate_weight(i, beta) for i in indices])
-
-        return dict(
-            obs=obs,
-            next_obs=next_obs,
-            action=action,
-            reward=reward,
-            terminal=terminal,
-            weights=weights,
-            indices=indices,
+    def sample(self, batch_size: Optional[int] = None) -> RolloutBufferSamples:
+        """Sample transitions from the buffer."""
+        data = (
+            np.array(self.obs),
+            np.array(self.actions),
+            np.array(self.values),
+            np.array(self.log_probs),
+            np.array(self.advantages),
+            np.array(self.returns),
         )
+        samples = RolloutBufferSamples(*tuple(map(self.to_torch, data)))
+        return samples
 
-    def update_priorities(self, indices: List[int], priorities: np.ndarray):
-        """Update priorities of sampled transitions."""
-        assert len(indices) == len(priorities)
+    def data_generate(self,
+                      num_mini_batch: int = None,
+                      mini_batch_size: int = None
+                      ) -> Generator[RolloutBufferSamples, Any, None]:
+        if mini_batch_size is None:
+            assert self.buffer_size >= num_mini_batch, (
+                'PPO requires the number of buffer_size ({}) '
+                'to be greater than or equal to the number of PPO mini batches ({}).'
+                ''.format(
+                    self.buffer_size,
+                    num_mini_batch,
+                ))
+            mini_batch_size = self.buffer_size // num_mini_batch
+        indices = np.arange(self.buffer_size)
+        sampler = BatchSampler(SubsetRandomSampler(indices),
+                               mini_batch_size,
+                               drop_last=True)
+        for batch_inds in sampler:
+            data = (
+                self.obs[batch_inds],
+                self.actions[batch_inds],
+                self.values[batch_inds],
+                self.log_probs[batch_inds],
+                self.advantages[batch_inds],
+                self.returns[batch_inds],
+            )
+            samples = RolloutBufferSamples(*tuple(map(self.to_torch, data)))
+            yield samples
 
-        for idx, priority in zip(indices, priorities):
-            assert priority > 0
-            assert 0 <= idx < len(self)
+    def to_torch(self, array: np.ndarray, copy: bool = True) -> torch.Tensor:
+        """Convert a numpy array to a PyTorch tensor.
 
-            self.sum_tree[idx] = priority**self.alpha
-            self.min_tree[idx] = priority**self.alpha
+        Args:
+            array (np.ndarray): The numpy array to convert.
+            copy (bool, optional): Whether to copy the data. Defaults to True.
 
-            self.max_priority = max(self.max_priority, priority)
-
-    def _sample_proportional(self) -> List[int]:
-        """Sample indices based on proportions."""
-        indices = []
-        p_total = self.sum_tree.sum(0, len(self) - 1)
-        segment = p_total / self.batch_size
-
-        for i in range(self.batch_size):
-            a = segment * i
-            b = segment * (i + 1)
-            upperbound = random.uniform(a, b)
-            idx = self.sum_tree.retrieve(upperbound)
-            indices.append(idx)
-
-        return indices
-
-    def _calculate_weight(self, idx: int, beta: float):
-        """Calculate the weight of the experience at idx."""
-        # get max weight
-        p_min = self.min_tree.min() / self.sum_tree.sum()
-        max_weight = (p_min * len(self))**(-beta)
-
-        # calculate weights
-        p_sample = self.sum_tree[idx] / self.sum_tree.sum()
-        weight = (p_sample * len(self))**(-beta)
-        weight = weight / max_weight
-
-        return weight
+        Returns:
+            torch.Tensor: The PyTorch tensor.
+        """
+        if copy:
+            return torch.tensor(array, dtype=torch.float32).to(self.device)
+        return torch.as_tensor(array, dtype=torch.float32).to(self.device)

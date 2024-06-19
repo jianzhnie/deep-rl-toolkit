@@ -62,8 +62,6 @@ class OnPolicyRunner(BaseRunner):
         for _ in range(n_eval_episodes):
             obs, info = self.test_env.reset()
             done = False
-            episode_reward = 0.0
-            episode_step = 0
             while not done:
                 action = self.agent.predict(obs)
                 next_obs, reward, terminated, truncated, info = self.test_env.step(
@@ -91,34 +89,31 @@ class OnPolicyRunner(BaseRunner):
     def run(self) -> None:
         """Train the agent."""
         self.text_logger.info('Start Training')
-        total_steps = self.args.num_episode * self.args.rollout_length
-        progress_bar = ProgressBar(total_steps)
+        progress_bar = ProgressBar(self.args.max_timesteps)
+        num_episode = self.args.max_timesteps // self.args.rollout_steps
         self.start_time = time.time()
-        obs, _ = self.train_env.reset()
-        for self.episode_cnt in range(1, self.args.num_episode + 1):
+        for self.episode_cnt in range(1, num_episode + 1):
             # Collect rollout data
             self.buffer.reset()
-            for step in range(self.args.rollout_length):
+            obs, _ = self.train_env.reset()
+            done = False
+            episode_reward = 0
+            for step in range(self.args.rollout_steps):
                 progress_bar.update(1)
                 self.global_step += 1
-
+                # Get action，log_prob, value and entropy from the agent
                 with torch.no_grad():
                     value, action, log_prob, entropy = self.agent.get_action(
                         obs)
-
+                # Take a step in the environment
                 next_obs, reward, terminated, truncated, info = self.train_env.step(
                     action)
-                if info and 'episode' in info:
-                    info_item = {
-                        k: v.item()
-                        for k, v in info['episode'].items()
-                    }
-                    episode_reward = info_item['r']
-                    episode_step = info_item['l']
-
-                obs = next_obs
-                done = np.logical_or(terminated, truncated)
+                next_done = np.logical_or(terminated, truncated)
+                # Add the obs, action, reward, done, value, log_prob to the buffer
                 self.buffer.add(obs, action, reward, done, value, log_prob)
+                obs = next_obs
+                done = next_done
+                episode_reward += reward
 
             # Bootstrap value if not done
             with torch.no_grad():
@@ -136,7 +131,6 @@ class OnPolicyRunner(BaseRunner):
             train_info['num_episode'] = self.episode_cnt
             train_info['num_steps'] = self.global_step
             train_info['episode_reward'] = episode_reward
-            train_info['episode_length'] = episode_step
 
             # Calculate training FPS
             train_fps = int(self.global_step / (time.time() - self.start_time))
@@ -145,8 +139,11 @@ class OnPolicyRunner(BaseRunner):
             # Log training information
             if self.episode_cnt % self.args.train_log_interval == 0:
                 log_message = '[Train], global_step: {}, episode: {}, episode reward: {},  train_fps: {}'.format(
-                    self.global_step, self.episode_cnt, episode_reward,
-                    train_fps)
+                    self.global_step,
+                    self.episode_cnt,
+                    episode_reward,
+                    train_fps,
+                )
                 log_message += ', train_fps: {}'.format(train_fps)
                 self.text_logger.info(log_message)
                 self.log_train_infos(train_info, self.global_step)

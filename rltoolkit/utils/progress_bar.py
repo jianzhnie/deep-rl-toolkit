@@ -51,7 +51,7 @@ class ProgressBar:
             eta = int(elapsed * (1 - percentage) / percentage + 0.5)
             msg = (f'\r[{{}}] {self.completed}/{self.task_num}, '
                    f'{fps:.1f} task/s, elapsed: {int(elapsed + 0.5)}s, '
-                   f'ETA: {eta:5}s')
+                   f'ETA: {eta:5}s \t')
 
             bar_width = min(
                 self.bar_width,

@@ -6,6 +6,7 @@ from typing import Optional
 class RLArguments:
     """Common settings for Reinforcement Learning algorithms."""
 
+    # Common settings
     project: str = field(
         default='rltoolkit',
         metadata={'help': "Name of the project. Defaults to 'rltoolkit'"},
@@ -31,6 +32,7 @@ class RLArguments:
             'help': 'Seed for environment randomization. Defaults to 42'
         },
     )
+    # Environment settings
     env_id: str = field(
         default='CartPole-v0',
         metadata={'help': "The environment name. Defaults to 'CartPole-v0'"},
@@ -49,6 +51,7 @@ class RLArguments:
             'Flag indicating whether to capture videos of the environment during training.'
         },
     )
+    # ReplayBuffer settings
     buffer_size: int = field(
         default=10000,
         metadata={
@@ -62,6 +65,7 @@ class RLArguments:
             'Size of the mini-batches sampled from the replay buffer during training. Defaults to 32'
         },
     )
+    # Training parameters
     n_steps: int = field(
         default=1,
         metadata={
@@ -85,6 +89,7 @@ class RLArguments:
         default=10,
         metadata={'help': 'Number of episodes to evaluate. Defaults to 10'},
     )
+    # Logging and saving
     work_dir: str = field(
         default='work_dirs',
         metadata={
@@ -562,13 +567,7 @@ class PPOArguments(RLArguments):
         default=1.0,
         metadata={'help': 'Maximum gradient norm. Defaults to 1.0'},
     )
-    num_episode: int = field(
-        default=1000,
-        metadata={
-            'help': 'Number of episodes to run for training. Defaults to 1000'
-        },
-    )
-    rollout_length: int = field(
+    rollout_steps: int = field(
         default=128,
         metadata={
             'help':
@@ -613,10 +612,58 @@ class SACArguments(RLArguments):
             'Learning rate for the temperature parameter. Defaults to 1e-4'
         },
     )
+    epsilon: float = field(
+        default=1e-5,
+        metadata={'help': 'Epsilon for the PPO algorithm. Defaults to 1e-5'},
+    )
     alpha: float = field(
         default=0.2,
         metadata={
             'help':
             'Initial value for the temperature parameter. Defaults to 0.2'
+        },
+    )
+    autotune: bool = field(
+        default=True,
+        metadata={
+            'help':
+            'Automatic tuning of the entropy coefficient, alpha. Defaults to True'
+        },
+    )
+    target_entropy: float = field(
+        default=0.89,
+        metadata={
+            'help': 'Target entropy for the SAC algorithm. Defaults to None'
+        },
+    )
+    warmup_learn_steps: int = field(
+        default=1000,
+        metadata={
+            'help':
+            'Number of steps before starting to update the model. Defaults to 1000'
+        },
+    )
+    target_update_frequency: int = field(
+        default=100,
+        metadata={
+            'help': 'Frequency of updating the target network. Defaults to 100'
+        },
+    )
+    soft_update_tau: float = field(
+        default=1.0,
+        metadata={
+            'help':
+            'Interpolation parameter for soft target updates. Defaults to 1.0'
+        },
+    )
+    train_frequency: int = field(
+        default=10,
+        metadata={'help': 'Frequency of training updates. Defaults to 1'},
+    )
+    gradient_steps: int = field(
+        default=2,
+        metadata={
+            'help':
+            'Number of times to update the learner network. Defaults to 1'
         },
     )
