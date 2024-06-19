@@ -7,10 +7,9 @@ import torch
 import torch.nn.functional as F
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import SACArguments
-from rltoolkit.cleanrl.utils.ac_net import ActorNet, CriticNet
+from rltoolkit.cleanrl.utils.ac_net import SACActor, SACCritic
 from rltoolkit.data.utils.type_aliases import ReplayBufferSamples
 from rltoolkit.utils import soft_target_update
-from torch.distributions import Categorical
 
 
 class SACConAgent(BaseAgent):
@@ -47,14 +46,23 @@ class SACConAgent(BaseAgent):
         self.action_dim = int(np.prod(action_shape))
         self.learner_update_step = 0
         self.target_model_update_step = 0
+        self.action_high = self.env.action_space.high
+        self.action_low = self.env.action_space.low
 
         # Policy Network
-        self.actor = ActorNet(self.obs_dim, self.args.hidden_dim,
-                              self.action_dim).to(device)
+        self.actor = SACActor(
+            self.obs_dim,
+            self.args.hidden_dim,
+            self.action_dim,
+            action_low=self.action_low,
+            action_high=self.action_high,
+            log_std_min=self.args.log_std_min,
+            log_std_max=self.args.log_std_max,
+        ).to(device)
         # Value Networks
-        self.critic1 = CriticNet(self.obs_dim, self.args.hidden_dim,
+        self.critic1 = SACCritic(self.obs_dim, self.args.hidden_dim,
                                  self.action_dim).to(device)
-        self.critic2 = CriticNet(self.obs_dim, self.args.hidden_dim,
+        self.critic2 = SACCritic(self.obs_dim, self.args.hidden_dim,
                                  self.action_dim).to(device)
 
         # Target Value Networks
@@ -74,8 +82,8 @@ class SACConAgent(BaseAgent):
 
         # Temperature parameter (alpha) for entropy term
         if self.args.autotune:
-            self.target_entropy = -self.args.target_entropy * torch.log(
-                1 / torch.tensor(self.action_dim))
+            self.target_entropy = -torch.prod(
+                torch.Tensor(state_shape).to(device)).item()
             self.log_alpha = torch.zeros(1, requires_grad=True, device=device)
             self.alpha = self.log_alpha.exp().item()
             self.alpha_optimizer = torch.optim.Adam([self.log_alpha],
@@ -98,10 +106,9 @@ class SACConAgent(BaseAgent):
         else:
             obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(
                 self.device)
-            logits = self.actor(obs_tensor)
-            action_dist = Categorical(logits=logits)
-            action = action_dist.sample()
-        return action.item()
+            action, _, _ = self.actor.get_action(obs_tensor)
+            action = action.detach().cpu().numpy().flatten()
+        return action
 
     def predict(self, obs: np.ndarray) -> int:
         """Predict an action from the input state without exploration (greedy).
@@ -114,10 +121,9 @@ class SACConAgent(BaseAgent):
         """
         obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
         with torch.no_grad():
-            logits = self.actor(obs_tensor)
-            action_dist = Categorical(logits=logits)
-            action = action_dist.probs.argmax(dim=1, keepdim=True)
-        return action.item()
+            action, _, _ = self.actor.get_action(obs_tensor)
+        action = action.detach().cpu().numpy().flatten()
+        return action
 
     def calc_q_target(
         self,
@@ -135,17 +141,12 @@ class SACConAgent(BaseAgent):
         Returns:
             torch.Tensor: Target Q-value.
         """
-        next_logits = self.actor(next_obs)
-        next_action_dist = Categorical(logits=next_logits)
-        next_log_pi = F.log_softmax(next_logits, dim=1)
-        next_action_prob = next_action_dist.probs
+        (next_action, next_log_pi, _) = self.actor.get_action(next_obs)
 
-        q1_next_target = self.target_critic1(next_obs)
-        q2_next_target = self.target_critic2(next_obs)
-        min_q_target = (
-            next_action_prob * torch.min(q1_next_target, q2_next_target) -
-            self.alpha * next_log_pi)
-        min_q_target = torch.sum(min_q_target, dim=1, keepdim=True)
+        q1_next_target = self.target_critic1(next_obs, next_action)
+        q2_next_target = self.target_critic2(next_obs, next_action)
+        min_q_target = (torch.min(q1_next_target, q2_next_target) -
+                        self.alpha * next_log_pi)
         next_q_value = reward + self.args.gamma * (1 - done) * min_q_target
         return next_q_value
 
@@ -168,9 +169,9 @@ class SACConAgent(BaseAgent):
         with torch.no_grad():
             next_q_target = self.calc_q_target(next_obs, reward, done)
 
-        q1_action_value = self.critic1(obs).gather(1, action)
+        q1_action_value = self.critic1(obs, action)
+        q2_action_value = self.critic2(obs, action)
         critic1_loss = F.mse_loss(q1_action_value, next_q_target.detach())
-        q2_action_value = self.critic2(obs).gather(1, action)
         critic2_loss = F.mse_loss(q2_action_value, next_q_target.detach())
 
         self.critic1_optimizer.zero_grad()
@@ -182,18 +183,12 @@ class SACConAgent(BaseAgent):
         self.critic2_optimizer.step()
 
         # Update Actor Network
-        logits = self.actor(obs)
-        action_dist = Categorical(logits=logits)
-        log_pi = F.log_softmax(logits, dim=1)
-        action_prob = action_dist.probs
+        pi, log_pi, _ = self.actor.get_action(obs)
+        q1_value = self.critic1(obs, pi)
+        q2_value = self.critic2(obs, pi)
+        min_qvalue = torch.min(q1_value, q2_value)
 
-        with torch.no_grad():
-            q1_value = self.critic1(obs)
-            q2_value = self.critic2(obs)
-            min_qvalue = torch.min(q1_value, q2_value)
-
-        actor_loss = torch.mean(action_prob *
-                                (self.alpha * log_pi - min_qvalue))
+        actor_loss = torch.mean((self.alpha * log_pi - min_qvalue))
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
@@ -201,9 +196,11 @@ class SACConAgent(BaseAgent):
 
         # Update Alpha
         if self.args.autotune:
-            alpha_loss = torch.mean(action_prob.detach() *
-                                    (-self.log_alpha.exp() *
-                                     (log_pi + self.target_entropy).detach()))
+            with torch.no_grad():
+                _, log_pi, _ = self.actor.get_action(obs)
+
+            alpha_loss = torch.mean(
+                (-self.log_alpha.exp() * (log_pi + self.target_entropy)))
             self.alpha_optimizer.zero_grad()
             alpha_loss.backward()
             self.alpha_optimizer.step()
