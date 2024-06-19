@@ -121,9 +121,9 @@ class PPOClipAgent(BaseAgent):
             - value_loss (float): The value loss of the critic.
             - actor_loss (float): The actor loss of the policy.
             - entropy_loss (float): The entropy loss of the policy.
-            - old_approx_kl (float): The old approximate KL divergence.
             - approx_kl (float): The approximate KL divergence.
-            - clipfrac (float): The fraction of clipped actions.
+            - approx_kl (float): The approximate KL divergence.
+            - clipped_frac (float): The fraction of clipped actions.
         """
         obs = batch.obs
         actions = batch.actions
@@ -183,17 +183,16 @@ class PPOClipAgent(BaseAgent):
 
         # Calculate KL divergence metrics
         with torch.no_grad():
-            old_approx_kl = (-log_ratio).mean()
-            approx_kl = ((ratio - 1) - log_ratio).mean()
-            clipfrac = (abs(ratio - 1.0) >
-                        self.args.clip_param).float().mean().item()
+            clipped = ratio.gt(1 + self.args.clip_param) | ratio.lt(
+                1 - self.args.clip_param)
+            approx_kl = (-log_ratio).mean()
+            clipped_frac = torch.as_tensor(clipped, dtype=torch.float32).mean()
 
         return {
             'loss': loss.item(),
             'value_loss': value_loss.item(),
             'actor_loss': actor_loss.item(),
             'entropy_loss': entropy_loss.item(),
-            'old_approx_kl': old_approx_kl.item(),
             'approx_kl': approx_kl.item(),
-            'clipfrac': clipfrac,
+            'clipped_frac': clipped_frac.item(),
         }
