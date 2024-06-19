@@ -630,6 +630,20 @@ class SACArguments(RLArguments):
             'Automatic tuning of the entropy coefficient, alpha. Defaults to True'
         },
     )
+    log_std_min: float = field(
+        default=-5,
+        metadata={
+            'help':
+            'Minimum value for the log standard deviation. Defaults to -5'
+        },
+    )
+    log_std_max: float = field(
+        default=2,
+        metadata={
+            'help':
+            'Maximum value for the log standard deviation. Defaults to 2'
+        },
+    )
     target_entropy: float = field(
         default=0.89,
         metadata={

@@ -1,5 +1,5 @@
 import copy
-from typing import List, Tuple, Union
+from typing import Dict, List, Union
 
 import gym
 import numpy as np
@@ -149,14 +149,14 @@ class SACAgent(BaseAgent):
         next_q_value = reward + self.args.gamma * (1 - done) * min_q_target
         return next_q_value
 
-    def learn(self, batch: ReplayBufferSamples) -> Tuple[float, float, float]:
+    def learn(self, batch: ReplayBufferSamples) -> Dict[str, float]:
         """Update the model by TD actor-critic.
 
         Args:
             batch (ReplayBufferSamples): Batch of samples from the replay buffer.
 
         Returns:
-            Tuple[float, float, float]: Losses for the actor, critic1, and critic2 networks.
+            Dict[str, float]: Dictionary of loss values.
         """
         obs = batch.obs
         next_obs = batch.next_obs
@@ -169,9 +169,9 @@ class SACAgent(BaseAgent):
             next_q_target = self.calc_q_target(next_obs, reward, done)
 
         q1_action_value = self.critic1(obs).gather(1, action)
-        critic1_loss = F.mse_loss(q1_action_value, next_q_target.detach())
+        critic1_loss = F.mse_loss(q1_action_value, next_q_target)
         q2_action_value = self.critic2(obs).gather(1, action)
-        critic2_loss = F.mse_loss(q2_action_value, next_q_target.detach())
+        critic2_loss = F.mse_loss(q2_action_value, next_q_target)
 
         self.critic1_optimizer.zero_grad()
         critic1_loss.backward()

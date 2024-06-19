@@ -4,7 +4,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributions import Normal
 
 
 def init_layer_uniform(layer: nn.Linear, init_w: float = 3e-3) -> nn.Linear:
@@ -50,53 +49,84 @@ class CriticNet(nn.Module):
 
 class SACActor(nn.Module):
 
-    def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int):
+    def __init__(
+        self,
+        obs_dim: int,
+        hidden_dim: int,
+        action_dim: int,
+        action_low: float,
+        action_high: float,
+        log_std_min: float,
+        log_std_max: float,
+    ):
         super(SACActor, self).__init__()
         self.fc1 = nn.Linear(obs_dim, hidden_dim)
-        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
         # set log_std layer
-        self.std_layer = nn.Linear(hidden_dim, action_dim)
+        self.fc_logstd = nn.Linear(hidden_dim, action_dim)
         # set mean layer
-        self.mu_layer = nn.Linear(hidden_dim, action_dim)
+        self.fc_mean = nn.Linear(hidden_dim, action_dim)
+        self.register_buffer(
+            'action_scale',
+            torch.tensor(
+                (action_high - action_low) / 2.0,
+                dtype=torch.float32,
+            ),
+        )
+        self.register_buffer(
+            'action_bias',
+            torch.tensor(
+                (action_high + action_low) / 2.0,
+                dtype=torch.float32,
+            ),
+        )
+        self.log_std_min = log_std_min
+        self.log_std_max = log_std_max
 
     def forward(self, obs: torch.Tensor) -> torch.Tensor:
-        out = self.fc1(obs)
-        out = self.relu(out)
+        out = F.relu(self.fc1(obs))
+        out = F.relu(self.fc1(obs))
         # get mean
-        mu = self.mu_layer(out)
+        mean = self.fc_mean(out)
         # get std
-        std = F.softplus(self.std_layer(out))
-        # sample actions
-        dist = Normal(mu, std)
-        # Reparameterization trick (mean + std * N(0,1))
-        x_t = dist.rsample()
+        log_std = self.fc_logstd(out)
+        log_std = torch.tanh(log_std)
+        log_std = self.log_std_min + 0.5 * (self.log_std_max -
+                                            self.log_std_min) * (log_std + 1)
+        return mean, log_std
 
-        pi = torch.tanh(x_t)
-        # normalize action and log_prob
-        log_pi = dist.log_prob(x_t)
-        # Enforcing Action Bound
-        log_pi = log_pi - torch.log(1 - pi.pow(2) + 1e-7)
-        return pi, log_pi
+    def get_action(self, obs: torch.Tensor):
+        mean, log_std = self.forward(obs)
+        std = log_std.exp()
+        normal_dist = torch.distributions.Normal(mean, std)
+        x_t = normal_dist.rsample()
+        y_t = torch.tanh(x_t)
+        action = y_t * self.action_scale + self.action_bias
+        log_prob = normal_dist.log_prob(x_t)
+        log_prob -= torch.log(self.action_scale * (1 - y_t.pow(2)) + 1e-6)
+        log_prob = log_prob.sum(dim=1, keepdim=True)
+        mean = torch.tanh(mean) * self.action_scale + self.action_bias
+        return action, log_prob, mean
 
 
 class SACCritic(nn.Module):
 
     def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int):
         super(SACCritic, self).__init__()
-        self.fc1 = nn.Linear(obs_dim + action_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc3 = nn.Linear(hidden_dim, action_dim)
-        self.relu = nn.ReLU()
 
-    def forward(self, x: torch.Tensor, a: torch.Tensor) -> torch.Tensor:
+        self.net = nn.Sequential(
+            nn.Linear(obs_dim + action_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, 1),
+        )
+
+    def forward(self, obs: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
         # 拼接状态和动作
-        cat = torch.cat([x, a], dim=1)
-        out = self.fc1(cat)
-        out = self.relu(out)
-        out = self.fc2(out)
-        out = self.relu(out)
-        out = self.fc3(out)
-        return out
+        inputs = torch.cat([obs, action], dim=1)
+        logits = self.net(inputs)
+        return logits
 
 
 class DDPGActor(nn.Module):
