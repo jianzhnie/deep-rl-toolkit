@@ -4,12 +4,14 @@ from .ddpg import DDPGAgent
 from .dqn import DQNAgent
 from .ppo_clip import PPOClipAgent
 from .ppo_penalty import PPOPenaltyAgent
+from .sac import SACAgent
 
 __all__ = [
-    'DQNAgent',
     'BaseAgent',
     'C51Agent',
     'DDPGAgent',
-    'PPOPenaltyAgent',
+    'DQNAgent',
     'PPOClipAgent',
+    'PPOPenaltyAgent',
+    'SACAgent',
 ]

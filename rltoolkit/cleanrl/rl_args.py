@@ -612,6 +612,10 @@ class SACArguments(RLArguments):
             'Learning rate for the temperature parameter. Defaults to 1e-4'
         },
     )
+    epsilon: float = field(
+        default=1e-5,
+        metadata={'help': 'Epsilon for the PPO algorithm. Defaults to 1e-5'},
+    )
     alpha: float = field(
         default=0.2,
         metadata={
@@ -619,8 +623,15 @@ class SACArguments(RLArguments):
             'Initial value for the temperature parameter. Defaults to 0.2'
         },
     )
+    autotune: bool = field(
+        default=True,
+        metadata={
+            'help':
+            'Automatic tuning of the entropy coefficient, alpha. Defaults to True'
+        },
+    )
     target_entropy: float = field(
-        default=None,
+        default=0.89,
         metadata={
             'help': 'Target entropy for the SAC algorithm. Defaults to None'
         },

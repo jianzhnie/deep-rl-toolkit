@@ -63,19 +63,26 @@ class SACAgent(BaseAgent):
 
         # Optimizers
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
-                                                lr=self.args.actor_lr)
+                                                lr=self.args.actor_lr,
+                                                eps=self.args.epsilon)
         self.critic1_optimizer = torch.optim.Adam(self.critic1.parameters(),
-                                                  lr=self.args.critic_lr)
+                                                  lr=self.args.critic_lr,
+                                                  eps=self.args.epsilon)
         self.critic2_optimizer = torch.optim.Adam(self.critic2.parameters(),
-                                                  lr=self.args.critic_lr)
+                                                  lr=self.args.critic_lr,
+                                                  eps=self.args.epsilon)
 
         # Temperature parameter (alpha) for entropy term
-        self.log_alpha = torch.tensor(np.log(0.01),
-                                      dtype=torch.float,
-                                      device=device)
-        self.log_alpha.requires_grad = True
-        self.log_alpha_optimizer = torch.optim.Adam([self.log_alpha],
-                                                    lr=self.args.alpha_lr)
+        if self.args.autotune:
+            self.target_entropy = -self.args.target_entropy * torch.log(
+                1 / torch.tensor(self.action_dim))
+            self.log_alpha = torch.zeros(1, requires_grad=True, device=device)
+            self.alpha = self.log_alpha.exp().item()
+            self.alpha_optimizer = torch.optim.Adam([self.log_alpha],
+                                                    lr=self.args.alpha_lr,
+                                                    eps=self.args.epsilon)
+        else:
+            self.alpha = self.args.alpha
 
     def get_action(self, obs: np.ndarray) -> int:
         """Select an action from the input state with exploration.
@@ -112,7 +119,7 @@ class SACAgent(BaseAgent):
             action = action_dist.probs.argmax(dim=1, keepdim=True)
         return action.item()
 
-    def calc_target(
+    def calc_q_target(
         self,
         next_obs: torch.Tensor,
         reward: torch.Tensor,
@@ -128,19 +135,19 @@ class SACAgent(BaseAgent):
         Returns:
             torch.Tensor: Target Q-value.
         """
-        logits = self.actor(next_obs)
-        action_dist = Categorical(logits=logits)
-        entropy = action_dist.entropy()
+        next_logits = self.actor(next_obs)
+        next_action_dist = Categorical(logits=next_logits)
+        next_log_pi = F.log_softmax(next_logits, dim=1)
+        next_action_prob = next_action_dist.probs
 
-        q1_value = self.target_critic1(next_obs)
-        q2_value = self.target_critic2(next_obs)
-        min_qvalue = torch.sum(action_dist.probs *
-                               torch.min(q1_value, q2_value),
-                               dim=1,
-                               keepdim=True)
-        next_value = min_qvalue + self.log_alpha.exp() * entropy
-        td_target = reward + self.args.gamma * next_value * (1 - done)
-        return td_target
+        q1_next_target = self.target_critic1(next_obs)
+        q2_next_target = self.target_critic2(next_obs)
+        min_q_target = (
+            next_action_prob * torch.min(q1_next_target, q2_next_target) -
+            self.alpha * next_log_pi)
+        min_q_target = torch.sum(min_q_target, dim=1, keepdim=True)
+        next_q_value = reward + self.args.gamma * (1 - done) * min_q_target
+        return next_q_value
 
     def learn(self, batch: ReplayBufferSamples) -> Tuple[float, float, float]:
         """Update the model by TD actor-critic.
@@ -158,11 +165,13 @@ class SACAgent(BaseAgent):
         done = batch.dones
 
         # Update Critic Networks
-        td_target = self.calc_target(next_obs, reward, done)
-        critic1_q_values = self.critic1(obs).gather(1, action)
-        critic1_loss = F.mse_loss(critic1_q_values, td_target.detach())
-        critic2_q_values = self.critic2(obs).gather(1, action)
-        critic2_loss = F.mse_loss(critic2_q_values, td_target.detach())
+        with torch.no_grad():
+            next_q_target = self.calc_q_target(next_obs, reward, done)
+
+        q1_action_value = self.critic1(obs).gather(1, action)
+        critic1_loss = F.mse_loss(q1_action_value, next_q_target.detach())
+        q2_action_value = self.critic2(obs).gather(1, action)
+        critic2_loss = F.mse_loss(q2_action_value, next_q_target.detach())
 
         self.critic1_optimizer.zero_grad()
         critic1_loss.backward()
@@ -175,25 +184,30 @@ class SACAgent(BaseAgent):
         # Update Actor Network
         logits = self.actor(obs)
         action_dist = Categorical(logits=logits)
-        entropy = action_dist.entropy()
-        q1_value = self.critic1(obs)
-        q2_value = self.critic2(obs)
-        min_qvalue = torch.sum(action_dist.probs *
-                               torch.min(q1_value, q2_value),
-                               dim=1,
-                               keepdim=True)
-        actor_loss = torch.mean(-self.log_alpha.exp() * entropy - min_qvalue)
+        log_pi = F.log_softmax(logits, dim=1)
+        action_prob = action_dist.probs
+
+        with torch.no_grad():
+            q1_value = self.critic1(obs)
+            q2_value = self.critic2(obs)
+            min_qvalue = torch.min(q1_value, q2_value)
+
+        actor_loss = torch.mean(action_prob *
+                                (self.alpha * log_pi - min_qvalue))
 
         self.actor_optimizer.zero_grad()
         actor_loss.backward()
         self.actor_optimizer.step()
 
         # Update Alpha
-        alpha_loss = torch.mean((entropy - self.args.target_entropy).detach() *
-                                self.log_alpha.exp())
-        self.log_alpha_optimizer.zero_grad()
-        alpha_loss.backward()
-        self.log_alpha_optimizer.step()
+        if self.args.autotune:
+            alpha_loss = torch.mean(action_prob.detach() *
+                                    (-self.log_alpha.exp() *
+                                     (log_pi + self.target_entropy).detach()))
+            self.alpha_optimizer.zero_grad()
+            alpha_loss.backward()
+            self.alpha_optimizer.step()
+            self.alpha = self.log_alpha.exp().item()
 
         # Soft Update of Target Networks
         if self.learner_update_step % self.args.target_update_frequency == 0:
@@ -208,7 +222,11 @@ class SACAgent(BaseAgent):
         self.learner_update_step += 1
 
         result = {
+            'alpha': self.alpha,
+            'alpha_loss': alpha_loss.item(),
             'actor_loss': actor_loss.item(),
+            'q1_value': q1_value.mean().item(),
+            'q2_value': q2_value.mean().item(),
             'critic1_loss': critic1_loss.item(),
             'critic2_loss': critic2_loss.item(),
         }
