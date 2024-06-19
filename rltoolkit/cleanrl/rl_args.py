@@ -6,6 +6,7 @@ from typing import Optional
 class RLArguments:
     """Common settings for Reinforcement Learning algorithms."""
 
+    # Common settings
     project: str = field(
         default='rltoolkit',
         metadata={'help': "Name of the project. Defaults to 'rltoolkit'"},
@@ -31,6 +32,7 @@ class RLArguments:
             'help': 'Seed for environment randomization. Defaults to 42'
         },
     )
+    # Environment settings
     env_id: str = field(
         default='CartPole-v0',
         metadata={'help': "The environment name. Defaults to 'CartPole-v0'"},
@@ -49,6 +51,7 @@ class RLArguments:
             'Flag indicating whether to capture videos of the environment during training.'
         },
     )
+    # ReplayBuffer settings
     buffer_size: int = field(
         default=10000,
         metadata={
@@ -62,6 +65,7 @@ class RLArguments:
             'Size of the mini-batches sampled from the replay buffer during training. Defaults to 32'
         },
     )
+    # Training parameters
     n_steps: int = field(
         default=1,
         metadata={
@@ -85,6 +89,7 @@ class RLArguments:
         default=10,
         metadata={'help': 'Number of episodes to evaluate. Defaults to 10'},
     )
+    # Logging and saving
     work_dir: str = field(
         default='work_dirs',
         metadata={
@@ -561,12 +566,6 @@ class PPOArguments(RLArguments):
     max_grad_norm: float = field(
         default=1.0,
         metadata={'help': 'Maximum gradient norm. Defaults to 1.0'},
-    )
-    num_episode: int = field(
-        default=1000,
-        metadata={
-            'help': 'Number of episodes to run for training. Defaults to 1000'
-        },
     )
     rollout_length: int = field(
         default=128,
