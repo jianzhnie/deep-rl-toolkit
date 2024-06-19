@@ -90,14 +90,15 @@ class OnPolicyRunner(BaseRunner):
         """Train the agent."""
         self.text_logger.info('Start Training')
         progress_bar = ProgressBar(self.args.max_timesteps)
-        num_episode = self.args.max_timesteps // self.args.rollout_length
+        num_episode = self.args.max_timesteps // self.args.rollout_steps
         self.start_time = time.time()
         for self.episode_cnt in range(1, num_episode + 1):
             # Collect rollout data
             self.buffer.reset()
             obs, _ = self.train_env.reset()
+            done = False
             episode_reward = 0
-            for step in range(self.args.rollout_length):
+            for step in range(self.args.rollout_steps):
                 progress_bar.update(1)
                 self.global_step += 1
                 # Get action，log_prob, value and entropy from the agent
@@ -107,10 +108,11 @@ class OnPolicyRunner(BaseRunner):
                 # Take a step in the environment
                 next_obs, reward, terminated, truncated, info = self.train_env.step(
                     action)
-                done = np.logical_or(terminated, truncated)
+                next_done = np.logical_or(terminated, truncated)
                 # Add the obs, action, reward, done, value, log_prob to the buffer
                 self.buffer.add(obs, action, reward, done, value, log_prob)
                 obs = next_obs
+                done = next_done
                 episode_reward += reward
 
             # Bootstrap value if not done

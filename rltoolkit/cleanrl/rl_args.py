@@ -567,7 +567,7 @@ class PPOArguments(RLArguments):
         default=1.0,
         metadata={'help': 'Maximum gradient norm. Defaults to 1.0'},
     )
-    rollout_length: int = field(
+    rollout_steps: int = field(
         default=128,
         metadata={
             'help':
