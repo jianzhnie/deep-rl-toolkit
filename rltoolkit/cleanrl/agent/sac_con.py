@@ -5,217 +5,229 @@ import gym
 import numpy as np
 import torch
 import torch.nn.functional as F
-from rltoolkit.cleanrl.rl_args import DDPGArguments
-from rltoolkit.cleanrl.utils.ac_net import SACActor, SACCritic
+from rltoolkit.cleanrl.agent.base import BaseAgent
+from rltoolkit.cleanrl.rl_args import SACArguments
+from rltoolkit.cleanrl.utils.ac_net import ActorNet, CriticNet
+from rltoolkit.data.utils.type_aliases import ReplayBufferSamples
+from rltoolkit.utils import soft_target_update
+from torch.distributions import Categorical
 
 
-class Agent(object):
-    """Agent interacting with environment.
+class SACConAgent(BaseAgent):
+    """Agent interacting with environment using Soft Actor-Critic (SAC)
+    algorithm.
 
-    The “Critic” estimates the value function. This could be the action-value (the Q value) or state-value (the V value).
-
-    The “Actor” updates the policy distribution in the direction suggested by the Critic (such as with policy gradients).
-
-    Attribute:
-        gamma (float): discount factor
-        entropy_weight (float): rate of weighting entropy into the loss function
-        actor (nn.Module): target actor model to select actions
-        critic (nn.Module): critic model to predict state values
-        actor_optimizer (optim.Optimizer) : optimizer of actor
-        critic_optimizer (optim.Optimizer) : optimizer of critic
-        device (torch.device): cpu / gpu
+    The "Critic" estimates the value function. This could be the action-value
+    (the Q value) or state-value (the V value). The "Actor" updates the policy
+    distribution in the direction suggested by the Critic (such as with policy
+    gradients).
     """
 
     def __init__(
         self,
-        args: DDPGArguments,
+        args: SACArguments,
         env: gym.Env,
         state_shape: Union[int, List[int]],
         action_shape: Union[int, List[int]],
         device: str = 'cpu',
     ) -> None:
+        """Initialize the SAC agent.
+
+        Args:
+            args (SACArguments): Hyperparameters for SAC.
+            env (gym.Env): Environment to interact with.
+            state_shape (Union[int, List[int]]): Shape of the state space.
+            action_shape (Union[int, List[int]]): Shape of the action space.
+            device (str, optional): Device to run the computations on. Defaults to 'cpu'.
+        """
         self.args = args
         self.env = env
         self.device = device
         self.obs_dim = int(np.prod(state_shape))
         self.action_dim = int(np.prod(action_shape))
-
         self.learner_update_step = 0
+        self.target_model_update_step = 0
 
-        # 策略网络
-        self.actor = SACActor(self.obs_dim, self.args.hidden_dim,
+        # Policy Network
+        self.actor = ActorNet(self.obs_dim, self.args.hidden_dim,
                               self.action_dim).to(device)
-        # 价值网络
-        self.critic1 = SACCritic(self.obs_dim, self.args.hidden_dim,
+        # Value Networks
+        self.critic1 = CriticNet(self.obs_dim, self.args.hidden_dim,
                                  self.action_dim).to(device)
-        self.critic2 = SACCritic(self.obs_dim, self.args.hidden_dim,
+        self.critic2 = CriticNet(self.obs_dim, self.args.hidden_dim,
                                  self.action_dim).to(device)
 
-        #  Target network
+        # Target Value Networks
         self.target_critic1 = copy.deepcopy(self.critic1)
         self.target_critic2 = copy.deepcopy(self.critic2)
 
-        # 策略网络优化器
+        # Optimizers
         self.actor_optimizer = torch.optim.Adam(self.actor.parameters(),
-                                                lr=self.args.actor_lr)
-        # 价值网络优化器
+                                                lr=self.args.actor_lr,
+                                                eps=self.args.epsilon)
         self.critic1_optimizer = torch.optim.Adam(self.critic1.parameters(),
-                                                  lr=self.args.critic_lr)
+                                                  lr=self.args.critic_lr,
+                                                  eps=self.args.epsilon)
         self.critic2_optimizer = torch.optim.Adam(self.critic2.parameters(),
-                                                  lr=self.args.critic_lr)
-        # Concat the Q-network parameters to use one optim
-        self.critic_parameters = list(self.critic1.parameters()) + list(
-            self.critic2.parameters())
-        self.critic_optimizer = torch.optim.Adam(self.critic1,
-                                                 lr=self.args.critic_lr)
+                                                  lr=self.args.critic_lr,
+                                                  eps=self.args.epsilon)
 
-        # automatic entropy tuning
-        # If automatic entropy tuning is True,
-        # initialize a target entropy, a log alpha and an alpha optimizer
-        if self.args.automatic_entropy_tuning:
-            self.target_entropy = -np.prod((self.action_dim, )).item()
-            # 使用alpha的log值,可以使训练结果比较稳定
-            self.log_alpha = torch.tensor(np.log(0.01),
-                                          dtype=torch.float,
-                                          requires_grad=True,
-                                          device=device)
+        # Temperature parameter (alpha) for entropy term
+        if self.args.autotune:
+            self.target_entropy = -self.args.target_entropy * torch.log(
+                1 / torch.tensor(self.action_dim))
+            self.log_alpha = torch.zeros(1, requires_grad=True, device=device)
+            self.alpha = self.log_alpha.exp().item()
             self.alpha_optimizer = torch.optim.Adam([self.log_alpha],
-                                                    lr=self.args.alpha_lr)
+                                                    lr=self.args.alpha_lr,
+                                                    eps=self.args.epsilon)
+        else:
+            self.alpha = self.args.alpha
 
-        self.device = device
+    def get_action(self, obs: np.ndarray) -> int:
+        """Select an action from the input state with exploration.
 
-    def sample(self, obs: np.ndarray):
-        """Select an action from the input state."""
-        # if initial random action should be conducted
-        if self.learner_update_step < self.initial_random_steps:
+        Args:
+            obs (np.ndarray): Observation from the environment.
+
+        Returns:
+            int: Selected action.
+        """
+        if self.learner_update_step < self.args.warmup_learn_steps:
             action = self.env.action_space.sample()
         else:
-            obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-            action, log_probs = self.actor(obs)
-            action = action.detach().cpu().numpy()
-        action = action.flatten()
-        return action
+            obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(
+                self.device)
+            logits = self.actor(obs_tensor)
+            action_dist = Categorical(logits=logits)
+            action = action_dist.sample()
+        return action.item()
 
-    def predict(self, obs) -> int:
-        obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        action, log_probs = self.actor(obs)
-        action = action.detach().cpu().numpy().flatten()
-        return action
+    def predict(self, obs: np.ndarray) -> int:
+        """Predict an action from the input state without exploration (greedy).
 
-    # Set up function for computing SAC Q-losses
-    def compute_critic_loss(self, obs: torch.Tensor, action: torch.Tensor,
-                            reward: torch.Tensor, next_obs: torch.Tensor,
-                            terminal: torch.Tensor) -> torch.Tensor:
+        Args:
+            obs (np.ndarray): Observation from the environment.
 
-        # Prediction π(a'|s'), logπ(a'|s')
-        # Target actions come from *current* policy
-        next_pi, next_log_pi = self.actor(next_obs)
+        Returns:
+            int: Predicted action.
+        """
+        obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
+        with torch.no_grad():
+            logits = self.actor(obs_tensor)
+            action_dist = Categorical(logits=logits)
+            action = action_dist.probs.argmax(dim=1, keepdim=True)
+        return action.item()
 
-        # Prediction Q1(s,a), Q2(s,a)
-        pred_q1_value = self.critic1(obs, action)
-        pred_q2_value = self.critic2(obs, action)
+    def calc_q_target(
+        self,
+        next_obs: torch.Tensor,
+        reward: torch.Tensor,
+        done: torch.Tensor,
+    ) -> torch.Tensor:
+        """Calculate the target Q-value for the next state.
 
-        # Target Q-values
-        # Min Double-Q: min(Q1‾(s',π(a'|s')), Q2‾(s',π(a'|s')))
-        q1_next_pi = self.target_critic1(next_obs, next_pi)
-        q2_next_pi = self.target_critic2(next_obs, next_pi)
-        min_q_next_pi = torch.min(q1_next_pi, q2_next_pi)
+        Args:
+            next_obs (torch.Tensor): Next state observations.
+            reward (torch.Tensor): Reward received.
+            done (torch.Tensor): Done flag indicating episode termination.
 
-        # TD target for Q regression
-        td_v_target = min_q_next_pi - self.alpha * next_log_pi
-        td_q_target = reward + self.gamma * td_v_target * (1 - terminal)
+        Returns:
+            torch.Tensor: Target Q-value.
+        """
+        next_logits = self.actor(next_obs)
+        next_action_dist = Categorical(logits=next_logits)
+        next_log_pi = F.log_softmax(next_logits, dim=1)
+        next_action_prob = next_action_dist.probs
 
-        # MSE loss against Bellman backup
-        q1_loss = F.mse_loss(pred_q1_value, td_q_target.detach())
-        q2_loss = F.mse_loss(pred_q2_value, td_q_target.detach())
-        q_loss = q1_loss + q2_loss
+        q1_next_target = self.target_critic1(next_obs)
+        q2_next_target = self.target_critic2(next_obs)
+        min_q_target = (
+            next_action_prob * torch.min(q1_next_target, q2_next_target) -
+            self.alpha * next_log_pi)
+        min_q_target = torch.sum(min_q_target, dim=1, keepdim=True)
+        next_q_value = reward + self.args.gamma * (1 - done) * min_q_target
+        return next_q_value
 
-        return q_loss, q1_loss, q2_loss
+    def learn(self, batch: ReplayBufferSamples) -> Tuple[float, float, float]:
+        """Update the model by TD actor-critic.
 
-    # Set up function for computing SAC pi loss
-    def compute_actor_loss(self, obs: torch.Tensor) -> torch.Tensor:
-        # Prediction π(a|s), logπ(a|s),
-        # π(a'|s'), logπ(a'|s'),
-        pi, log_pi = self.actor(obs)
+        Args:
+            batch (ReplayBufferSamples): Batch of samples from the replay buffer.
 
-        # Min Double-Q: min(Q1(s,π(a|s)), Q2(s,π(a|s))),
-        q1_pi = self.critic1(obs, pi)
-        q2_pi = self.critic2(obs, pi)
-        min_q_pi = torch.min(q1_pi, q2_pi)
+        Returns:
+            Tuple[float, float, float]: Losses for the actor, critic1, and critic2 networks.
+        """
+        obs = batch.obs
+        next_obs = batch.next_obs
+        action = batch.actions.long()
+        reward = batch.rewards
+        done = batch.dones
 
-        # Entropy-regularized policy loss
-        actor_loss = (self.alpha * log_pi - min_q_pi).mean()
-        return actor_loss, log_pi
+        # Update Critic Networks
+        with torch.no_grad():
+            next_q_target = self.calc_q_target(next_obs, reward, done)
 
-    def soft_update(self, net, target_net):
-        for param_target, param in zip(target_net.parameters(),
-                                       net.parameters()):
-            param_target.data.copy_(param_target.data * (1.0 - self.tau) +
-                                    param.data * self.tau)
+        q1_action_value = self.critic1(obs).gather(1, action)
+        critic1_loss = F.mse_loss(q1_action_value, next_q_target.detach())
+        q2_action_value = self.critic2(obs).gather(1, action)
+        critic2_loss = F.mse_loss(q2_action_value, next_q_target.detach())
 
-    def learn(self, obs: torch.Tensor, action: torch.Tensor,
-              reward: torch.Tensor, next_obs: torch.Tensor,
-              terminal: torch.Tensor) -> Tuple[float, float]:
+        self.critic1_optimizer.zero_grad()
+        critic1_loss.backward()
+        self.critic1_optimizer.step()
 
-        # 对倒立摆环境的奖励进行重塑以便训练
-        reward = (reward + 8.0) / 8.0
+        self.critic2_optimizer.zero_grad()
+        critic2_loss.backward()
+        self.critic2_optimizer.step()
 
-        # Prediction π(a|s), logπ(a|s), π(a'|s'), logπ(a'|s'),
-        pi, log_pi = self.actor(obs)
-        # Target actions come from *current* policy
-        next_pi, next_log_pi = self.actor(next_obs)
+        # Update Actor Network
+        logits = self.actor(obs)
+        action_dist = Categorical(logits=logits)
+        log_pi = F.log_softmax(logits, dim=1)
+        action_prob = action_dist.probs
 
-        # ###### train alpha #####
-        # If automatic entropy tuning is True, update alpha
-        if self.automatic_entropy_tuning:
-            alpha_loss = -torch.mean((self.log_alpha.exp() *
-                                      (log_pi + self.target_entropy).detach()))
+        with torch.no_grad():
+            q1_value = self.critic1(obs)
+            q2_value = self.critic2(obs)
+            min_qvalue = torch.min(q1_value, q2_value)
+
+        actor_loss = torch.mean(action_prob *
+                                (self.alpha * log_pi - min_qvalue))
+
+        self.actor_optimizer.zero_grad()
+        actor_loss.backward()
+        self.actor_optimizer.step()
+
+        # Update Alpha
+        if self.args.autotune:
+            alpha_loss = torch.mean(action_prob.detach() *
+                                    (-self.log_alpha.exp() *
+                                     (log_pi + self.target_entropy).detach()))
             self.alpha_optimizer.zero_grad()
             alpha_loss.backward()
             self.alpha_optimizer.step()
-            # used for the actor loss calculation
-            self.alpha = self.log_alpha.exp()
+            self.alpha = self.log_alpha.exp().item()
 
-        # ###### train Critic Network #####
-        #  Prediction Q1(s,a), Q2(s,a)
-        pred_q1_value = self.critic1(obs, action)
-        pred_q2_value = self.critic2(obs, action)
+        # Soft Update of Target Networks
+        if self.learner_update_step % self.args.target_update_frequency == 0:
+            soft_target_update(self.critic1,
+                               self.target_critic1,
+                               tau=self.args.soft_update_tau)
+            soft_target_update(self.critic2,
+                               self.target_critic2,
+                               tau=self.args.soft_update_tau)
+            self.target_model_update_step += 1
 
-        # Target Q-values
-        # Min Double-Q: min(Q1‾(s',π(a'|s')), Q2‾(s',π(a'|s')))
-        q1_next_pi = self.target_critic1(next_obs, next_pi)
-        q2_next_pi = self.target_critic2(next_obs, next_pi)
-        min_q_next_pi = torch.min(q1_next_pi, q2_next_pi)
-
-        # TD target for Q regression
-        td_v_target = min_q_next_pi - self.alpha * next_log_pi
-        td_q_target = reward + self.gamma * td_v_target * (1 - terminal)
-
-        # MSE loss against Bellman backup
-        q1_loss = F.mse_loss(pred_q1_value, td_q_target.detach())
-        q2_loss = F.mse_loss(pred_q2_value, td_q_target.detach())
-        q_loss = q1_loss + q2_loss
-
-        # Update two Q-network parameter
-        # First run one gradient descent step for Q1 and Q2
-        self.critic_optimizer.zero_grad()
-        q_loss.backward()
-        self.critic_optimizer.step()
-
-        # ###### train Policy network #####
-        # Min Double-Q: min(Q1(s,π(a|s)), Q2(s,π(a|s))),
-        q1_pi = self.critic1(obs, pi)
-        q2_pi = self.critic2(obs, pi)
-        min_q_pi = torch.min(q1_pi, q2_pi)
-
-        # Entropy-regularized policy loss
-        policy_loss = torch.mean(self.alpha * log_pi - min_q_pi)
-        self.actor_optimizer.zero_grad()
-        policy_loss.backward()
-        self.actor_optimizer.step()
-
-        self.soft_update(self.critic1, self.target_critic1)
-        self.soft_update(self.critic2, self.target_critic2)
         self.learner_update_step += 1
 
-        return policy_loss.item(), q_loss.item()
+        result = {
+            'alpha': self.alpha,
+            'alpha_loss': alpha_loss.item(),
+            'actor_loss': actor_loss.item(),
+            'q1_value': q1_action_value.mean().item(),
+            'q2_value': q2_action_value.mean().item(),
+            'critic1_loss': critic1_loss.item(),
+            'critic2_loss': critic2_loss.item(),
+        }
+        return result

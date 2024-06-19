@@ -225,8 +225,8 @@ class SACAgent(BaseAgent):
             'alpha': self.alpha,
             'alpha_loss': alpha_loss.item(),
             'actor_loss': actor_loss.item(),
-            'q1_value': q1_value.mean().item(),
-            'q2_value': q2_value.mean().item(),
+            'q1_value': q1_action_value.mean().item(),
+            'q2_value': q2_action_value.mean().item(),
             'critic1_loss': critic1_loss.item(),
             'critic2_loss': critic2_loss.item(),
         }
