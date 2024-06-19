@@ -922,3 +922,165 @@ class SimpleRolloutBuffer:
         if copy:
             return torch.tensor(array, dtype=torch.float32).to(self.device)
         return torch.as_tensor(array, dtype=torch.float32).to(self.device)
+
+
+class ListRolloutBuffer:
+    """Rollout buffer used in on-policy algorithms like A2C/PPO. This buffer
+    stores `buffer_size` transitions collected using the current policy. The
+    experience is discarded after the policy update.
+
+    Args:
+        args (RLArguments): Hyperparameters for the buffer and algorithms.
+        observation_space (spaces.Space): Observation space.
+        action_space (spaces.Space): Action space.
+        device (Union[torch.device, str]): PyTorch device.
+    """
+
+    def __init__(
+        self,
+        args: RLArguments,
+        observation_space: spaces.Space,
+        action_space: spaces.Space,
+        device: Union[torch.device, str] = 'auto',
+    ) -> None:
+        self.args = args
+        self.buffer_size = args.buffer_size
+        self.obs_shape = get_obs_shape(observation_space)
+        self.action_dim = get_action_dim(action_space)
+        self.device = device
+
+    def reset(self) -> None:
+        """Reset the rollout buffer by clearing all stored transitions."""
+        self.obs = []
+        self.actions = []
+        self.rewards = []
+        self.values = []
+        self.dones = []
+        self.log_probs = []
+
+        self.curr_ptr = 0
+        self.curr_size = 0
+
+    def to_array(self) -> None:
+        self.obs = np.array(self.obs)
+        self.actions = np.array(self.actions)
+        self.rewards = np.array(self.rewards)
+        self.values = np.array(self.values)
+        self.dones = np.array(self.dones)
+        self.log_probs = np.array(self.log_probs)
+
+    def compute_returns_and_advantage(self, last_values: Union[float,
+                                                               np.ndarray],
+                                      dones: np.ndarray) -> None:
+        """Compute the lambda-return (TD(lambda) estimate) and GAE(lambda)
+        advantage.
+
+        Args:
+            last_values (torch.Tensor): State value estimation for the last step (one for each env).
+            dones (np.ndarray): Boolean array indicating if the last step was terminal.
+        """
+        last_gae_lam = 0
+        self.to_array()
+        self.advantages = np.zeros_like(self.rewards)
+        for step in reversed(range(self.buffer_size)):
+            if step == self.buffer_size - 1:
+                next_non_terminal = 1.0 - dones
+                next_values = last_values
+            else:
+                next_non_terminal = 1.0 - self.dones[step + 1]
+                next_values = self.values[step + 1]
+
+            delta = (self.rewards[step] +
+                     self.args.gamma * next_values * next_non_terminal -
+                     self.values[step])
+
+            last_gae_lam = (delta + self.args.gamma * self.args.gae_lambda *
+                            next_non_terminal * last_gae_lam)
+
+            self.advantages[step] = last_gae_lam
+        self.returns = self.advantages + self.values
+
+    def add(
+        self,
+        obs: Union[List[float], np.ndarray],
+        action: int,
+        reward: float,
+        done: bool,
+        value: float,
+        log_prob: float,
+    ) -> None:
+        """Add a new transition to the buffer.
+
+        Args:
+            obs (np.ndarray): Observation.
+            action (np.ndarray): Action.
+            reward (float): Reward.
+            done (bool): Whether the episode is done.
+            value (torch.Tensor): Estimated value of the current state.
+            log_prob (torch.Tensor): Log probability of the action.
+        """
+        self.obs.append(obs)
+        self.actions.append(action)
+        self.rewards.append(reward)
+        self.dones.append(done)
+        self.values.append(value)
+        self.log_probs.append(log_prob)
+
+        self.curr_ptr = (self.curr_ptr + 1) % self.buffer_size
+        self.curr_size = min(self.curr_size + 1, self.buffer_size)
+
+    def sample(self, batch_size: Optional[int] = None) -> RolloutBufferSamples:
+        """Sample transitions from the buffer."""
+        data = (
+            np.array(self.obs),
+            np.array(self.actions),
+            np.array(self.values),
+            np.array(self.log_probs),
+            np.array(self.advantages),
+            np.array(self.returns),
+        )
+        samples = RolloutBufferSamples(*tuple(map(self.to_torch, data)))
+        return samples
+
+    def data_generate(self,
+                      num_mini_batch: int = None,
+                      mini_batch_size: int = None
+                      ) -> Generator[RolloutBufferSamples, Any, None]:
+        if mini_batch_size is None:
+            assert self.buffer_size >= num_mini_batch, (
+                'PPO requires the number of buffer_size ({}) '
+                'to be greater than or equal to the number of PPO mini batches ({}).'
+                ''.format(
+                    self.buffer_size,
+                    num_mini_batch,
+                ))
+            mini_batch_size = self.buffer_size // num_mini_batch
+        indices = np.arange(self.buffer_size)
+        sampler = BatchSampler(SubsetRandomSampler(indices),
+                               mini_batch_size,
+                               drop_last=True)
+        for batch_inds in sampler:
+            data = (
+                self.obs[batch_inds],
+                self.actions[batch_inds],
+                self.values[batch_inds],
+                self.log_probs[batch_inds],
+                self.advantages[batch_inds],
+                self.returns[batch_inds],
+            )
+            samples = RolloutBufferSamples(*tuple(map(self.to_torch, data)))
+            yield samples
+
+    def to_torch(self, array: np.ndarray, copy: bool = True) -> torch.Tensor:
+        """Convert a numpy array to a PyTorch tensor.
+
+        Args:
+            array (np.ndarray): The numpy array to convert.
+            copy (bool, optional): Whether to copy the data. Defaults to True.
+
+        Returns:
+            torch.Tensor: The PyTorch tensor.
+        """
+        if copy:
+            return torch.tensor(array, dtype=torch.float32).to(self.device)
+        return torch.as_tensor(array, dtype=torch.float32).to(self.device)

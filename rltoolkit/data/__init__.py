@@ -9,6 +9,7 @@ from rltoolkit.data.buffer.buffers import (
     RolloutBuffer,
     SimpleReplayBuffer,
     SimpleRolloutBuffer,
+    ListRolloutBuffer,
 )
 from rltoolkit.data.buffer.cached import CachedReplayBuffer
 from rltoolkit.data.buffer.her import HERReplayBuffer
@@ -52,4 +53,5 @@ __all__ = [
     'HERVectorReplayBuffer',
     'PrioritizedVectorReplayBuffer',
     'SimpleRolloutBuffer',
+    'ListRolloutBuffer',
 ]
