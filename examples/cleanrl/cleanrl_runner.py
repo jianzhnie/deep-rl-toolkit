@@ -11,7 +11,8 @@ import yaml
 
 sys.path.append(os.getcwd())
 import gymnasium as gym
-from rltoolkit.cleanrl.agent import C51Agent, DDPGAgent, DQNAgent, PPOAgent
+from rltoolkit.cleanrl.agent import (C51Agent, DDPGAgent, DQNAgent,
+                                     PPOClipAgent, PPOPenaltyAgent)
 from rltoolkit.cleanrl.offpolicy_runner import OffPolicyRunner
 from rltoolkit.cleanrl.onpolicy_runner import OnPolicyRunner
 from rltoolkit.cleanrl.rl_args import (C51Arguments, DDPGArguments,
@@ -84,7 +85,8 @@ def main() -> None:
             'pg',
             'ac',
             'a2c',
-            'ppo',
+            'ppo_clip',
+            'ppo_penalty',
             'ddpg',
             'sac',
             'td3',
@@ -121,9 +123,12 @@ def main() -> None:
     elif run_args.algo_name == 'ddpg':
         algo_args: DDPGArguments = tyro.cli(DDPGArguments)
         Agent: DDPGAgent = DDPGAgent
-    elif run_args.algo_name == 'ppo':
+    elif run_args.algo_name == 'ppo_clip':
         algo_args: PPOArguments = tyro.cli(PPOArguments)
-        Agent: PPOAgent = PPOAgent
+        Agent: PPOClipAgent = PPOClipAgent
+    elif run_args.algo_name == 'ppo_penalty':
+        algo_args: PPOArguments = tyro.cli(PPOArguments)
+        Agent: PPOPenaltyAgent = PPOPenaltyAgent
     elif run_args.algo_name == 'sac':
         algo_args: SACArguments = tyro.cli(SACArguments)
 
@@ -179,7 +184,7 @@ def main() -> None:
             agent=agent,
             device=device,
         )
-    elif args.algo_name in ['ppo', 'pg', 'trpo']:
+    elif args.algo_name in ['ppo_clip', 'ppo_penalty', 'pg', 'trpo']:
         runner = OnPolicyRunner(
             args,
             train_env=train_env,
