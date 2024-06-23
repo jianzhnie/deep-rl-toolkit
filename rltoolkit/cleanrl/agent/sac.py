@@ -40,6 +40,7 @@ class SACAgent(BaseAgent):
             action_shape (Union[int, List[int]]): Shape of the action space.
             device (str, optional): Device to run the computations on. Defaults to 'cpu'.
         """
+        super().__init__(args)
         self.args = args
         self.env = env
         self.device = device
