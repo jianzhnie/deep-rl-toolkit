@@ -200,6 +200,59 @@ class DDPGCritic(nn.Module):
         return out
 
 
+class TD3Actor(nn.Module):
+
+    def __init__(
+        self,
+        obs_dim: int,
+        hidden_dim: int,
+        action_dim: int,
+        action_high: float,
+        action_low: float,
+    ):
+        super().__init__()
+        self.fc1 = nn.Linear(obs_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc_mu = nn.Linear(hidden_dim, action_dim)
+        # action rescaling
+        self.register_buffer(
+            'action_scale',
+            torch.tensor(
+                (action_high - action_low) / 2.0,
+                dtype=torch.float32,
+            ),
+        )
+        self.register_buffer(
+            'action_bias',
+            torch.tensor(
+                (action_high + action_low) / 2.0,
+                dtype=torch.float32,
+            ),
+        )
+
+    def forward(self, obs: torch.Tensor):
+        out = F.relu(self.fc1(obs))
+        out = F.relu(self.fc2(out))
+        out = torch.tanh(self.fc_mu(out))
+        return out * self.action_scale + self.action_bias
+
+
+class TD3Critic(nn.Module):
+
+    def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int):
+        super().__init__()
+        self.fc1 = nn.Linear(obs_dim + action_dim, hidden_dim)
+        self.fc2 = nn.Linear(hidden_dim, hidden_dim)
+        self.fc3 = nn.Linear(hidden_dim, 1)
+
+    def forward(self, obs: torch.Tensor, action: torch.Tensor) -> torch.Tensor:
+        out = torch.cat([obs, action], 1)
+        out = F.relu(self.fc1(out))
+        out = F.relu(self.fc2(out))
+        out = self.fc3(out)
+        return out
+
+
 class OUNoise(object):
 
     def __init__(
