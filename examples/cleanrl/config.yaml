@@ -139,3 +139,50 @@ ppo_penalty:
     rollout_steps: 128
     batch_size: 32
     logger: wandb
+
+sac:
+  CartPole-v0:
+    algo_name: sac
+    max_timesteps: 20000
+    actor_lr: 3.0e-4
+    critic_lr: 3.0e-4
+    alpha_lr: 3.0e-4
+    buffer_size: 10000
+    batch_size: 64
+    logger: tensorboard
+  CartPole-v1:
+    algo_name: sac
+    max_timesteps: 500000
+    actor_lr: 3.0e-4
+    critic_lr: 3.0e-4
+    alpha_lr: 3.0e-3
+    buffer_size: 10000
+    batch_size: 64
+    logger: wandb
+
+td3:
+  Pendulum-v1:
+    algo_name: td3
+    actor_lr: 1.0e-3
+    critic_lr: 1.0e-3
+    max_timesteps: 100000
+    buffer_size: 20000
+    target_update_frequency: 1
+    soft_update_tau: 0.01
+    train_frequency: 10
+    gradient_steps: 2
+    batch_size: 128
+    logger: tensorboard
+
+saccon:
+  Hopper-v4:
+    algo_name: saccon
+    actor_lr: 3.0e-4
+    critic_lr: 1.0e-3
+    alpha_lr: 3.0e-4
+    max_timesteps: 2000000
+    buffer_size: 1000000
+    train_frequency: 10
+    gradient_steps: 2
+    batch_size: 256
+    logger: wandb
