@@ -6,6 +6,7 @@ from .ppo_clip import PPOClipAgent
 from .ppo_penalty import PPOPenaltyAgent
 from .sac import SACAgent
 from .sac_con import SACConAgent
+from .td3 import TD3Agent
 
 __all__ = [
     'BaseAgent',
@@ -16,4 +17,5 @@ __all__ = [
     'PPOPenaltyAgent',
     'SACAgent',
     'SACConAgent',
+    'TD3Agent',
 ]

@@ -37,8 +37,8 @@ class DDPGAgent(BaseAgent):
         self.device = device
         self.obs_dim = int(np.prod(state_shape))
         self.action_dim = int(np.prod(action_shape))
-        self.action_high = self.env.action_space.high
-        self.action_low = self.env.action_space.low
+        self.action_high = self.env.action_space.high[0]
+        self.action_low = self.env.action_space.low[0]
         self.learner_update_step = 0
         self.target_model_update_step = 0
 
