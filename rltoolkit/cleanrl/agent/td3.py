@@ -135,7 +135,7 @@ class TD3Agent(BaseAgent):
 
         # cal policy loss
         actor_loss = torch.tensor(0.0).to(self.device)
-        if self.learner_update_step % self.args.policy_update_frequency == 0:
+        if self.learner_update_step % self.args.actor_update_frequency == 0:
             pi = self.actor(obs)
             q1_pi = self.critic1(obs, pi)
             actor_loss = -torch.mean(q1_pi)
@@ -146,10 +146,13 @@ class TD3Agent(BaseAgent):
             self.actor_optimizer.step()
 
             # 软更新策略网络
-            soft_target_update(self.actor, self.target_actor)
+            soft_target_update(self.actor, self.target_actor,
+                               self.args.soft_update_tau)
             # 软更新价值网络
-            soft_target_update(self.critic1, self.target_critic1)
-            soft_target_update(self.critic2, self.target_critic2)
+            soft_target_update(self.critic1, self.target_critic1,
+                               self.args.soft_update_tau)
+            soft_target_update(self.critic2, self.target_critic2,
+                               self.args.soft_update_tau)
 
         self.learner_update_step += 1
 
