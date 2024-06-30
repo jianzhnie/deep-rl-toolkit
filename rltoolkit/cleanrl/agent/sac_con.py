@@ -1,5 +1,5 @@
 import copy
-from typing import List, Tuple, Union
+from typing import Dict, List, Optional, Union
 
 import gymnasium as gym
 import numpy as np
@@ -28,7 +28,7 @@ class SACConAgent(BaseAgent):
         env: gym.Env,
         state_shape: Union[int, List[int]],
         action_shape: Union[int, List[int]],
-        device: str = 'cpu',
+        device: Optional[Union[str, torch.device]] = None,
     ) -> None:
         """Initialize the SAC agent.
 
@@ -151,7 +151,7 @@ class SACConAgent(BaseAgent):
         next_q_value = reward + self.args.gamma * (1 - done) * min_q_target
         return next_q_value
 
-    def learn(self, batch: ReplayBufferSamples) -> Tuple[float, float, float]:
+    def learn(self, batch: ReplayBufferSamples) -> Dict[str, float]:
         """Update the model by TD actor-critic.
 
         Args:

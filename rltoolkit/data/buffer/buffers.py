@@ -577,7 +577,7 @@ class SimpleReplayBuffer:
         args: RLArguments,
         observation_space: spaces.Space,
         action_space: spaces.Space,
-        device: str = 'cpu',
+        device: Optional[Union[str, torch.device]] = None,
     ) -> None:
         self.args: RLArguments = args
         self.buffer_size = args.buffer_size

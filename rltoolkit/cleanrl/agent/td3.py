@@ -1,5 +1,5 @@
 import copy
-from typing import Dict, List, Union
+from typing import Dict, List, Optional, Union
 
 import gymnasium as gym
 import numpy as np
@@ -30,7 +30,7 @@ class TD3Agent(BaseAgent):
         env: gym.Env,
         state_shape: Union[int, List[int]],
         action_shape: Union[int, List[int]],
-        device: str = 'cpu',
+        device: Optional[Union[str, torch.device]] = None,
     ) -> None:
         super().__init__(args)
         self.args = args
