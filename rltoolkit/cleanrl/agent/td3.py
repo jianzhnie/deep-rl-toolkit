@@ -43,8 +43,8 @@ class TD3Agent(BaseAgent):
         self.device = device
         self.obs_dim = int(np.prod(state_shape))
         self.action_dim = int(np.prod(action_shape))
-        self.action_high = self.env.action_space.high
-        self.action_low = self.env.action_space.low
+        self.action_high = self.env.action_space.high[0]
+        self.action_low = self.env.action_space.low[0]
         self.learner_update_step = 0
         self.target_model_update_step = 0
 
@@ -53,8 +53,8 @@ class TD3Agent(BaseAgent):
             self.obs_dim,
             self.args.hidden_dim,
             self.action_dim,
-            action_low=self.action_low,
             action_high=self.action_high,
+            action_low=self.action_low,
         ).to(device)
 
         # 价值网络
@@ -79,32 +79,30 @@ class TD3Agent(BaseAgent):
         self.critic_optimizer = torch.optim.Adam(self.critic_parameters,
                                                  lr=self.args.critic_lr)
 
-    def sample(self, obs: np.ndarray):
+    def get_action(self, obs: np.ndarray):
         if self.learner_update_step < self.args.warmup_learn_steps:
-            selected_action = self.env.action_space.sample()
+            action = self.env.action_space.sample()
         else:
-            obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(
-                self.device)
-            action = self.actor(obs_tensor).detach().cpu().numpy()
+            action = self.predict(obs)
+
+        return action
+
+    def predict(self, obs: np.ndarray):
+        with torch.no_grad():
+            obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
+            action = self.actor(obs)
             action += torch.normal(
                 0, self.actor.action_scale * self.args.exploration_noise)
             action = action.cpu().numpy().clip(self.action_low,
                                                self.action_high)
-
-        return selected_action
-
-    def predict(self, obs: np.ndarray):
-        obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        with torch.no_grad():
-            action = self.actor(obs_tensor).detach().cpu().numpy()
-        return action
+        return action.flatten()
 
     def learn(self, batch: ReplayBufferSamples) -> Tuple[float, float]:
         """Update the model by TD actor-critic."""
 
         obs = batch.obs
         next_obs = batch.next_obs
-        action = batch.actions.long()
+        action = batch.actions
         reward = batch.rewards
         done = batch.dones
 
@@ -130,13 +128,14 @@ class TD3Agent(BaseAgent):
         q2_loss = F.mse_loss(q2_value, next_q_value)
         critic_loss = q1_loss + q2_loss
 
+        # optimize the critic
         self.critic_optimizer.zero_grad()
         critic_loss.backward()
         self.critic_optimizer.step()
 
         # cal policy loss
-        if self.learner_update_step % self.policy_update_frequency == 0:
-
+        actor_loss = torch.tensor(0.0).to(self.device)
+        if self.learner_update_step % self.args.policy_update_frequency == 0:
             pi = self.actor(obs)
             q1_pi = self.critic1(obs, pi)
             actor_loss = -torch.mean(q1_pi)
@@ -159,5 +158,7 @@ class TD3Agent(BaseAgent):
             'actor_loss': actor_loss.item(),
             'q1_loss': q1_loss.item(),
             'q2_loss': q2_loss.item(),
+            'q1_value': q1_value.mean().item(),
+            'q2_value': q2_value.mean().item(),
         }
         return learn_result
