@@ -695,60 +695,37 @@ class TD3Arguments(RLArguments):
         },
     )
     actor_lr: float = field(
-        default=1e-4,
+        default=1e-3,
         metadata={
             'help': 'Learning rate for the actor network. Defaults to 1e-4'
         },
     )
     critic_lr: float = field(
-        default=1e-4,
+        default=1e-3,
         metadata={
             'help': 'Learning rate for the critic network. Defaults to 1e-4'
         },
     )
-    alpha_lr: float = field(
-        default=1e-4,
-        metadata={
-            'help':
-            'Learning rate for the temperature parameter. Defaults to 1e-4'
-        },
-    )
-    epsilon: float = field(
-        default=1e-5,
-        metadata={'help': 'Epsilon for the PPO algorithm. Defaults to 1e-5'},
-    )
-    alpha: float = field(
+    policy_noise: float = field(
         default=0.2,
         metadata={
-            'help':
-            'Initial value for the temperature parameter. Defaults to 0.2'
+            'help': 'Standard deviation for policy noise. Defaults to 0.2'
         },
     )
-    autotune: bool = field(
-        default=True,
+    noise_clip: float = field(
+        default=0.5,
+        metadata={'help': 'Maximum value for policy noise. Defaults to 0.5'},
+    )
+    exploration_noise: float = field(
+        default=0.1,
         metadata={
-            'help':
-            'Automatic tuning of the entropy coefficient, alpha. Defaults to True'
+            'help': 'Standard deviation for exploration noise. Defaults to 0.1'
         },
     )
-    log_std_min: float = field(
-        default=-5,
-        metadata={
-            'help':
-            'Minimum value for the log standard deviation. Defaults to -5'
-        },
-    )
-    log_std_max: float = field(
+    actor_update_frequency: int = field(
         default=2,
         metadata={
-            'help':
-            'Maximum value for the log standard deviation. Defaults to 2'
-        },
-    )
-    target_entropy: float = field(
-        default=0.89,
-        metadata={
-            'help': 'Target entropy for the SAC algorithm. Defaults to None'
+            'help': 'Frequency of updating the policy network. Defaults to 2'
         },
     )
     warmup_learn_steps: int = field(

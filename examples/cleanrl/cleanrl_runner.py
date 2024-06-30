@@ -12,12 +12,13 @@ import yaml
 sys.path.append(os.getcwd())
 import gymnasium as gym
 from rltoolkit.cleanrl.agent import (C51Agent, DDPGAgent, DQNAgent,
-                                     PPOClipAgent, PPOPenaltyAgent)
+                                     PPOClipAgent, PPOPenaltyAgent, SACAgent,
+                                     SACConAgent, TD3Agent)
 from rltoolkit.cleanrl.offpolicy_runner import OffPolicyRunner
 from rltoolkit.cleanrl.onpolicy_runner import OnPolicyRunner
 from rltoolkit.cleanrl.rl_args import (C51Arguments, DDPGArguments,
                                        DQNArguments, PPOArguments,
-                                       SACArguments)
+                                       SACArguments, TD3Arguments)
 from rltoolkit.utils.logger.logging import get_logger
 
 logger = get_logger(__name__)
@@ -89,6 +90,7 @@ def main() -> None:
             'ppo_penalty',
             'ddpg',
             'sac',
+            'saccon',
             'td3',
         ],
         default='dqn',
@@ -131,6 +133,13 @@ def main() -> None:
         Agent: PPOPenaltyAgent = PPOPenaltyAgent
     elif run_args.algo_name == 'sac':
         algo_args: SACArguments = tyro.cli(SACArguments)
+        Agent: SACAgent = SACAgent
+    elif run_args.algo_name == 'saccon':
+        algo_args: SACArguments = tyro.cli(SACArguments)
+        Agent: SACAgent = SACConAgent
+    elif run_args.algo_name == 'td3':
+        algo_args: TD3Arguments = tyro.cli(TD3Arguments)
+        Agent: TD3Agent = TD3Agent
 
     # Extract Algo-specific settings
     if run_args.algo_name in config:
@@ -176,7 +185,15 @@ def main() -> None:
         action_shape=action_shape,
         device=device,
     )
-    if args.algo_name in ['dqn', 'ddqn', 'ddpg', 'c51']:
+    if args.algo_name in [
+            'c51',
+            'dqn',
+            'ddqn',
+            'ddpg',
+            'sac',
+            'saccon',
+            'td3',
+    ]:
         runner = OffPolicyRunner(
             args,
             train_env=train_env,
@@ -184,7 +201,12 @@ def main() -> None:
             agent=agent,
             device=device,
         )
-    elif args.algo_name in ['ppo_clip', 'ppo_penalty', 'pg', 'trpo']:
+    elif args.algo_name in [
+            'ppo_clip',
+            'ppo_penalty',
+            'pg',
+            'trpo',
+    ]:
         runner = OnPolicyRunner(
             args,
             train_env=train_env,
