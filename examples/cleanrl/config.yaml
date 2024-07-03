@@ -172,7 +172,7 @@ td3:
     train_frequency: 10
     gradient_steps: 2
     batch_size: 128
-    logger: tensorboard
+    logger: wandb
 
 saccon:
   Hopper-v4:
