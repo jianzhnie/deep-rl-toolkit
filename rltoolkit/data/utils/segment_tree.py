@@ -5,30 +5,36 @@ from typing import Callable
 
 
 class SegmentTree:
-    """Create SegmentTree.
+    """Create SegmentTree. Build a Segment Tree data structure.
+
+    https://en.wikipedia.org/wiki/Segment_tree
 
     Taken from OpenAI baselines github repository:
     https://github.com/openai/baselines/blob/master/baselines/common/segment_tree.py
 
-    Attributes:
-        capacity (int)
-        tree (list)
-        operation (function)
+    Can be used as regular array that supports Index arrays, but with two
+    important differences:
+
+        a) setting item's value is slightly slower.
+            It is O(lg capacity) instead of O(1).
+        b) user has access to an efficient ( O(log segment size) )
+            `reduce` operation which reduces `operation` over
+            a contiguous subsequence of items in the array.
+
+    :param capacity: (int) Total size of the array - must be a power of two.
+    :param operation: (lambda (Any, Any): Any) operation for combining elements (eg. sum, max) must form a
+        mathematical group together with the set of possible values for array elements (i.e. be associative)
+    :param neutral_element: (Any) neutral element for the operation above. eg. float('-inf') for max and 0 for sum.
     """
 
-    def __init__(self, capacity: int, operation: Callable, init_value: float):
-        """Initialization.
-
-        Args:
-            capacity (int)
-            operation (function)
-            init_value (float)
-        """
+    def __init__(self, capacity: int, operation: Callable,
+                 init_value: float) -> None:
         assert (capacity > 0 and capacity & (capacity - 1)
                 == 0), 'capacity must be positive and a power of 2.'
         self.capacity = capacity
         self.tree = [init_value for _ in range(2 * capacity)]
         self.operation = operation
+        self.init_value = init_value
 
     def _operate_helper(self, start: int, end: int, node: int, node_start: int,
                         node_end: int) -> float:
@@ -51,7 +57,15 @@ class SegmentTree:
                 )
 
     def operate(self, start: int = 0, end: int = 0) -> float:
-        """Returns result of applying `self.operation`."""
+        """Returns result of applying `self.operation`. to a contiguous
+        subsequence of the array.
+
+            self.operation(arr[start], operation(arr[start+1], operation(... arr[end])))
+
+        :param start: (int) beginning of the subsequence
+        :param end: (int) end of the subsequences
+        :return: (Any) result of reducing self.operation over the specified range of array elements.
+        """
         if end <= 0:
             end += self.capacity
         end -= 1
@@ -89,16 +103,18 @@ class SumSegmentTree(SegmentTree):
         Args:
             capacity (int)
         """
-        super(SumSegmentTree, self).__init__(capacity=capacity,
-                                             operation=operator.add,
-                                             init_value=0.0)
+        super().__init__(capacity=capacity,
+                         operation=operator.add,
+                         init_value=0.0)
 
     def sum(self, start: int = 0, end: int = 0) -> float:
-        """Returns arr[start] + ...
+        """Returns arr[start] + ...+ arr[end].
 
-        + arr[end].
+        :param start: (int) start position of the reduction (must be >= 0)
+        :param end: (int) end position of the reduction (must be < len(arr), can be None for len(arr) - 1)
+        :return: (Any) reduction of SumSegmentTree
         """
-        return super(SumSegmentTree, self).operate(start, end)
+        return super().operate(start, end)
 
     def retrieve(self, upperbound: float) -> int:
         """Find the highest index `i` about upper bound in the tree."""
@@ -132,10 +148,10 @@ class MinSegmentTree(SegmentTree):
         Args:
             capacity (int)
         """
-        super(MinSegmentTree, self).__init__(capacity=capacity,
-                                             operation=min,
-                                             init_value=float('inf'))
+        super().__init__(capacity=capacity,
+                         operation=min,
+                         init_value=float('inf'))
 
     def min(self, start: int = 0, end: int = 0) -> float:
         """Returns min(arr[start], ...,  arr[end])."""
-        return super(MinSegmentTree, self).operate(start, end)
+        return super().operate(start, end)
