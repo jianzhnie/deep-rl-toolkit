@@ -7,7 +7,7 @@ import numpy as np
 import torch
 from gymnasium import spaces
 from rltoolkit.cleanrl.rl_args import RLArguments
-from rltoolkit.data.utils.segment_tree import MinSegmentTree, SumSegmentTree
+from rltoolkit.data.utils import SegmentTree, to_numpy
 from rltoolkit.data.utils.type_aliases import (PrioritizedReplayBufferSamples,
                                                ReplayBufferSamples,
                                                RolloutBufferSamples)
@@ -1112,11 +1112,23 @@ class PrioritizedReplayBuffer(BaseBuffer):
         action_space: spaces.Space,
         device: Union[torch.device, str] = 'auto',
         alpha: float = 1.0,
+        beta: float = 1.0,
+        weight_norm: bool = True,
         num_envs: int = 1,
     ) -> None:
         super().__init__(buffer_size, observation_space, action_space, device,
                          num_envs)
-        assert alpha >= 0
+        assert alpha >= 0.0 and beta >= 0.0
+        self._alpha, self._beta = alpha, beta
+
+        per_capacity = 1
+        while per_capacity < buffer_size:
+            per_capacity *= 2
+
+        self.weight = SegmentTree(per_capacity)
+        self._eps = np.finfo(np.float32).eps.item()
+        self._weight_norm = weight_norm
+        self._max_prio = self._min_prio = 1.0
 
         self.observations = np.zeros(
             (self.buffer_size, self.num_envs) + self.obs_shape,
@@ -1134,13 +1146,8 @@ class PrioritizedReplayBuffer(BaseBuffer):
         self.dones = np.zeros((self.buffer_size, self.num_envs),
                               dtype=np.float32)
 
-        it_capacity = 1
-        while it_capacity < buffer_size:
-            it_capacity *= 2
-        self._alpha = alpha
-        self._it_sum = SumSegmentTree(it_capacity)
-        self._it_min = MinSegmentTree(it_capacity)
-        self._max_weight = 1.0
+    def init_weight(self, index: Union[int, np.ndarray]) -> None:
+        self.weight[index] = self._max_prio**self._alpha
 
     def add(
         self,
@@ -1157,9 +1164,7 @@ class PrioritizedReplayBuffer(BaseBuffer):
         self.actions[self.curr_ptr] = np.array(action).copy()
         self.rewards[self.curr_ptr] = np.array(reward).copy()
         self.dones[self.curr_ptr] = np.array(done).copy()
-
-        self._it_sum[self.curr_ptr] = self._max_weight**self._alpha
-        self._it_min[self.curr_ptr] = self._max_weight**self._alpha
+        self.init_weight(self.curr_ptr)
 
         self.curr_ptr = (self.curr_ptr + 1) % self.buffer_size
         self.curr_size = min(self.curr_size + 1, self.buffer_size)
@@ -1186,11 +1191,11 @@ class PrioritizedReplayBuffer(BaseBuffer):
 
         return data
 
-    def sample(self,
-               batch_size: int,
-               beta: float,
-               env: Optional[VecNormalize] = None
-               ) -> PrioritizedReplayBufferSamples:
+    def sample(
+            self,
+            batch_size: int,
+            env: Optional[VecNormalize] = None
+    ) -> PrioritizedReplayBufferSamples:
         """Sample elements from the replay buffer using priorization.
 
         :param batch_size: Number of element to sample
@@ -1200,22 +1205,30 @@ class PrioritizedReplayBuffer(BaseBuffer):
         :return:
         """
         # Sample indices
-        mass = []
-        total = self._it_sum.sum(0, self.size() - 1)
-        # TODO(szymon): should we ensure no repeats?
-        mass = np.random.random(size=batch_size) * total
-        batch_inds = self._it_sum.retrieve(mass)
-        th_data = self._get_samples(batch_inds, env=env)
+        if batch_size > 0 and self.size() > 0:
+            scalar = np.random.rand(batch_size) * self.weight.reduce()
+            batch_inds = self.weight.get_prefix_sum_idx(scalar)
 
-        p_min = self._it_min.min() / self._it_sum.sum()
-        max_weight = (p_min * self.size())**(-beta)
-        p_sample = self._it_sum[batch_inds] / self._it_sum.sum()
-        weights = (p_sample * self.size())**(-beta) / max_weight
-
+        weights = self.get_weight(batch_inds)
+        weights = weights / np.max(weights) if self._weight_norm else weights
+        th_data = self._get_samples(batch_inds, env)
         return PrioritizedReplayBufferSamples(*tuple(
             map(self.to_torch, th_data)),
                                               weights=weights,
                                               indices=batch_inds)
+
+    def get_weight(self, index: Union[int,
+                                      np.ndarray]) -> Union[float, np.ndarray]:
+        """Get the importance sampling weight.
+
+        The "weight" in the returned Batch is the weight on loss function to
+        debias the sampling process (some transition tuples are sampled more
+        often so their losses are weighted less).
+        """
+        # important sampling weight calculation
+        # original formula: ((p_j/p_sum*N)**(-beta))/((p_min/p_sum*N)**(-beta))
+        # simplified formula: (p_j/p_min)**(-beta)
+        return (self.weight[index] / self._min_prio)**(-self._beta)
 
     def update_weights(self, batch_inds: np.ndarray, weights: np.ndarray):
         """Update weights of sampled transitions.
@@ -1231,6 +1244,7 @@ class PrioritizedReplayBuffer(BaseBuffer):
         assert np.min(weights) > 0
         assert np.min(batch_inds) >= 0
         assert np.max(batch_inds) < self.size()
-        self._it_sum[batch_inds] = weights**self._alpha
-        self._it_min[batch_inds] = weights**self._alpha
-        self._max_weight = max(self._max_weight, np.max(weights))
+        weight = np.abs(to_numpy(weights)) + self._eps
+        self.weight[batch_inds] = weight**self._alpha
+        self._max_prio = max(self._max_prio, np.max(weights))
+        self._min_prio = min(self._min_prio, weight.min())
