@@ -1092,8 +1092,6 @@ class PrioritizedReplayBuffer(BaseBuffer):
     """Replay buffer used in off-policy algorithms like SAC/TD3. This time with
     priorization!
 
-    TODO normalization stuff is probably not implemented correctly.
-
     Mainly copy/paste from
         https://github.com/hill-a/stable-baselines/blob/master/stable_baselines/common/buffers.py
 
