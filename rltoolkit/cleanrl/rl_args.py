@@ -236,6 +236,137 @@ class DQNArguments(RLArguments):
 
 
 @dataclass
+class PERArguments(RLArguments):
+    """PER-specific settings."""
+
+    alpha: float = field(
+        default=0.2,
+        metadata={
+            'help':
+            'Alpha parameter for the prioritized experience replay. Defaults to 0.6'
+        },
+    )
+    beta: float = field(
+        default=0.6,
+        metadata={
+            'help':
+            'Beta parameter for the prioritized experience replay. Defaults to 0.6'
+        },
+    )
+    prior_eps: float = field(
+        default=1e-6,
+        metadata={
+            'help':
+            'Epsilon parameter for the prioritized experience replay. Defaults to 0.01'
+        },
+    )
+    hidden_dim: int = field(
+        default=128,
+        metadata={
+            'help':
+            'The hidden dimension size of the neural network. Defaults to 128'
+        },
+    )
+    double_dqn: bool = field(
+        default=False,
+        metadata={
+            'help':
+            'Flag indicating whether to use Double DQN. Defaults to False'
+        },
+    )
+    dueling_dqn: bool = field(
+        default=False,
+        metadata={
+            'help':
+            'Flag indicating whether to use Dueling DQN. Defaults to False'
+        },
+    )
+    learning_rate: float = field(
+        default=1e-3,
+        metadata={
+            'help': 'Learning rate used by the optimizer. Defaults to 1e-4'
+        },
+    )
+    min_learning_rate: float = field(
+        default=1e-5,
+        metadata={
+            'help':
+            'Minimum learning rate used by the optimizer. Defaults to 1e-5'
+        },
+    )
+    lr_scheduler_method: str = field(
+        default='linear',
+        metadata={
+            'help':
+            "Method used for learning rate scheduling. Defaults to 'linear'"
+        },
+    )
+    eps_greedy_start: float = field(
+        default=1.0,
+        metadata={
+            'help':
+            'Initial value of epsilon for epsilon-greedy exploration. Defaults to 1.0'
+        },
+    )
+    eps_greedy_end: float = field(
+        default=0.1,
+        metadata={
+            'help':
+            'Final value of epsilon for epsilon-greedy exploration. Defaults to 0.1'
+        },
+    )
+    eps_greedy_scheduler: str = field(
+        default='linear',
+        metadata={
+            'help':
+            "Type of scheduler used for epsilon-greedy exploration. Defaults to 'linear'"
+        },
+    )
+    max_grad_norm: float = field(
+        default=None,
+        metadata={'help': 'Maximum gradient norm. Defaults to 1.0'},
+    )
+    use_smooth_l1_loss: bool = field(
+        default=False,
+        metadata={
+            'help':
+            'Flag indicating whether to use the smooth L1 loss. Defaults to False'
+        },
+    )
+    warmup_learn_steps: int = field(
+        default=1000,
+        metadata={
+            'help':
+            'Number of steps before starting to update the model. Defaults to 1000'
+        },
+    )
+    target_update_frequency: int = field(
+        default=100,
+        metadata={
+            'help': 'Frequency of updating the target network. Defaults to 100'
+        },
+    )
+    soft_update_tau: float = field(
+        default=1.0,
+        metadata={
+            'help':
+            'Interpolation parameter for soft target updates. Defaults to 1.0'
+        },
+    )
+    train_frequency: int = field(
+        default=10,
+        metadata={'help': 'Frequency of training updates. Defaults to 1'},
+    )
+    gradient_steps: int = field(
+        default=2,
+        metadata={
+            'help':
+            'Number of times to update the learner network. Defaults to 1'
+        },
+    )
+
+
+@dataclass
 class C51Arguments(RLArguments):
     """C51-specific settings."""
 

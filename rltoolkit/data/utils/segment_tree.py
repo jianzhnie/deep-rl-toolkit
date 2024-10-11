@@ -56,7 +56,7 @@ class SegmentTree:
         mid = (node_start + node_end) // 2
         if end <= mid:
             return self._operate_helper(start, end, 2 * node, node_start, mid)
-        elif start > mid:
+        elif start >= mid + 1:
             return self._operate_helper(start, end, 2 * node + 1, mid + 1,
                                         node_end)
         else:
@@ -131,23 +131,31 @@ class SumSegmentTree(SegmentTree):
         """
         return super().operate(start, end)
 
-    def retrieve(self, upperbound: float) -> int:
-        """Find the highest index `i` about upper bound in the tree.
+    def find_prefixsum_idx(self, prefixsum: float) -> int:
+        """Find the highest index `i` in the array such that.
 
-        功能：根据累积和查找索引，返回使累积和不超过 upperbound 的最大索引。 参数：     upperbound：累积和的上限。 实现：
-        从根节点开始，通过比较左、右子节点的值进行二分查找，找到符合条件的叶子节点。
+            sum(arr[0] + arr[1] + ... + arr[i - i]) <= prefixsum
+
+        If array values are probabilities, this function
+        allows to sample indexes according to the discrete
+        probability efficiently.
+
+        功能：根据累积和查找索引，返回使累积和不超过 prefixsum 的最大索引。
+        参数：
+            prefixsum：累积和的上限。
+        实现：
+            从根节点开始，通过比较左、右子节点的值进行二分查找，找到符合条件的叶子节点。
         """
-        # TODO: Check assert case and fix bug
-        assert 0 <= upperbound <= self.sum() + 1e-5, 'Upperbound out of range.'
+        assert 0 <= prefixsum <= self.sum() + 1e-5, 'Upperbound out of range.'
 
         idx = 1
         while idx < self.capacity:  # While non-leaf
             left = 2 * idx
-            right = left + 1
-            if self.tree[left] > upperbound:
-                idx = 2 * idx
+            right = 2 * idx + 1
+            if self.tree[left] > prefixsum:
+                idx = left
             else:
-                upperbound -= self.tree[left]
+                prefixsum -= self.tree[left]
                 idx = right
         return idx - self.capacity
 

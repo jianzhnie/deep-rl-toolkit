@@ -1,3 +1,6 @@
+import os
+import random
+import sys
 import warnings
 from abc import ABC, abstractmethod
 from collections import deque
@@ -6,8 +9,11 @@ from typing import Any, Deque, Dict, Generator, List, Optional, Tuple, Union
 import numpy as np
 import torch
 from gymnasium import spaces
+
+sys.path.append(os.getcwd())
 from rltoolkit.cleanrl.rl_args import RLArguments
 from rltoolkit.data.utils import SegmentTree, to_numpy
+from rltoolkit.data.utils.segment_tree import MinSegmentTree, SumSegmentTree
 from rltoolkit.data.utils.type_aliases import (PrioritizedReplayBufferSamples,
                                                ReplayBufferSamples,
                                                RolloutBufferSamples)
@@ -739,6 +745,108 @@ class SimpleReplayBuffer:
         self.dones[:self.curr_size] = data['terminal'][:self.curr_size]
         self.next_observations[:self.curr_size] = data['next_obs'][:self.
                                                                    curr_size]
+
+
+class SimplePerReplayBuffer(SimpleReplayBuffer):
+    """Replay buffer with prioritized sampling based on TD error.
+
+    Args:
+        args (RLArguments): Hyperparameters for the buffer and algorithms.
+        observation_space (spaces.Space): Observation space.
+        action_space (spaces.Space): Action space.
+        device (Union[torch.device, str]): PyTorch device.
+        buffer_size (int): Maximum size of the buffer.
+        alpha (float): Parameter for prioritized sampling.
+        beta (float): Parameter for importance sampling.
+    """
+
+    def __init__(
+        self,
+        args: RLArguments,
+        observation_space: spaces.Space,
+        action_space: spaces.Space,
+        device: Union[torch.device, str] = 'auto',
+    ) -> None:
+        super().__init__(args, observation_space, action_space, device)
+
+        self.alpha = args.alpha
+        self.beta = args.beta
+        self.max_prior = 1.0
+
+        # capacity must be positive and a power of 2.
+        tree_capacity = 1
+        while tree_capacity < self.args.buffer_size:
+            tree_capacity *= 2
+
+        self.sum_tree = SumSegmentTree(tree_capacity)
+        self.min_tree = MinSegmentTree(tree_capacity)
+
+    def add(
+        self,
+        obs: np.ndarray,
+        action: np.ndarray,
+        reward: float,
+        next_obs: np.ndarray,
+        done: bool,
+    ) -> None:
+        self.sum_tree[self.curr_ptr] = self.max_prior**self.alpha
+        self.min_tree[self.curr_ptr] = self.max_prior**self.alpha
+        super().add(obs, action, reward, next_obs, done)
+
+    def sample(self, batch_size: int) -> PrioritizedReplayBufferSamples:
+        batch_inds = self._sample_proportional(batch_size)
+        weights = np.array([self._calculate_weight(i) for i in batch_inds])
+        data = (
+            self.observations[batch_inds, :],
+            self.actions[batch_inds, :],
+            self.next_observations[batch_inds, :],
+            self.dones[batch_inds],
+            self.rewards[batch_inds],
+        )
+        return PrioritizedReplayBufferSamples(*tuple(map(self.to_torch, data)),
+                                              weights=weights,
+                                              indices=batch_inds)
+
+    def update_priorities(self, indices: List[int], priorities: np.ndarray):
+        """Update priorities of sampled transitions."""
+        assert len(indices) == len(priorities)
+
+        for idx, priority in zip(indices, priorities):
+            assert priority > 0
+            assert 0 <= idx < len(self)
+
+            self.sum_tree[idx] = priority**self.alpha
+            self.min_tree[idx] = priority**self.alpha
+
+            self.max_prior = max(self.max_prior, priority)
+
+    def _sample_proportional(self, batch_size: int) -> List[int]:
+        """Sample indices based on proportions."""
+        indices = []
+        p_total = self.sum_tree.sum(0, len(self) - 1)
+        segment = p_total / batch_size
+
+        for i in range(batch_size):
+            left = segment * i
+            right = segment * (i + 1)
+            upperbound = random.uniform(left, right)
+            idx = self.sum_tree.find_prefixsum_idx(upperbound)
+            indices.append(idx)
+
+        return indices
+
+    def _calculate_weight(self, idx: int):
+        """Calculate the weight of the experience at idx."""
+        # get max weight
+        p_min = self.min_tree.min() / self.sum_tree.sum()
+        max_weight = (p_min * len(self))**(-self.beta)
+
+        # calculate weights
+        p_sample = self.sum_tree[idx] / self.sum_tree.sum()
+        weight = (p_sample * len(self))**(-self.beta)
+        weight = weight / max_weight
+
+        return weight
 
 
 class SimpleRolloutBuffer:
