@@ -11,14 +11,16 @@ import yaml
 
 sys.path.append(os.getcwd())
 import gymnasium as gym
-from rltoolkit.cleanrl.agent import (C51Agent, DDPGAgent, DQNAgent,
+from rltoolkit.cleanrl.agent import (C51Agent, DDPGAgent, DQNAgent, PERAgent,
                                      PPOClipAgent, PPOPenaltyAgent, SACAgent,
                                      SACConAgent, TD3Agent)
-from rltoolkit.cleanrl.offpolicy_runner import OffPolicyRunner
+from rltoolkit.cleanrl.offpolicy_runner import (OffPolicyRunner,
+                                                PerOffPolicyRunner)
 from rltoolkit.cleanrl.onpolicy_runner import OnPolicyRunner
 from rltoolkit.cleanrl.rl_args import (C51Arguments, DDPGArguments,
-                                       DQNArguments, PPOArguments,
-                                       SACArguments, TD3Arguments)
+                                       DQNArguments, PERArguments,
+                                       PPOArguments, SACArguments,
+                                       TD3Arguments)
 from rltoolkit.utils.logger.logging import get_logger
 
 logger = get_logger(__name__)
@@ -81,6 +83,7 @@ def main() -> None:
             'ddqn',
             'dueling_dqn',
             'dueling_ddqn',
+            'per',
             'rainbow',
             'c51',
             'pg',
@@ -119,6 +122,9 @@ def main() -> None:
         # Update parser with DQN configuration
         algo_args: DQNArguments = tyro.cli(DQNArguments)
         Agent: DQNAgent = DQNAgent
+    elif run_args.algo_name == 'per':
+        algo_args: PERArguments = tyro.cli(PERArguments)
+        Agent: PERArguments = PERAgent
     elif run_args.algo_name == 'c51':
         algo_args: C51Arguments = tyro.cli(C51Arguments)
         Agent: C51Agent = C51Agent
@@ -195,6 +201,14 @@ def main() -> None:
             'td3',
     ]:
         runner = OffPolicyRunner(
+            args,
+            train_env=train_env,
+            test_env=test_env,
+            agent=agent,
+            device=device,
+        )
+    elif args.algo_name in ['per']:
+        runner = PerOffPolicyRunner(
             args,
             train_env=train_env,
             test_env=test_env,
