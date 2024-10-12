@@ -5,11 +5,13 @@ from typing import Callable, List
 
 
 class SegmentTree:
-    """Create SegmentTree. Build a Segment Tree data structure.
+    """A Segment Tree data structure to perform efficient range queries and
+    updates. This version supports operations like sum, min, max, and more,
+    where each operation is associative.
 
     https://en.wikipedia.org/wiki/Segment_tree
 
-    Taken from OpenAI baselines github repository:
+    This is based on the OpenAI baselines implementation:
     https://github.com/openai/baselines/blob/master/baselines/common/segment_tree.py
 
     Can be used as a regular array that supports index arrays, but with two
@@ -106,7 +108,10 @@ class SegmentTree:
 
 
 class SumSegmentTree(SegmentTree):
-    """Create SumSegmentTree.
+    """A specialized Segment Tree where the operation is summation.
+
+    Inherits from the SegmentTree class and uses addition as the
+    associative operation.
 
     Taken from OpenAI baselines github repository:
     https://github.com/openai/baselines/blob/master/baselines/common/segment_tree.py
@@ -123,7 +128,7 @@ class SumSegmentTree(SegmentTree):
                          init_value=0.0)
 
     def sum(self, start: int = 0, end: int = 0) -> float:
-        """Returns arr[start] + ... + arr[end].
+        """Returns the sum of the values in the range [start, end].
 
         :param start: (int) Start position of the reduction (must be >= 0).
         :param end: (int) End position of the reduction (must be < len(arr), can be None for len(arr) - 1).
@@ -146,7 +151,8 @@ class SumSegmentTree(SegmentTree):
         实现：
             从根节点开始，通过比较左、右子节点的值进行二分查找，找到符合条件的叶子节点。
         """
-        assert 0 <= prefixsum <= self.sum() + 1e-5, 'Upperbound out of range.'
+        assert 0 <= prefixsum <= self.sum(
+        ) + 1e-5, f'{prefixsum} out of range.'
 
         idx = 1
         while idx < self.capacity:  # While non-leaf
@@ -161,7 +167,11 @@ class SumSegmentTree(SegmentTree):
 
 
 class MinSegmentTree(SegmentTree):
-    """Create SegmentTree.
+    """A specialized Segment Tree where the operation is finding the minimum
+    value.
+
+    Inherits from the SegmentTree class and uses the min function as the operation.
+
 
     Taken from OpenAI baselines github repository:
     https://github.com/openai/baselines/blob/master/baselines/common/segment_tree.py
