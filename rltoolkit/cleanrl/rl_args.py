@@ -227,7 +227,7 @@ class DQNArguments(RLArguments):
         metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
     learn_steps: int = field(
-        default=2,
+        default=1,
         metadata={
             'help':
             'Number of times to update the learner network. Defaults to 1'
@@ -358,7 +358,7 @@ class PERArguments(RLArguments):
         metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
     learn_steps: int = field(
-        default=2,
+        default=1,
         metadata={
             'help':
             'Number of times to update the learner network. Defaults to 1'
@@ -500,7 +500,7 @@ class RainbowArguments(RLArguments):
         metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
     learn_steps: int = field(
-        default=2,
+        default=1,
         metadata={
             'help':
             'Number of times to update the learner network. Defaults to 1'
@@ -616,7 +616,7 @@ class C51Arguments(RLArguments):
         metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
     learn_steps: int = field(
-        default=2,
+        default=1,
         metadata={
             'help':
             'Number of times to update the learner network. Defaults to 1'
@@ -679,7 +679,7 @@ class DDPGArguments(RLArguments):
         metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
     learn_steps: int = field(
-        default=2,
+        default=1,
         metadata={
             'help':
             'Number of times to update the learner network. Defaults to 1'
@@ -948,7 +948,7 @@ class SACArguments(RLArguments):
         metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
     learn_steps: int = field(
-        default=2,
+        default=1,
         metadata={
             'help':
             'Number of times to update the learner network. Defaults to 1'
@@ -1026,7 +1026,7 @@ class TD3Arguments(RLArguments):
         metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
     learn_steps: int = field(
-        default=2,
+        default=1,
         metadata={
             'help':
             'Number of times to update the learner network. Defaults to 1'

@@ -133,12 +133,6 @@ class PERAgent(BaseAgent):
                                device=self.device).reshape(-1, 1)
 
         action = action.to(self.device, dtype=torch.long)
-        # Soft update target network
-        if self.learner_update_step % self.args.target_update_frequency == 0:
-            soft_target_update(self.qnet, self.target_qnet,
-                               self.args.soft_update_tau)
-            self.target_model_update_step += 1
-        self.learner_update_step += 1
 
         # Compute current Q values
         current_q_values = self.qnet(obs).gather(1, action)
@@ -171,7 +165,14 @@ class PERAgent(BaseAgent):
                                            self.args.max_grad_norm)
         loss.backward()
         self.optimizer.step()
-        new_priorities = td_error.detach().cpu().numpy() + self.args.prior_eps
 
+        # Soft update target network
+        if self.learner_update_step % self.args.target_update_frequency == 0:
+            soft_target_update(self.qnet, self.target_qnet,
+                               self.args.soft_update_tau)
+            self.target_model_update_step += 1
+        self.learner_update_step += 1
+
+        new_priorities = td_error.detach().cpu().numpy() + self.args.prior_eps
         learn_result = {'loss': loss.item()}
         return (learn_result, indices, new_priorities)

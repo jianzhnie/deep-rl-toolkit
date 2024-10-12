@@ -76,10 +76,13 @@ dueling_ddqn:
 per:
   CartPole-v0:
     algo_name: per
+    double_dqn: True
     learning_rate: 0.01
     max_timesteps: 20000
     buffer_size: 10000
-    target_update_frequency: 1000
+    train_frequency: 10
+    learn_steps: 2
+    target_update_frequency: 500
     batch_size: 64
     logger: tensorboard
 
