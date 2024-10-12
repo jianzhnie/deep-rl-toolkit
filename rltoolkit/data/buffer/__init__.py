@@ -5,6 +5,8 @@ from .her import HERReplayBuffer
 from .manager import (HERReplayBufferManager, PrioritizedReplayBufferManager,
                       ReplayBufferManager)
 from .prio import PrioritizedReplayBuffer
+from .simbuffers import (SimplePerReplayBuffer, SimpleReplayBuffer,
+                         SimpleRolloutBuffer)
 from .vecbuf import (HERVectorReplayBuffer, PrioritizedVectorReplayBuffer,
                      VectorReplayBuffer)
 
@@ -22,4 +24,7 @@ __all__ = [
     'OffPolicyBuffer',
     'BaseBuffer',
     'RolloutBuffer',
+    'SimplePerReplayBuffer',
+    'SimpleReplayBuffer',
+    'SimpleRolloutBuffer',
 ]

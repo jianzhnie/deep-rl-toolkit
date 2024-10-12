@@ -23,7 +23,7 @@ class SimpleReplayBuffer:
     """A simple FIFO experience replay buffer for off-policy RL or offline RL.
 
     Args:
-        buffer_size (int): Maximum size of the replay memory.
+        args (RLArguments): Hyperparameters for the buffer and algorithms.
         observation_space (spaces.Space): The observation space of the environment.
         action_space (spaces.Space): The action space of the environment.
         device (str, optional): Device to store the tensors ('cpu' or 'cuda'). Default is 'cpu'.
@@ -36,29 +36,31 @@ class SimpleReplayBuffer:
         action_space: spaces.Space,
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
+        """Initialize the replay buffer."""
         self.args: RLArguments = args
         self.buffer_size = args.buffer_size
         self.obs_shape = get_obs_shape(observation_space)
         self.action_dim = get_action_dim(action_space)
 
+        # Memory buffers for storing experiences
         self.observations = np.zeros((self.buffer_size, *self.obs_shape),
                                      dtype=np.float32)
-        self.next_observations = np.zeros(
-            (self.buffer_size, ) + self.obs_shape, dtype=np.float32)
+        self.next_observations = np.zeros((self.buffer_size, *self.obs_shape),
+                                          dtype=np.float32)
         self.actions = np.zeros((self.buffer_size, self.action_dim),
                                 dtype=action_space.dtype)
         self.rewards = np.zeros((self.buffer_size, 1), dtype=np.float32)
         self.dones = np.zeros((self.buffer_size, 1), dtype=np.float32)
 
-        # for N-step Learning
+        # For N-step Learning
         assert (isinstance(args.n_steps, int) and args.n_steps > 0
-                ), 'N-step should be an integer and greater than 0.'
+                ), 'n_steps should be an integer and greater than 0.'
 
-        self.n_step_buffer = deque(maxlen=args.n_steps)
+        self.n_step_buffer: Deque = deque(maxlen=args.n_steps)
 
-        self.curr_ptr = 0
-        self.curr_size = 0
-        self.device = device
+        self.curr_ptr = 0  # Pointer to the current position in the buffer
+        self.curr_size = 0  # Tracks the current size of the buffer
+        self.device = torch.device(device)
 
     def add(
         self,
@@ -71,12 +73,13 @@ class SimpleReplayBuffer:
         """Add an experience sample to the replay buffer.
 
         Args:
-            obs (np.ndarray): The observation.
+            obs (np.ndarray): The current observation.
             next_obs (np.ndarray): The next observation.
             action (np.ndarray): The action taken.
             reward (np.ndarray): The reward received.
-            done (np.ndarray): Whether the episode is done.
+            done (np.ndarray): Whether the episode has ended.
         """
+        # For N-step transition
         if self.args.n_steps > 1:
             transition = (obs, action, next_obs, reward, done)
             self.n_step_buffer.append(transition)
@@ -94,13 +97,21 @@ class SimpleReplayBuffer:
         self.rewards[self.curr_ptr] = np.array(reward).copy()
         self.dones[self.curr_ptr] = np.array(done).copy()
 
+        # Update pointer and size
         self.curr_ptr = (self.curr_ptr + 1) % self.buffer_size
         self.curr_size = min(self.curr_size + 1, self.buffer_size)
 
     def get_n_step_info(self, n_step_buffer: Deque,
-                        gamma: float) -> Tuple[float, np.array, bool]:
-        """Return n step rew, next_obs, and terminal."""
-        # info of the last transition
+                        gamma: float) -> Tuple[np.ndarray, float, np.ndarray]:
+        """Calculate the n-step reward, next observation, and done flag.
+
+        Args:
+            n_step_buffer (Deque): A deque storing the last n transitions.
+            gamma (float): The discount factor.
+
+        Returns:
+            Tuple[np.ndarray, float, np.ndarray]: Next observation, n-step reward, and done flag.
+        """
         next_obs, reward, done = n_step_buffer[-1][-3:]
 
         # info of the n-1 transition
@@ -140,21 +151,25 @@ class SimpleReplayBuffer:
         return self._get_samples(batch_inds)
 
     def _get_samples(self, batch_inds: np.ndarray) -> ReplayBufferSamples:
+        """Retrieve the experiences corresponding to the given indices.
+
+        Args:
+            batch_inds (np.ndarray): Indices of the batch to sample.
+
+        Returns:
+            ReplayBufferSamples: A named tuple of the sampled experiences.
+        """
         data = (
-            self.observations[batch_inds, :],
-            self.actions[batch_inds, :],
-            self.next_observations[batch_inds, :],
+            self.observations[batch_inds],
+            self.actions[batch_inds],
+            self.next_observations[batch_inds],
             self.dones[batch_inds],
             self.rewards[batch_inds],
         )
         return ReplayBufferSamples(*tuple(map(self.to_torch, data)))
 
     def size(self) -> int:
-        """Get the current size of the replay buffer.
-
-        Returns:
-            int: The current size of the buffer.
-        """
+        """Return the current size of the buffer."""
         return self.curr_size
 
     def __len__(self) -> int:
@@ -164,7 +179,7 @@ class SimpleReplayBuffer:
         """Save the replay buffer to a file.
 
         Args:
-            pathname (str): The path to the file where the buffer should be saved.
+            pathname (str): File path for saving the buffer.
         """
         other = np.array([self.curr_size, self.curr_ptr], dtype=np.int32)
         np.savez(
@@ -181,7 +196,7 @@ class SimpleReplayBuffer:
         """Load the replay buffer from a file.
 
         Args:
-            pathname (str): The path to the file from which the buffer should be loaded.
+            pathname (str): File path to load the buffer from.
         """
         data = np.load(pathname)
         other = data['other']
@@ -197,16 +212,14 @@ class SimpleReplayBuffer:
 
 
 class SimplePerReplayBuffer(SimpleReplayBuffer):
-    """Replay buffer with prioritized sampling based on TD error.
+    """Replay buffer with prioritized sampling based on Temporal-Difference
+    (TD) error.
 
     Args:
         args (RLArguments): Hyperparameters for the buffer and algorithms.
-        observation_space (spaces.Space): Observation space.
-        action_space (spaces.Space): Action space.
+        observation_space (spaces.Space): The observation space of the environment.
+        action_space (spaces.Space): The action space of the environment.
         device (Union[torch.device, str]): PyTorch device.
-        buffer_size (int): Maximum size of the buffer.
-        alpha (float): Parameter for prioritized sampling.
-        beta (float): Parameter for importance sampling.
     """
 
     def __init__(
@@ -214,61 +227,68 @@ class SimplePerReplayBuffer(SimpleReplayBuffer):
         args: RLArguments,
         observation_space: spaces.Space,
         action_space: spaces.Space,
-        device: Union[torch.device, str] = 'auto',
+        device: Union[torch.device, str] = 'cpu',
     ) -> None:
+        """Initialize the prioritized replay buffer."""
         super().__init__(args, observation_space, action_space, device)
 
+        # Parameters for prioritized replay
         self.alpha = args.alpha
         self.beta = args.beta
         self.max_prior = 1.0
 
-        # capacity must be positive and a power of 2.
+        # Capacity of the segment trees should be the next power of 2 greater than buffer size
         tree_capacity = 1
-        while tree_capacity < self.args.buffer_size:
+        while tree_capacity < self.buffer_size:
             tree_capacity *= 2
 
+        # Sum tree and min tree for efficient priority sampling
         self.sum_tree = SumSegmentTree(tree_capacity)
         self.min_tree = MinSegmentTree(tree_capacity)
 
     def add(
         self,
         obs: np.ndarray,
+        next_obs: np.ndarray,
         action: np.ndarray,
         reward: float,
-        next_obs: np.ndarray,
         done: bool,
     ) -> None:
+        """Add an experience to the prioritized replay buffer.
+
+        Args:
+            obs (np.ndarray): The current observation.
+            next_obs (np.ndarray): The next observation.
+            action (np.ndarray): The action taken.
+            reward (np.ndarray): The reward received.
+            done (np.ndarray): Whether the episode terminated after the action.
+        """
+        super().add(obs, next_obs, action, reward, done)
+        # Update priorities in the segment trees
         self.sum_tree[self.curr_ptr] = self.max_prior**self.alpha
         self.min_tree[self.curr_ptr] = self.max_prior**self.alpha
-        super().add(obs, action, reward, next_obs, done)
 
     def sample(self, batch_size: int) -> PrioritizedReplayBufferSamples:
         assert self.curr_ptr > batch_size
         batch_inds = self._sample_proportional(batch_size)
         weights = np.array([self._calculate_weight(i) for i in batch_inds])
-        data = (
-            self.observations[batch_inds, :],
-            self.actions[batch_inds, :],
-            self.next_observations[batch_inds, :],
-            self.dones[batch_inds],
-            self.rewards[batch_inds],
-        )
-        return PrioritizedReplayBufferSamples(*tuple(map(self.to_torch, data)),
-                                              weights=weights,
-                                              indices=batch_inds)
+        return self._get_samples(batch_inds, weights)
 
-    def update_priorities(self, indices: List[int], priorities: np.ndarray):
-        """Update priorities of sampled transitions."""
-        assert len(indices) == len(priorities)
+    def _get_samples(self, batch_inds: np.ndarray,
+                     weights: torch.Tensor) -> PrioritizedReplayBufferSamples:
+        """Retrieve the experiences corresponding to the given indices, along
+        with their weights.
 
-        for idx, priority in zip(indices, priorities):
-            assert priority > 0
-            assert 0 <= idx < len(self)
+        Args:
+            batch_inds (np.ndarray): The indices of the experiences to sample.
+            weights (torch.Tensor): Importance sampling weights for the experiences.
 
-            self.sum_tree[idx] = priority**self.alpha
-            self.min_tree[idx] = priority**self.alpha
-
-            self.max_prior = max(self.max_prior, priority)
+        Returns:
+            PrioritizedReplayBufferSamples: Sampled experiences and their weights.
+        """
+        # Get base samples using the parent method
+        samples = super()._get_samples(batch_inds)
+        return PrioritizedReplayBufferSamples(*samples, weights, batch_inds)
 
     def _sample_proportional(self, batch_size: int) -> List[int]:
         """Sample indices based on proportions."""
@@ -287,16 +307,29 @@ class SimplePerReplayBuffer(SimpleReplayBuffer):
 
     def _calculate_weight(self, idx: int):
         """Calculate the weight of the experience at idx."""
-        # get max weight
-        p_min = self.min_tree.min() / self.sum_tree.sum()
-        max_weight = (p_min * len(self))**(-self.beta)
+        # Get max weight
+        min_prob = self.min_tree.min() / self.sum_tree.sum()
+        max_weight = (min_prob * len(self))**(-self.beta)
 
-        # calculate weights
-        p_sample = self.sum_tree[idx] / self.sum_tree.sum()
-        weight = (p_sample * len(self))**(-self.beta)
+        # Calculate the sampling probabilities and importance weights
+        sample_prob = self.sum_tree[idx] / self.sum_tree.sum()
+        weight = (sample_prob * len(self))**(-self.beta)
         weight = weight / max_weight
-
         return weight
+
+    def update_priorities(self, indices: List[int], priorities: np.ndarray):
+        """Update priorities of sampled transitions."""
+        assert len(indices) == len(priorities)
+
+        for idx, priority in zip(indices, priorities):
+            assert priority > 0, 'Priority must be positive.'
+            assert 0 <= idx < self.curr_size, 'Index out of range.'
+
+            # Clip priority and update the trees
+            self.sum_tree[idx] = priority**self.alpha
+            self.min_tree[idx] = priority**self.alpha
+
+            self.max_prior = max(self.max_prior, priority)
 
 
 class SimpleRolloutBuffer:
