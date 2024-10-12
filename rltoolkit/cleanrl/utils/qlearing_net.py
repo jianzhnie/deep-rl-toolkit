@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple
 
 import numpy as np
 import torch
@@ -145,29 +145,31 @@ class NoisyNet(nn.Module):
 
     def __init__(
         self,
-        state_shape: Union[int, Tuple[int]],
-        action_shape: Union[int, Tuple[int]],
+        obs_dim: int,
+        action_dim: int,
         hidden_dim: int,
         noisy_std: float = 0.5,
-    ):
+    ) -> None:
         """Initialization."""
         super(NoisyNet, self).__init__()
-        obs_dim = int(np.prod(state_shape))
-        action_dim = int(np.prod(action_shape))
-        self.feature = nn.Linear(obs_dim, hidden_dim)
-        self.noisy_layer = NoisyLinear(hidden_dim, action_dim, noisy_std)
-        self.relu = nn.ReLU(inplace=True)
+        self.noisy_net = nn.Sequential(
+            nn.Linear(obs_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            NoisyLinear(hidden_dim, hidden_dim, noisy_std),
+            nn.ReLU(inplace=True),
+            NoisyLinear(hidden_dim, action_dim, noisy_std),
+        )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
         """Forward method implementation."""
-        out = self.feature(x)
-        out = self.relu(out)
-        out = self.noisy_layer(out)
+        out = self.noisy_net(obs)
         return out
 
-    def reset_noise(self):
-        """Reset all noisy layers."""
-        self.noisy_layer.reset_noise()
+    def reset_noise(self) -> None:
+        """Resets noise of value and advantage networks."""
+        for layer in self.noisy_net:
+            if isinstance(layer, NoisyLinear):
+                layer.reset_noise()
 
 
 class RainbowNet(nn.Module):

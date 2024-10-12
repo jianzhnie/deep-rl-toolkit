@@ -150,6 +150,13 @@ class DQNArguments(RLArguments):
             'Flag indicating whether to use Dueling DQN. Defaults to False'
         },
     )
+    noisy_dqn: bool = field(
+        default=False,
+        metadata={
+            'help':
+            'Flag indicating whether to use Noisy DQN. Defaults to False'
+        },
+    )
     learning_rate: float = field(
         default=1e-3,
         metadata={

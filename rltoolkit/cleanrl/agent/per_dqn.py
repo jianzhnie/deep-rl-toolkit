@@ -12,7 +12,7 @@ from rltoolkit.data.utils.type_aliases import PrioritizedReplayBufferSamples
 from rltoolkit.utils import LinearDecayScheduler, soft_target_update
 
 
-class PERAgent(BaseAgent):
+class PERDQNAgent(BaseAgent):
     """Prioritized Experience Replay (PER) agent implementing DQN, Double DQN,
     and Dueling DQN.
 

@@ -7,12 +7,12 @@ import torch
 import torch.nn.functional as F
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import DQNArguments
-from rltoolkit.cleanrl.utils.qlearing_net import DuelingNet, NoisyNet, QNet
+from rltoolkit.cleanrl.utils.qlearing_net import NoisyNet
 from rltoolkit.data.utils.type_aliases import ReplayBufferSamples
 from rltoolkit.utils import LinearDecayScheduler, soft_target_update
 
 
-class DQNAgent(BaseAgent):
+class NoisyDQNAgent(BaseAgent):
     """Deep Q-Network algorithm.
 
     "Human-Level Control Through Deep Reinforcement Learning" - Mnih V. et al., 2015.
@@ -47,24 +47,12 @@ class DQNAgent(BaseAgent):
         self.action_dim = int(np.prod(action_shape))
 
         # Initialize networks
-        if args.dueling_dqn:
-            self.qnet = DuelingNet(
-                obs_dim=self.obs_dim,
-                action_dim=self.action_dim,
-                hidden_dim=self.args.hidden_dim,
-            ).to(device)
-        elif args.noisy_dqn:
-            self.qnet = NoisyNet(
-                self.obs_dim,
-                self.action_dim,
-                hidden_dim=self.args.hidden_dim,
-            ).to(device)
-        else:
-            self.qnet = QNet(
-                obs_dim=self.obs_dim,
-                action_dim=self.action_dim,
-                hidden_dim=self.args.hidden_dim,
-            ).to(device)
+        self.qnet = NoisyNet(
+            self.obs_dim,
+            self.action_dim,
+            hidden_dim=self.args.hidden_dim,
+        ).to(device)
+
         self.target_qnet = copy.deepcopy(self.qnet)
         self.target_qnet.eval()
         # Initialize optimizer and schedulers
@@ -83,41 +71,30 @@ class DQNAgent(BaseAgent):
         )
 
     def get_action(self, obs: np.ndarray) -> np.ndarray:
-        """Get action from the actor network.
+        """Get action from the Q-network.
 
         Args:
-            obs (np.ndarray): Current observation.
+            obs (np.ndarray): The current observation.
 
         Returns:
             np.ndarray: Selected action.
         """
-        if self.args.noisy_dqn:
-            action = self.predict(obs)
-        else:
-            # epsilon greedy policy
-            if np.random.rand() <= self.eps_greedy:
-                action = self.env.action_space.sample()
-            else:
-                action = self.predict(obs)
-
-            self.eps_greedy = max(self.eps_greedy_scheduler.step(),
-                                  self.args.eps_greedy_end)
-        return action
+        return self.predict(obs)
 
     def predict(self, obs: np.ndarray) -> int:
-        """Predict an action given an observation.
+        """Predict an action given the observation using the Q-network.
 
         Args:
-            obs (np.ndarray): Current observation.
+            obs (np.ndarray): The observation.
 
         Returns:
-            int: Selected action.
+            int: The selected action.
         """
+        # Ensure observation is in the correct shape
         if obs.ndim == 1:
-            # Expand to have batch_size = 1
             obs = np.expand_dims(obs, axis=0)
 
-        obs_tensor = torch.tensor(obs, dtype=torch.float, device=self.device)
+        obs_tensor = torch.tensor(obs, dtype=torch.float32, device=self.device)
         with torch.no_grad():
             action = self.qnet(obs_tensor).argmax().item()
 
@@ -143,21 +120,9 @@ class DQNAgent(BaseAgent):
         # Compute current Q values
         current_q_values = self.qnet(obs).gather(1, action)
         # Compute target Q values
-        if self.args.noisy_dqn:
-            with torch.no_grad():
-                next_q_values = self.target_qnet(next_obs).max(dim=1,
-                                                               keepdim=True)[0]
-        else:
-            if self.args.double_dqn:
-                with torch.no_grad():
-                    greedy_action = self.qnet(next_obs).max(dim=1,
-                                                            keepdim=True)[1]
-                    next_q_values = self.target_qnet(next_obs).gather(
-                        1, greedy_action)
-            else:
-                with torch.no_grad():
-                    next_q_values = self.target_qnet(next_obs).max(
-                        dim=1, keepdim=True)[0]
+        with torch.no_grad():
+            next_q_values = self.target_qnet(next_obs).max(dim=1,
+                                                           keepdim=True)[0]
 
         target_q_values = (
             reward +
@@ -175,10 +140,10 @@ class DQNAgent(BaseAgent):
         loss.backward()
         self.optimizer.step()
 
-        if self.args.noisy_dqn:
-            # NoisyNet: reset noise
-            self.qnet.reset_noise()
-            self.target_qnet.reset_noise()
+        # NoisyNet: reset noise
+        self.qnet.reset_noise()
+        self.target_qnet.reset_noise()
+
         # Soft update target network
         if self.learner_update_step % self.args.target_update_frequency == 0:
             soft_target_update(self.qnet, self.target_qnet,
