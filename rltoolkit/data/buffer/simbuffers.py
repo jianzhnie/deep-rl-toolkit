@@ -236,6 +236,7 @@ class SimplePerReplayBuffer(SimpleReplayBuffer):
         self.alpha = args.alpha
         self.beta = args.beta
         self.max_prior = 1.0
+        self.tree_ptr = 0
 
         # Capacity of the segment trees should be the next power of 2 greater than buffer size
         tree_capacity = 1
@@ -265,11 +266,12 @@ class SimplePerReplayBuffer(SimpleReplayBuffer):
         """
         super().add(obs, next_obs, action, reward, done)
         # Update priorities in the segment trees
-        self.sum_tree[self.curr_ptr] = self.max_prior**self.alpha
-        self.min_tree[self.curr_ptr] = self.max_prior**self.alpha
+        self.sum_tree[self.tree_ptr] = self.max_prior**self.alpha
+        self.min_tree[self.tree_ptr] = self.max_prior**self.alpha
+        self.tree_ptr = (self.tree_ptr + 1) % self.buffer_size
 
     def sample(self, batch_size: int) -> PrioritizedReplayBufferSamples:
-        assert self.curr_ptr > batch_size
+        assert self.curr_size > batch_size
         batch_inds = self._sample_proportional(batch_size)
         weights = np.array([self._calculate_weight(i) for i in batch_inds])
         return self._get_samples(batch_inds, weights)
@@ -349,8 +351,9 @@ class SimpleRolloutBuffer:
         args: RLArguments,
         observation_space: spaces.Space,
         action_space: spaces.Space,
-        device: Union[torch.device, str] = 'auto',
+        device: Union[str, torch.device] = 'cpu',
     ) -> None:
+        """Initialize the rollout buffer."""
         self.args = args
         self.buffer_size = args.buffer_size
         self.obs_shape = get_obs_shape(observation_space)
@@ -373,6 +376,35 @@ class SimpleRolloutBuffer:
 
         self.curr_ptr = 0
         self.curr_size = 0
+
+    def add(
+        self,
+        obs: np.ndarray,
+        action: np.ndarray,
+        reward: float,
+        done: bool,
+        value: Union[float, np.ndarray],
+        log_prob: Union[float, np.ndarray],
+    ) -> None:
+        """Add a new transition to the buffer.
+
+        Args:
+            obs (np.ndarray): Observation.
+            action (np.ndarray): Action.
+            reward (float): Reward.
+            done (bool): Whether the episode is done.
+            value (torch.Tensor): Estimated value of the current state.
+            log_prob (torch.Tensor): Log probability of the action.
+        """
+        self.observations[self.curr_ptr] = np.array(obs)
+        self.actions[self.curr_ptr] = np.array(action)
+        self.rewards[self.curr_ptr] = np.array(reward)
+        self.dones[self.curr_ptr] = np.array(done)
+        self.values[self.curr_ptr] = np.array(value)
+        self.log_probs[self.curr_ptr] = np.array(log_prob)
+
+        self.curr_ptr = (self.curr_ptr + 1) % self.buffer_size
+        self.curr_size = min(self.curr_size + 1, self.buffer_size)
 
     def compute_returns_and_advantage(self, last_values: Union[float,
                                                                np.ndarray],
@@ -403,35 +435,6 @@ class SimpleRolloutBuffer:
             self.advantages[step] = last_gae_lam
 
         self.returns = self.advantages + self.values
-
-    def add(
-        self,
-        obs: np.ndarray,
-        action: np.ndarray,
-        reward: float,
-        done: bool,
-        value: Union[float, np.ndarray],
-        log_prob: Union[float, np.ndarray],
-    ) -> None:
-        """Add a new transition to the buffer.
-
-        Args:
-            obs (np.ndarray): Observation.
-            action (np.ndarray): Action.
-            reward (float): Reward.
-            done (bool): Whether the episode is done.
-            value (torch.Tensor): Estimated value of the current state.
-            log_prob (torch.Tensor): Log probability of the action.
-        """
-        self.observations[self.curr_ptr] = np.array(obs)
-        self.actions[self.curr_ptr] = np.array(action)
-        self.rewards[self.curr_ptr] = np.array(reward)
-        self.dones[self.curr_ptr] = np.array(done)
-        self.values[self.curr_ptr] = np.array(value)
-        self.log_probs[self.curr_ptr] = np.array(log_prob)
-
-        self.curr_ptr = (self.curr_ptr + 1) % self.buffer_size
-        self.curr_size = min(self.curr_size + 1, self.buffer_size)
 
     def sample(
         self,
@@ -473,6 +476,24 @@ class SimpleRolloutBuffer:
         samples = RolloutBufferSamples(*tuple(map(self.to_torch, data)))
         return samples
 
+    def to_torch(self, array: np.ndarray, copy: bool = True) -> torch.Tensor:
+        """Convert a numpy array to a PyTorch tensor.
+
+        Args:
+            array (np.ndarray): The numpy array to convert.
+            copy (bool, optional): Whether to copy the data. Defaults to True.
+
+        Returns:
+            torch.Tensor: The PyTorch tensor.
+        """
+        if copy:
+            return torch.tensor(array, dtype=torch.float32).to(self.device)
+        return torch.as_tensor(array, dtype=torch.float32).to(self.device)
+
+    def size(self) -> int:
+        """Return the current size of the buffer."""
+        return self.curr_size
+
     def data_generator(self,
                        num_mini_batch: int = None,
                        mini_batch_size: int = None
@@ -501,17 +522,3 @@ class SimpleRolloutBuffer:
             )
             samples = RolloutBufferSamples(*tuple(map(self.to_torch, data)))
             yield samples
-
-    def to_torch(self, array: np.ndarray, copy: bool = True) -> torch.Tensor:
-        """Convert a numpy array to a PyTorch tensor.
-
-        Args:
-            array (np.ndarray): The numpy array to convert.
-            copy (bool, optional): Whether to copy the data. Defaults to True.
-
-        Returns:
-            torch.Tensor: The PyTorch tensor.
-        """
-        if copy:
-            return torch.tensor(array, dtype=torch.float32).to(self.device)
-        return torch.as_tensor(array, dtype=torch.float32).to(self.device)
