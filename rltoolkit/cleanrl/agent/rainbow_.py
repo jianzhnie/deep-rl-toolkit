@@ -31,40 +31,20 @@ class RainbowAgent(BaseAgent):
         device: Optional[Union[str, torch.device]] = 'cpu',
     ) -> None:
         super().__init__(args)
-        assert (isinstance(args.n_steps, int) and args.n_steps >= 1
-                ), 'N-step should be an integer and greater than 1.'
 
-        assert isinstance(args.learning_rate,
-                          float), 'Learning rate must be a float.'
+        # Validate arguments
+        assert args.n_steps > 0, 'N-step should be an integer and greater than 0.'
         assert args.learning_rate > 0, 'Learning rate must be greater than zero.'
-        assert isinstance(args.learn_steps,
-                          int), 'Learn step rate must be an integer.'
         assert args.learn_steps >= 1, 'Learn step must be greater than or equal to one.'
-        assert isinstance(args.gamma, (float, int)), 'Gamma must be a float.'
-        assert isinstance(args.soft_update_tau, float), 'Tau must be a float.'
-        assert args.soft_update_tau > 0, 'Tau must be greater than zero.'
-        assert isinstance(
-            args.prior_eps,
-            float), 'Minimum priority for sampling must be a float.'
-        assert (args.prior_eps >
-                0), 'Minimum priority for sampling must be greater than zero.'
-        assert isinstance(args.num_atoms,
-                          int), 'Number of atoms must be an integer.'
-        assert (args.num_atoms >=
-                1), 'Number of atoms must be greater than or equal to one.'
-        assert isinstance(
-            args.v_min,
-            (float, int)), 'Minimum value of support must be a float.'
-        assert isinstance(
-            args.v_max,
-            (float, int)), 'Maximum value of support must be a float.'
         assert (
             args.v_max >= args.v_min
-        ), 'Maximum value of support must be greater than or equal to minimum value.'
+        ), 'Max support value must be greater than or equal to min support.'
 
+        # Store environment and device details
         self.args = args
         self.env = env
         self.device = torch.device(device)
+
         self.obs_dim = int(np.prod(state_shape))
         self.action_dim = int(np.prod(action_shape))
 
@@ -96,11 +76,13 @@ class RainbowAgent(BaseAgent):
             support=self.support,
             noisy_std=self.noisy_std,
         ).to(self.device)
+
         self.target_qnet = copy.deepcopy(self.qnet)
         self.target_qnet.load_state_dict(self.qnet.state_dict())
         self.target_qnet.eval()
+
         # Initialize optimizer and schedulers
-        self.optimizer = torch.optim.Adam(params=self.qnet.parameters(),
+        self.optimizer = torch.optim.Adam(self.qnet.parameters(),
                                           lr=self.learning_rate)
         self.lr_scheduler = torch.optim.lr_scheduler.LinearLR(
             optimizer=self.optimizer,
@@ -109,9 +91,9 @@ class RainbowAgent(BaseAgent):
             total_iters=self.args.max_timesteps,
         )
         self.eps_greedy_scheduler = LinearDecayScheduler(
-            args.eps_greedy_start,
-            args.eps_greedy_end,
-            max_steps=int(args.max_timesteps * 0.8),
+            start=self.args.eps_greedy_start,
+            end=self.args.eps_greedy_end,
+            max_steps=int(self.args.max_timesteps * 0.8),
         )
 
     def get_action(self, obs: np.ndarray) -> np.ndarray:
@@ -157,14 +139,13 @@ class RainbowAgent(BaseAgent):
         weights = torch.tensor(batch.weights,
                                dtype=torch.float32,
                                device=self.device).view(-1, 1)
-        # N-step Learning loss
+
+        # Compute loss
         elementwise_loss = self._compute_dqn_loss(batch)
-        # PER: importance sampling before average
         loss = torch.mean(elementwise_loss * weights)
 
         # Optimize the model
         self.optimizer.zero_grad()
-
         if self.args.max_grad_norm:
             torch.nn.utils.clip_grad_norm_(self.qnet.parameters(),
                                            self.args.max_grad_norm)
@@ -180,16 +161,17 @@ class RainbowAgent(BaseAgent):
             soft_target_update(self.qnet, self.target_qnet,
                                self.args.soft_update_tau)
             self.target_model_update_step += 1
+
         self.learner_update_step += 1
 
         # Update priorities
         loss_for_prior = elementwise_loss.detach().cpu().numpy()
         new_priorities = loss_for_prior + self.prior_eps
-        learn_result = {'loss': loss.item()}
-        return (learn_result, indices, new_priorities)
+
+        return {'loss': loss.item()}, indices, new_priorities
 
     def _compute_dqn_loss(
-            self, batch: PrioritizedReplayBufferSamples) -> Dict[str, float]:
+            self, batch: PrioritizedReplayBufferSamples) -> torch.Tensor:
         """Compute the distributional DQN loss.
 
         Args:
@@ -198,48 +180,35 @@ class RainbowAgent(BaseAgent):
         Returns:
             torch.Tensor: Element-wise loss for each experience in the batch.
         """
-        obs = batch.obs
-        next_obs = batch.next_obs
-        action = batch.actions
-        reward = batch.rewards
-        done = batch.dones
+        obs = batch.obs.to(self.device)
+        next_obs = batch.next_obs.to(self.device)
+        action = batch.actions.to(self.device, dtype=torch.long).squeeze()
+        reward = batch.rewards.to(self.device)
+        done = batch.dones.to(self.device)
 
-        action = action.to(self.device, dtype=torch.long)
-
+        # Compute target distribution
         with torch.no_grad():
-            # Predict next actions from next_states
-            next_action = self.qnet.forward(next_obs).argmax(dim=1)
-            # Predict the target q distribution for the same next states
-            target_dist = self.target_qnet.forward(next_obs, return_qval=False)
-            # Index the target q_dist to select the distributions corresponding to next_actions
+            next_action = self.qnet(next_obs).argmax(dim=1)
+            target_dist = self.target_qnet(next_obs, return_qval=False)
             target_dist = target_dist[range(self.args.batch_size), next_action]
 
-            if self.args.n_steps > 1:
-                gamma = self.args.gamma**self.args.n_steps
-            else:
-                gamma = self.args.gamma
-            # Determine the target z values
-
+            gamma = (self.args.gamma**self.args.n_steps
+                     if self.args.n_steps > 1 else self.args.gamma)
             t_z = reward + (1 - done) * gamma * self.support
-            t_z = t_z.clamp(min=self.v_min, max=self.v_max)
+            t_z = t_z.clamp(self.v_min, self.v_max)
 
-            # Finds closest support element index value
+            # Compute projection of distribution
             b = (t_z - self.v_min) / self.delta_z
-
-            # Find the neighbouring indices of b
-            l = b.floor().long()
-            u = b.ceil().long()
-
-            # Shape of projected q distribution is (batch_size, num_atoms) as we have argmaxed over actions
-            # Fix disappearing probability mass
+            l, u = b.floor().long(), b.ceil().long()
             l[(u > 0) * (l == u)] -= 1
             u[(l < (self.num_atoms - 1)) * (l == u)] += 1
+
             offset = (torch.linspace(
                 0, (self.args.batch_size - 1) * self.num_atoms,
                 self.args.batch_size).long().unsqueeze(1).expand(
                     self.args.batch_size, self.num_atoms).to(self.device))
 
-            proj_dist = torch.zeros(target_dist.size(), device=self.device)
+            proj_dist = torch.zeros_like(target_dist)
             proj_dist.view(-1).index_add_(0, (l + offset).view(-1),
                                           (target_dist *
                                            (u.float() - b)).view(-1))
@@ -247,11 +216,12 @@ class RainbowAgent(BaseAgent):
                                           (target_dist *
                                            (b - l.float())).view(-1))
 
-        # Calculate the current state
-        curr_q_dist = self.qnet.forward(obs, return_qval=False)
+        # Compute current distribution
+        curr_q_dist = self.qnet(obs, return_qval=False)
         log_p = torch.log(curr_q_dist + 1e-8)
-        log_p = log_p[range(self.args.batch_size), action.squeeze()]
+        log_p = log_p[range(self.args.batch_size), action]
 
         # Loss is the negative log-likelihood of the projected distribution
         elementwise_loss = -(proj_dist * log_p).sum(dim=1)
+
         return elementwise_loss

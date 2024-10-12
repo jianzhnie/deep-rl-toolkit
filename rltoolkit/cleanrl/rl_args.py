@@ -378,7 +378,7 @@ class RainbowArguments(RLArguments):
         },
     )
     beta: float = field(
-        default=0.6,
+        default=0.4,
         metadata={
             'help':
             'Beta parameter for the prioritized experience replay. Defaults to 0.6'
