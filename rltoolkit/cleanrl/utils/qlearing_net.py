@@ -1,4 +1,3 @@
-import math
 from typing import Optional, Tuple, Union
 
 import numpy as np
@@ -67,7 +66,7 @@ class NoisyLinear(nn.Module):
     Attributes:
         in_features (int): input size of linear module
         out_features (int): output size of linear module
-        std_init (float): initial std value
+        noisy_std (float): initial std value
         weight_mu (nn.Parameter): mean value weight parameter
         weight_sigma (nn.Parameter): std value weight parameter
         bias_mu (nn.Parameter): mean value bias parameter
@@ -77,12 +76,12 @@ class NoisyLinear(nn.Module):
     def __init__(self,
                  in_features: int,
                  out_features: int,
-                 std_init: float = 0.5):
+                 noisy_std: float = 0.5) -> None:
         super(NoisyLinear, self).__init__()
         """Initialization."""
         self.in_features = in_features
         self.out_features = out_features
-        self.std_init = std_init
+        self.noisy_std = noisy_std
 
         self.weight_mu = nn.Parameter(
             torch.FloatTensor(out_features, in_features))
@@ -118,13 +117,13 @@ class NoisyLinear(nn.Module):
 
     def reset_parameters(self):
         """Reset trainable network parameters (factorized gaussian noise)."""
-        mu_range = 1.0 / math.sqrt(self.in_features)
+        mu_range = 1.0 / np.sqrt(self.in_features)
         self.weight_mu.data.uniform_(-mu_range, mu_range)
-        self.weight_sigma.data.fill_(self.std_init /
-                                     math.sqrt(self.in_features))
         self.bias_mu.data.uniform_(-mu_range, mu_range)
-        self.bias_sigma.data.fill_(self.std_init /
-                                   math.sqrt(self.out_features))
+
+        self.weight_sigma.data.fill_(self.noisy_std /
+                                     np.sqrt(self.in_features))
+        self.bias_sigma.data.fill_(self.noisy_std / np.sqrt(self.out_features))
 
     def reset_noise(self):
         """Make new noise."""
@@ -149,14 +148,14 @@ class NoisyNet(nn.Module):
         state_shape: Union[int, Tuple[int]],
         action_shape: Union[int, Tuple[int]],
         hidden_dim: int,
-        std_init: float = 0.5,
+        noisy_std: float = 0.5,
     ):
         """Initialization."""
         super(NoisyNet, self).__init__()
         obs_dim = int(np.prod(state_shape))
         action_dim = int(np.prod(action_shape))
         self.feature = nn.Linear(obs_dim, hidden_dim)
-        self.noisy_layer = NoisyLinear(hidden_dim, action_dim, std_init)
+        self.noisy_layer = NoisyLinear(hidden_dim, action_dim, noisy_std)
         self.relu = nn.ReLU(inplace=True)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -169,6 +168,77 @@ class NoisyNet(nn.Module):
     def reset_noise(self):
         """Reset all noisy layers."""
         self.noisy_layer.reset_noise()
+
+
+class RainbowNet(nn.Module):
+
+    def __init__(
+        self,
+        obs_dim: int,
+        hidden_dim: int,
+        action_dim: int,
+        num_atoms: int,
+        support: torch.Tensor,
+        noisy_std: float = 0.5,
+        is_dueling: bool = True,
+        is_noisy: bool = True,
+    ) -> None:
+        """Initialization."""
+
+        super().__init__()
+
+        self.action_dim = action_dim
+        self.num_atoms = num_atoms
+        self.support = support
+
+        def linear(in_features, out_features):
+            if is_noisy:
+                return NoisyLinear(in_features, out_features, noisy_std)
+            else:
+                return nn.Linear(in_features, out_features)
+
+        # set common feature layer
+        self.feature_layer = nn.Sequential(
+            nn.Linear(obs_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+        )
+        self.q_layer = nn.Sequential(
+            linear(hidden_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            linear(hidden_dim, self.action_dim * self.num_atoms),
+        )
+        self.is_dueling = is_dueling
+        if self.is_dueling:
+            self.v_layer = nn.Sequential(
+                linear(hidden_dim, hidden_dim),
+                nn.ReLU(inplace=True),
+                linear(hidden_dim, self.num_atoms),
+            )
+
+        self.output_dim = self.action_dim * self.num_atoms
+
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
+        probs = self.get_prob_dist(obs)
+        qval = torch.sum(probs * self.support, dim=2)
+        return qval
+
+    def get_prob_dist(self, obs: torch.Tensor) -> torch.Tensor:
+        """Forward method implementation."""
+        feature = self.feature_layer(obs)
+        q = self.q_layer(feature)
+        q = q.view(-1, self.action_dim, self.num_atoms)
+
+        if self.is_dueling:
+            v = self.v_layer(feature)
+            v = v.view(-1, 1, self.num_atoms)
+            logits = q - q.mean(dim=1, keepdim=True) + v
+        else:
+            logits = q
+
+        probs = logits.softmax(dim=2)
+        probs = probs.clamp(min=1e-3)  # for avoiding nans
+
+        return probs
 
 
 class C51Network(nn.Module):
