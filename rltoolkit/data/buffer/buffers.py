@@ -658,7 +658,7 @@ class SimpleReplayBuffer:
         sub_n_step_buffer = list(n_step_buffer)[:-1]
         for transition in reversed(sub_n_step_buffer):
             next_o, r, d = transition[-3:]
-            reward += r + gamma * reward * (1 - d)
+            reward = r + gamma * reward * (1 - d)
             next_obs, done = (next_o, d) if d else (next_obs, done)
 
         return next_obs, reward, done
@@ -794,6 +794,7 @@ class SimplePerReplayBuffer(SimpleReplayBuffer):
         super().add(obs, action, reward, next_obs, done)
 
     def sample(self, batch_size: int) -> PrioritizedReplayBufferSamples:
+        assert self.curr_ptr > batch_size
         batch_inds = self._sample_proportional(batch_size)
         weights = np.array([self._calculate_weight(i) for i in batch_inds])
         data = (
