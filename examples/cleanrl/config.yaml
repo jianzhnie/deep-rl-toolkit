@@ -73,6 +73,25 @@ dueling_ddqn:
     dueling_dqn: True
     n_steps: 3
 
+noisy_dqn:
+  CartPole-v0:
+    algo_name: noisy_dqn
+    learning_rate: 0.01
+    max_timesteps: 20000
+    buffer_size: 10000
+    batch_size: 64
+    noisy_dqn: True
+    logger: tensorboard
+
+  CartPole-v1:
+    algo_name: noisy_dqn
+    learning_rate: 0.01
+    max_timesteps: 100000
+    buffer_size: 10000
+    batch_size: 64
+    noisy_dqn: True
+    logger: tensorboard
+
 per:
   CartPole-v0:
     algo_name: per
@@ -82,7 +101,7 @@ per:
     buffer_size: 10000
     train_frequency: 10
     learn_steps: 2
-    target_update_frequency: 500
+    target_update_frequency: 50
     batch_size: 64
     logger: tensorboard
 
@@ -90,23 +109,27 @@ per:
     algo_name: per
     learning_rate: 0.01
     min_learning_rate: 1.0e-5
-    max_timesteps: 100000
+    max_timesteps: 200000
     buffer_size: 10000
-    target_update_frequency: 1000
+    train_frequency: 20
+    learn_steps: 1
+    target_update_frequency: 100
     batch_size: 64
+    logger: tensorboard
 
 rainbow:
   CartPole-v0:
     algo_name: rainbow
-    learning_rate: 0.001
+    learning_rate: 0.01
     learn_step: 2
-    n_steps: 3
-    beta: 0.4
-    v_max: 10
-    v_min: -10
+    n_steps: 1
+    v_max: 20
+    v_min: -20
     max_timesteps: 20000
     buffer_size: 10000
-    target_update_frequency: 1000
+    train_frequency: 10
+    learn_steps: 2
+    target_update_frequency: 100
     batch_size: 64
     logger: tensorboard
 

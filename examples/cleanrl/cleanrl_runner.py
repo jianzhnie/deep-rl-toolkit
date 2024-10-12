@@ -11,10 +11,10 @@ import yaml
 
 sys.path.append(os.getcwd())
 import gymnasium as gym
-from rltoolkit.cleanrl.agent import (C51Agent, DDPGAgent, DQNAgent, PERAgent,
-                                     PPOClipAgent, PPOPenaltyAgent,
-                                     RainbowAgent, SACAgent, SACConAgent,
-                                     TD3Agent)
+from rltoolkit.cleanrl.agent import (C51Agent, DDPGAgent, DQNAgent,
+                                     PERDQNAgent, PPOClipAgent,
+                                     PPOPenaltyAgent, RainbowAgent, SACAgent,
+                                     SACConAgent, TD3Agent)
 from rltoolkit.cleanrl.offpolicy_runner import (OffPolicyRunner,
                                                 PerOffPolicyRunner)
 from rltoolkit.cleanrl.onpolicy_runner import OnPolicyRunner
@@ -84,6 +84,7 @@ def main() -> None:
             'ddqn',
             'dueling_dqn',
             'dueling_ddqn',
+            'noisy_dqn',
             'per',
             'rainbow',
             'c51',
@@ -124,7 +125,7 @@ def main() -> None:
         Agent: DQNAgent = DQNAgent
     elif run_args.algo_name == 'per':
         algo_args: PERArguments = tyro.cli(PERArguments)
-        Agent: PERAgent = PERAgent
+        Agent: PERDQNAgent = PERDQNAgent
     elif run_args.algo_name == 'rainbow':
         algo_args: RainbowArguments = tyro.cli(RainbowArguments)
         Agent: RainbowAgent = RainbowAgent
@@ -198,6 +199,9 @@ def main() -> None:
             'c51',
             'dqn',
             'ddqn',
+            'noisy_dqn',
+            'dueling_dqn',
+            'dueling_ddqn',
             'ddpg',
             'sac',
             'saccon',
