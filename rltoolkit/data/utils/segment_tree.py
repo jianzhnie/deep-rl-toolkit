@@ -5,11 +5,13 @@ from typing import Callable, List
 
 
 class SegmentTree:
-    """Create SegmentTree. Build a Segment Tree data structure.
+    """A Segment Tree data structure to perform efficient range queries and
+    updates. This version supports operations like sum, min, max, and more,
+    where each operation is associative.
 
     https://en.wikipedia.org/wiki/Segment_tree
 
-    Taken from OpenAI baselines github repository:
+    This is based on the OpenAI baselines implementation:
     https://github.com/openai/baselines/blob/master/baselines/common/segment_tree.py
 
     Can be used as a regular array that supports index arrays, but with two
@@ -56,7 +58,7 @@ class SegmentTree:
         mid = (node_start + node_end) // 2
         if end <= mid:
             return self._operate_helper(start, end, 2 * node, node_start, mid)
-        elif start > mid:
+        elif start >= mid + 1:
             return self._operate_helper(start, end, 2 * node + 1, mid + 1,
                                         node_end)
         else:
@@ -106,7 +108,10 @@ class SegmentTree:
 
 
 class SumSegmentTree(SegmentTree):
-    """Create SumSegmentTree.
+    """A specialized Segment Tree where the operation is summation.
+
+    Inherits from the SegmentTree class and uses addition as the
+    associative operation.
 
     Taken from OpenAI baselines github repository:
     https://github.com/openai/baselines/blob/master/baselines/common/segment_tree.py
@@ -123,7 +128,7 @@ class SumSegmentTree(SegmentTree):
                          init_value=0.0)
 
     def sum(self, start: int = 0, end: int = 0) -> float:
-        """Returns arr[start] + ... + arr[end].
+        """Returns the sum of the values in the range [start, end].
 
         :param start: (int) Start position of the reduction (must be >= 0).
         :param end: (int) End position of the reduction (must be < len(arr), can be None for len(arr) - 1).
@@ -131,29 +136,42 @@ class SumSegmentTree(SegmentTree):
         """
         return super().operate(start, end)
 
-    def retrieve(self, upperbound: float) -> int:
-        """Find the highest index `i` about upper bound in the tree.
+    def find_prefixsum_idx(self, prefixsum: float) -> int:
+        """Find the highest index `i` in the array such that.
 
-        功能：根据累积和查找索引，返回使累积和不超过 upperbound 的最大索引。 参数：     upperbound：累积和的上限。 实现：
-        从根节点开始，通过比较左、右子节点的值进行二分查找，找到符合条件的叶子节点。
+            sum(arr[0] + arr[1] + ... + arr[i - i]) <= prefixsum
+
+        If array values are probabilities, this function
+        allows to sample indexes according to the discrete
+        probability efficiently.
+
+        功能：根据累积和查找索引，返回使累积和不超过 prefixsum 的最大索引。
+        参数：
+            prefixsum：累积和的上限。
+        实现：
+            从根节点开始，通过比较左、右子节点的值进行二分查找，找到符合条件的叶子节点。
         """
-        # TODO: Check assert case and fix bug
-        assert 0 <= upperbound <= self.sum() + 1e-5, 'Upperbound out of range.'
+        assert 0 <= prefixsum <= self.sum(
+        ) + 1e-5, f'{prefixsum} out of range.'
 
         idx = 1
         while idx < self.capacity:  # While non-leaf
             left = 2 * idx
-            right = left + 1
-            if self.tree[left] > upperbound:
-                idx = 2 * idx
+            right = 2 * idx + 1
+            if self.tree[left] > prefixsum:
+                idx = left
             else:
-                upperbound -= self.tree[left]
+                prefixsum -= self.tree[left]
                 idx = right
         return idx - self.capacity
 
 
 class MinSegmentTree(SegmentTree):
-    """Create SegmentTree.
+    """A specialized Segment Tree where the operation is finding the minimum
+    value.
+
+    Inherits from the SegmentTree class and uses the min function as the operation.
+
 
     Taken from OpenAI baselines github repository:
     https://github.com/openai/baselines/blob/master/baselines/common/segment_tree.py

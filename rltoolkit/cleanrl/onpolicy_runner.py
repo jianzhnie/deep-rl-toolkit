@@ -8,7 +8,7 @@ from rltoolkit.cleanrl.agent import BaseAgent
 from rltoolkit.cleanrl.base_runner import BaseRunner
 from rltoolkit.cleanrl.rl_args import RLArguments
 from rltoolkit.cleanrl.utils.utils import calculate_mean
-from rltoolkit.data import SimpleRolloutBuffer
+from rltoolkit.data.buffer import SimpleRolloutBuffer
 from rltoolkit.utils import ProgressBar
 
 

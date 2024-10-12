@@ -1,7 +1,7 @@
 import copy
 from typing import Dict, List, Optional, Union
 
-import gym
+import gymnasium as gym
 import numpy as np
 import torch
 import torch.nn.functional as F
