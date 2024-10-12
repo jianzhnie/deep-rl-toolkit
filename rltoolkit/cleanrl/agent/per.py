@@ -1,5 +1,5 @@
 import copy
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import gymnasium as gym
 import numpy as np
@@ -13,38 +13,45 @@ from rltoolkit.utils import LinearDecayScheduler, soft_target_update
 
 
 class PERAgent(BaseAgent):
-    """Deep Q-Network algorithm.
-
-    "Human-Level Control Through Deep Reinforcement Learning" - Mnih V. et al., 2015.
+    """Prioritized Experience Replay (PER) agent implementing DQN, Double DQN,
+    and Dueling DQN.
 
     Args:
-        args (DQNArguments): Configuration object for the agent.
-        env (gym.Env): Environment object.
-        state_shape (Optional[Union[int, List[int]]]): Shape of the state.
-        action_shape (Optional[Union[int, List[int]]]): Shape of the action.
-        device (Optional[Union[str, torch.device]]): Device to use for computation.
+        args (PERArguments): Configuration object with agent hyperparameters.
+        env (gym.Env): The environment the agent will interact with.
+        state_shape (Union[int, List[int]]): Shape of the environment's state space.
+        action_shape (Union[int, List[int]]): Shape of the environment's action space.
+        device (Optional[Union[str, torch.device]]): Device (CPU/GPU) to run the computations on.
     """
 
     def __init__(
         self,
         args: PERArguments,
         env: gym.Env,
-        state_shape: Union[int, List[int]] = None,
-        action_shape: Union[int, List[int]] = None,
+        state_shape: Union[int, List[int]],
+        action_shape: Union[int, List[int]],
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
         super().__init__(args)
+
+        # Check for valid argument values
         assert (isinstance(args.n_steps, int) and args.n_steps > 0
-                ), 'N-step should be an integer and greater than 0.'
+                ), 'N-step should be an integer greater than 0.'
+
         self.args = args
         self.env = env
-        self.device = device
+        self.device = device or torch.device('cpu')
+        # Default to CPU if no device is provided
+        self.obs_dim = int(np.prod(state_shape))
+        # Flatten state shape for network input
+        self.action_dim = int(np.prod(action_shape))
+        # Flatten action shape
+
+        # Initialize learning variables
         self.learner_update_step = 0
         self.target_model_update_step = 0
         self.eps_greedy = args.eps_greedy_start
         self.learning_rate = args.learning_rate
-        self.obs_dim = int(np.prod(state_shape))
-        self.action_dim = int(np.prod(action_shape))
 
         # Initialize networks
         if args.dueling_dqn:
@@ -52,127 +59,146 @@ class PERAgent(BaseAgent):
                 obs_dim=self.obs_dim,
                 action_dim=self.action_dim,
                 hidden_dim=self.args.hidden_dim,
-            ).to(device)
+            ).to(self.device)
         else:
             self.qnet = QNet(
                 obs_dim=self.obs_dim,
                 action_dim=self.action_dim,
                 hidden_dim=self.args.hidden_dim,
-            ).to(device)
+            ).to(self.device)
+
         self.target_qnet = copy.deepcopy(self.qnet)
+        # Target network is a copy of the Q-network
         self.target_qnet.eval()
-        # Initialize optimizer and schedulers
+        # Set target network to evaluation mode
+
+        # Initialize optimizer and learning rate scheduler
         self.optimizer = torch.optim.Adam(params=self.qnet.parameters(),
-                                          lr=args.learning_rate)
+                                          lr=self.learning_rate)
         self.lr_scheduler = torch.optim.lr_scheduler.LinearLR(
             optimizer=self.optimizer,
-            start_factor=args.learning_rate,
-            end_factor=args.min_learning_rate,
-            total_iters=args.max_timesteps,
+            start_factor=self.learning_rate,
+            end_factor=self.args.min_learning_rate,
+            total_iters=self.args.max_timesteps,
         )
+
+        # Epsilon-greedy decay scheduler
         self.eps_greedy_scheduler = LinearDecayScheduler(
-            args.eps_greedy_start,
-            args.eps_greedy_end,
-            max_steps=args.max_timesteps * 0.8,
+            self.args.eps_greedy_start,
+            self.args.eps_greedy_end,
+            max_steps=int(self.args.max_timesteps * 0.9),
         )
 
     def get_action(self, obs: np.ndarray) -> np.ndarray:
-        """Get action from the actor network.
+        """Get an action using epsilon-greedy policy.
 
         Args:
-            obs (np.ndarray): Current observation.
+            obs (np.ndarray): The current observation from the environment.
 
         Returns:
-            np.ndarray: Selected action.
+            np.ndarray: The chosen action.
         """
-        # epsilon greedy policy
+        # With probability epsilon, sample a random action (exploration)
         if np.random.rand() <= self.eps_greedy:
             action = self.env.action_space.sample()
         else:
+            # Otherwise, predict the best action (exploitation)
             action = self.predict(obs)
 
+        # Decay epsilon over time
         self.eps_greedy = max(self.eps_greedy_scheduler.step(),
                               self.args.eps_greedy_end)
         return action
 
     def predict(self, obs: np.ndarray) -> int:
-        """Predict an action given an observation.
+        """Predict the action based on the current Q-network.
 
         Args:
-            obs (np.ndarray): Current observation.
+            obs (np.ndarray): The current observation.
 
         Returns:
-            int: Selected action.
+            int: The action with the highest Q-value.
         """
         if obs.ndim == 1:
-            # Expand to have batch_size = 1
-            obs = np.expand_dims(obs, axis=0)
+            obs = np.expand_dims(obs, axis=0)  # Add batch dimension if needed
 
-        obs = torch.tensor(obs, dtype=torch.float, device=self.device)
-        q_values = self.qnet(obs)
-        action = torch.argmax(q_values, dim=1).item()
+        obs_tensor = torch.tensor(obs, dtype=torch.float32, device=self.device)
+        with torch.no_grad():
+            q_values = self.qnet(obs_tensor)
+            action = q_values.argmax(dim=1).item()
+        # Choose the action with highest Q-value
         return action
 
-    def learn(self, batch: PrioritizedReplayBufferSamples) -> Dict[str, float]:
-        """Perform a learning step.
+    def learn(
+        self, batch: PrioritizedReplayBufferSamples
+    ) -> Tuple[Dict[str, float], np.ndarray, np.ndarray]:
+        """Perform a learning step using the provided experience batch.
 
         Args:
-            batch (Dict[str, torch.Tensor]): Batch of experience.
+            batch (PrioritizedReplayBufferSamples): A batch of experience data.
 
         Returns:
-            float: Loss value.
+            Tuple[Dict[str, float], np.ndarray, np.ndarray]:
+                - A dictionary with the current loss value.
+                - Indices of the replay buffer samples.
+                - New priorities for the replay buffer based on TD error.
         """
-        obs = batch.obs
-        next_obs = batch.next_obs
-        action = batch.actions
-        reward = batch.rewards
-        done = batch.dones
-        indices = batch.indices
+        obs = batch.obs.to(self.device)
+        next_obs = batch.next_obs.to(self.device)
+        action = batch.actions.to(self.device, dtype=torch.long)
+        reward = batch.rewards.to(self.device)
+        done = batch.dones.to(self.device)
         weights = torch.tensor(batch.weights,
-                               dtype=torch.float,
+                               dtype=torch.float32,
                                device=self.device).reshape(-1, 1)
 
-        action = action.to(self.device, dtype=torch.long)
-
-        # Compute current Q values
+        # Compute current Q-values
         current_q_values = self.qnet(obs).gather(1, action)
-        # Compute target Q values
-        if self.args.double_dqn:
-            with torch.no_grad():
-                greedy_action = self.qnet(next_obs).max(dim=1, keepdim=True)[1]
+
+        # Compute next Q-values
+        with torch.no_grad():
+            if self.args.double_dqn:
+                # Double DQN: Get next action using Q-network, then evaluate it using the target network
+                next_actions = self.qnet(next_obs).argmax(dim=1, keepdim=True)
                 next_q_values = self.target_qnet(next_obs).gather(
-                    1, greedy_action)
-        else:
-            with torch.no_grad():
+                    1, next_actions)
+            else:
+                # Regular DQN: Just use the maximum Q-value from the target network
                 next_q_values = self.target_qnet(next_obs).max(dim=1,
                                                                keepdim=True)[0]
 
+        # Calculate the target Q-values (Bellman equation)
         target_q_values = (
-            reward +
-            (1 - done) * self.args.gamma**self.args.n_steps * next_q_values)
+            reward + (1 - done) *
+            (self.args.gamma**self.args.n_steps) * next_q_values)
 
+        # Calculate TD error (used for prioritized replay)
         td_error = torch.abs(current_q_values - target_q_values)
-        # Compute loss
+
+        # Compute loss with importance sampling weights
         elementwise_loss = F.mse_loss(current_q_values,
                                       target_q_values,
                                       reduction='none')
-        loss = torch.mean(elementwise_loss * weights)
-        # Optimize the model
-        self.optimizer.zero_grad()
+        loss = (elementwise_loss * weights).mean()
 
+        # Perform backpropagation
+        self.optimizer.zero_grad()
         if self.args.max_grad_norm:
             torch.nn.utils.clip_grad_norm_(self.qnet.parameters(),
                                            self.args.max_grad_norm)
         loss.backward()
         self.optimizer.step()
 
-        # Soft update target network
+        # Soft update of the target network
         if self.learner_update_step % self.args.target_update_frequency == 0:
             soft_target_update(self.qnet, self.target_qnet,
                                self.args.soft_update_tau)
-            self.target_model_update_step += 1
+
+        # Update the number of learning steps
         self.learner_update_step += 1
 
+        # Calculate new priorities for replay buffer
         new_priorities = td_error.detach().cpu().numpy() + self.args.prior_eps
-        learn_result = {'loss': loss.item()}
-        return (learn_result, indices, new_priorities)
+
+        # Return the loss and new priorities
+        return {'loss': loss.item()}, batch.indices, new_priorities
