@@ -95,7 +95,12 @@ per:
 rainbow:
   CartPole-v0:
     algo_name: rainbow
-    learning_rate: 0.01
+    learning_rate: 0.001
+    learn_step: 2
+    n_steps: 3
+    beta: 0.4
+    v_max: 10
+    v_min: -10
     max_timesteps: 20000
     buffer_size: 10000
     target_update_frequency: 1000

@@ -124,7 +124,7 @@ def main() -> None:
         Agent: DQNAgent = DQNAgent
     elif run_args.algo_name == 'per':
         algo_args: PERArguments = tyro.cli(PERArguments)
-        Agent: PERArguments = PERAgent
+        Agent: PERAgent = PERAgent
     elif run_args.algo_name == 'rainbow':
         algo_args: RainbowArguments = tyro.cli(RainbowArguments)
         Agent: RainbowAgent = RainbowAgent
