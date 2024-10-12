@@ -202,43 +202,52 @@ class RainbowNet(nn.Module):
             nn.Linear(obs_dim, hidden_dim),
             nn.ReLU(inplace=True),
         )
-        self.q_layer = nn.Sequential(
+
+        self.value_net = nn.Sequential(
             linear(hidden_dim, hidden_dim),
             nn.ReLU(inplace=True),
-            linear(hidden_dim, self.action_dim * self.num_atoms),
+            linear(hidden_dim, self.num_atoms),
         )
         self.is_dueling = is_dueling
         if self.is_dueling:
-            self.v_layer = nn.Sequential(
+            self.advantage_net = nn.Sequential(
                 linear(hidden_dim, hidden_dim),
                 nn.ReLU(inplace=True),
-                linear(hidden_dim, self.num_atoms),
+                linear(hidden_dim, self.action_dim * self.num_atoms),
             )
-
         self.output_dim = self.action_dim * self.num_atoms
 
-    def forward(self, obs: torch.Tensor) -> torch.Tensor:
-        probs = self.get_prob_dist(obs)
-        qval = torch.sum(probs * self.support, dim=2)
-        return qval
-
-    def get_prob_dist(self, obs: torch.Tensor) -> torch.Tensor:
+    def forward(self,
+                obs: torch.Tensor,
+                return_qval: bool = True) -> torch.Tensor:
         """Forward method implementation."""
         feature = self.feature_layer(obs)
-        q = self.q_layer(feature)
-        q = q.view(-1, self.action_dim, self.num_atoms)
+        value = self.value_net(feature)
+        value = value.view(-1, 1, self.num_atoms)
 
         if self.is_dueling:
-            v = self.v_layer(feature)
-            v = v.view(-1, 1, self.num_atoms)
-            logits = q - q.mean(dim=1, keepdim=True) + v
+            advantage = self.advantage_net(feature)
+            advantage = advantage.view(-1, self.action_dim, self.num_atoms)
+            logits = value + advantage - advantage.mean(dim=1, keepdim=True)
         else:
-            logits = q
+            logits = advantage
 
-        probs = logits.softmax(dim=2)
-        probs = probs.clamp(min=1e-3)  # for avoiding nans
+        prob_dist = logits.softmax(dim=2)
+        prob_dist = prob_dist.clamp(min=1e-3)  # for avoiding nans
 
-        return probs
+        qval = torch.sum(prob_dist * self.support, dim=2)
+        if return_qval:
+            return qval
+        return prob_dist
+
+    def reset_noise(self):
+        """Resets noise of value and advantage networks."""
+        for layer in self.value_net:
+            if isinstance(layer, NoisyLinear):
+                layer.reset_noise()
+        for layer in self.advantage_net:
+            if isinstance(layer, NoisyLinear):
+                layer.reset_noise()
 
 
 class C51Network(nn.Module):

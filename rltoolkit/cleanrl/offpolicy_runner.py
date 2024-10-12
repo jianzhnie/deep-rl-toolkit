@@ -56,7 +56,7 @@ class OffPolicyRunner(BaseRunner):
             self.buffer.add(obs, next_obs, action, reward, done)
             if self.buffer.size() > self.args.warmup_learn_steps:
                 if self.global_step % self.args.train_frequency == 0:
-                    for _ in range(self.args.gradient_steps):
+                    for _ in range(self.args.learn_steps):
                         batchs = self.buffer.sample(self.args.batch_size)
                         learn_result = self.agent.learn(batchs)
                         episode_result_info.append(learn_result)
@@ -205,7 +205,7 @@ class PerOffPolicyRunner(BaseRunner):
             self.buffer.add(obs, next_obs, action, reward, done)
             if self.buffer.size() > self.args.warmup_learn_steps:
                 if self.global_step % self.args.train_frequency == 0:
-                    for _ in range(self.args.gradient_steps):
+                    for _ in range(self.args.learn_steps):
                         batchs = self.buffer.sample(self.args.batch_size)
                         learn_result, indices, new_priorities = self.agent.learn(
                             batchs)

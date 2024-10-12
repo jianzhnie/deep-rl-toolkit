@@ -226,7 +226,7 @@ class DQNArguments(RLArguments):
         default=10,
         metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
-    gradient_steps: int = field(
+    learn_steps: int = field(
         default=2,
         metadata={
             'help':
@@ -357,7 +357,7 @@ class PERArguments(RLArguments):
         default=10,
         metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
-    gradient_steps: int = field(
+    learn_steps: int = field(
         default=2,
         metadata={
             'help':
@@ -410,7 +410,7 @@ class RainbowArguments(RLArguments):
         },
     )
     noisy_std: float = field(
-        default=0.1,
+        default=0.5,
         metadata={
             'help':
             'Standard deviation for the initial weights of the value function. Defaults to 0.1'
@@ -421,20 +421,6 @@ class RainbowArguments(RLArguments):
         metadata={
             'help':
             'The hidden dimension size of the neural network. Defaults to 128'
-        },
-    )
-    double_dqn: bool = field(
-        default=False,
-        metadata={
-            'help':
-            'Flag indicating whether to use Double DQN. Defaults to False'
-        },
-    )
-    dueling_dqn: bool = field(
-        default=False,
-        metadata={
-            'help':
-            'Flag indicating whether to use Dueling DQN. Defaults to False'
         },
     )
     learning_rate: float = field(
@@ -513,7 +499,7 @@ class RainbowArguments(RLArguments):
         default=10,
         metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
-    gradient_steps: int = field(
+    learn_steps: int = field(
         default=2,
         metadata={
             'help':
@@ -629,7 +615,7 @@ class C51Arguments(RLArguments):
         default=10,
         metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
-    gradient_steps: int = field(
+    learn_steps: int = field(
         default=2,
         metadata={
             'help':
@@ -692,7 +678,7 @@ class DDPGArguments(RLArguments):
         default=10,
         metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
-    gradient_steps: int = field(
+    learn_steps: int = field(
         default=2,
         metadata={
             'help':
@@ -961,7 +947,7 @@ class SACArguments(RLArguments):
         default=10,
         metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
-    gradient_steps: int = field(
+    learn_steps: int = field(
         default=2,
         metadata={
             'help':
@@ -1039,7 +1025,7 @@ class TD3Arguments(RLArguments):
         default=10,
         metadata={'help': 'Frequency of training updates. Defaults to 1'},
     )
-    gradient_steps: int = field(
+    learn_steps: int = field(
         default=2,
         metadata={
             'help':
