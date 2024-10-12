@@ -43,8 +43,8 @@ class DQNAgent(BaseAgent):
 
         self.args = args
         self.env = env
-        self.device = device or torch.device(
-            'cpu')  # Default to CPU if not specified
+        self.device = device or torch.device('cpu')
+        # Default to CPU if not specified
         self.learner_update_step = 0
         self.target_model_update_step = 0
         self.eps_greedy = args.eps_greedy_start
@@ -208,6 +208,8 @@ class DQNAgent(BaseAgent):
 
         self.learner_update_step += 1
 
-        return {
-            'loss': loss.item()
-        }  # Return the loss as a dictionary for logging
+        learn_result = {
+            'loss': loss.item(),
+        }
+        # Return the loss as a dictionary for logging
+        return learn_result
