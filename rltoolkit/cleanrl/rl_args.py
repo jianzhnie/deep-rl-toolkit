@@ -805,6 +805,69 @@ class A2CArguments(RLArguments):
         },
     )
 
+    epsilon: float = field(
+        default=1e-5,
+        metadata={'help': 'Epsilon for the PPO algorithm. Defaults to 1e-5'},
+    )
+    gae_lambda: float = field(
+        default=0.95,
+        metadata={
+            'help':
+            'Lambda for Generalized Advantage Estimation (GAE). Defaults to 0.95'
+        },
+    )
+    norm_advantages: bool = field(
+        default=True,
+        metadata={
+            'help':
+            'Flag indicating whether to normalize the advantages. Defaults to True'
+        },
+    )
+    value_loss_coef: float = field(
+        default=0.5,
+        metadata={
+            'help':
+            'Coefficient for the value loss in the PPO algorithm. Defaults to 0.5'
+        },
+    )
+    entropy_coef: float = field(
+        default=0.01,
+        metadata={
+            'help':
+            'Coefficient for the entropy term in the PPO algorithm. Defaults to 0.01'
+        },
+    )
+    clip_vloss: bool = field(
+        default=True,
+        metadata={
+            'help':
+            'Flag indicating whether to clip the value loss. Defaults to False'
+        },
+    )
+    clip_param: float = field(
+        default=0.2,
+        metadata={
+            'help': 'Clip parameter for the PPO algorithm. Defaults to 0.2'
+        },
+    )
+    max_grad_norm: float = field(
+        default=1.0,
+        metadata={'help': 'Maximum gradient norm. Defaults to 1.0'},
+    )
+    rollout_steps: int = field(
+        default=128,
+        metadata={
+            'help':
+            'Number of steps to take before updating the target network. Defaults to 10'
+        },
+    )
+    update_epochs: int = field(
+        default=1,
+        metadata={
+            'help': 'Number of epochs to run for training. Defaults to 10'
+        },
+    )
+
 
 @dataclass
 class PPOArguments(RLArguments):
