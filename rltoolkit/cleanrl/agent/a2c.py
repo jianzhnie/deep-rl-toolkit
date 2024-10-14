@@ -34,7 +34,7 @@ class A2CAgent(BaseAgent):
         action_shape: Union[int, List[int]],
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
-        super().__init__()
+        super().__init__(args)
         self.args = args
         self.env = env
         self.device = device or torch.device(
@@ -92,6 +92,23 @@ class A2CAgent(BaseAgent):
         obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
         value = self.actor_critic.get_value(obs_tensor)
         return value.item()
+
+    def predict(self, obs: np.ndarray) -> int:
+        """Predict the action with the highest probability given an
+        observation.
+
+        Args:
+            obs (np.ndarray): The observation from the environment.
+
+        Returns:
+            int: The predicted action.
+        """
+        obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
+        with torch.no_grad():
+            logits = self.actor_critic.get_action(obs_tensor)
+            dist = Categorical(logits=logits)
+            action = dist.probs.argmax(dim=1, keepdim=True)
+        return action.item()
 
     def learn(self, batch: RolloutBufferSamples) -> Dict[str, float]:
         """Perform a learning step using a batch of sampled experiences.

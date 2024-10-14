@@ -122,7 +122,6 @@ class PPOClipAgent(BaseAgent):
             - actor_loss (float): The actor loss of the policy.
             - entropy_loss (float): The entropy loss of the policy.
             - approx_kl (float): The approximate KL divergence.
-            - approx_kl (float): The approximate KL divergence.
             - clipped_frac (float): The fraction of clipped actions.
         """
         obs = batch.obs
