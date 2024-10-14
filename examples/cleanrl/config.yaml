@@ -16,7 +16,7 @@ dqn:
     batch_size: 64
     n_steps: 3
 
-ddqn:
+double_dqn:
   CartPole-v0:
     algo_name: ddqn
     learning_rate: 0.01
@@ -43,6 +43,7 @@ dueling_dqn:
     buffer_size: 10000
     batch_size: 64
     dueling_dqn : True
+    double_dqn: True
 
   CartPole-v1:
     algo_name: dueling_dqn
@@ -51,35 +52,55 @@ dueling_dqn:
     buffer_size: 10000
     batch_size: 64
     dueling_dqn : True
+    double_dqn: True
     n_steps: 3
 
-dueling_ddqn:
+noisy_dqn:
   CartPole-v0:
-    algo_name: dueling_ddqn
-    learning_rate: 0.01
-    max_timesteps: 20000
+    algo_name: noisy_dqn
+    learning_rate: 0.05
+    max_timesteps: 30000
     buffer_size: 10000
     batch_size: 64
     double_dqn: True
-    dueling_dqn: True
+    noisy_dqn: True
+    train_frequency: 20
+    learn_steps: 2
+    target_update_frequency: 100
+    logger: tensorboard
 
   CartPole-v1:
-    algo_name: dueling_ddqn
+    algo_name: noisy_dqn
     learning_rate: 0.01
     max_timesteps: 100000
     buffer_size: 10000
     batch_size: 64
-    double_dqn: True
-    dueling_dqn: True
-    n_steps: 3
+    noisy_dqn: True
+    logger: tensorboard
+
+categorical_dqn:
+  CartPole-v0:
+    algo_name: categorical_dqn
+    learning_rate: 0.05
+    max_timesteps: 20000
+    buffer_size: 10000
+    batch_size: 128
+    train_frequency: 20
+    learn_steps: 2
+    n_steps: 1
+    target_update_frequency: 100
+    logger: tensorboard
 
 per:
   CartPole-v0:
     algo_name: per
+    double_dqn: True
     learning_rate: 0.01
     max_timesteps: 20000
     buffer_size: 10000
-    target_update_frequency: 1000
+    train_frequency: 10
+    learn_steps: 2
+    target_update_frequency: 50
     batch_size: 64
     logger: tensorboard
 
@@ -87,24 +108,25 @@ per:
     algo_name: per
     learning_rate: 0.01
     min_learning_rate: 1.0e-5
-    max_timesteps: 100000
+    max_timesteps: 200000
     buffer_size: 10000
-    target_update_frequency: 1000
+    train_frequency: 20
+    learn_steps: 1
+    target_update_frequency: 100
     batch_size: 64
+    logger: tensorboard
 
 rainbow:
   CartPole-v0:
     algo_name: rainbow
-    learning_rate: 0.001
-    learn_step: 2
-    n_steps: 3
-    beta: 0.4
-    v_max: 10
-    v_min: -10
+    learning_rate: 0.05
     max_timesteps: 20000
     buffer_size: 10000
-    target_update_frequency: 1000
-    batch_size: 64
+    batch_size: 128
+    train_frequency: 20
+    learn_steps: 2
+    n_steps: 1
+    target_update_frequency: 100
     logger: tensorboard
 
   CartPole-v1:

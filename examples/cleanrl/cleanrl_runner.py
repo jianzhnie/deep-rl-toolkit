@@ -11,10 +11,10 @@ import yaml
 
 sys.path.append(os.getcwd())
 import gymnasium as gym
-from rltoolkit.cleanrl.agent import (C51Agent, DDPGAgent, DQNAgent, PERAgent,
-                                     PPOClipAgent, PPOPenaltyAgent,
-                                     RainbowAgent, SACAgent, SACConAgent,
-                                     TD3Agent)
+from rltoolkit.cleanrl.agent import (C51Agent, DDPGAgent, DQNAgent,
+                                     PERDQNAgent, PPOClipAgent,
+                                     PPOPenaltyAgent, RainbowAgent, SACAgent,
+                                     SACConAgent, TD3Agent)
 from rltoolkit.cleanrl.offpolicy_runner import (OffPolicyRunner,
                                                 PerOffPolicyRunner)
 from rltoolkit.cleanrl.onpolicy_runner import OnPolicyRunner
@@ -81,9 +81,10 @@ def main() -> None:
         type=str,
         choices=[
             'dqn',
-            'ddqn',
+            'double_dqn',
             'dueling_dqn',
-            'dueling_ddqn',
+            'noisy_dqn',
+            'categorical_dqn',
             'per',
             'rainbow',
             'c51',
@@ -114,17 +115,17 @@ def main() -> None:
     run_args = parser.parse_args()
     if run_args.algo_name in [
             'dqn',
-            'ddqn',
-            'noisy_dqn',
+            'double_dqn',
             'dueling_dqn',
-            'dueling_ddqn',
+            'noisy_dqn',
+            'categorical_dqn',
     ]:
         # Update parser with DQN configuration
         algo_args: DQNArguments = tyro.cli(DQNArguments)
         Agent: DQNAgent = DQNAgent
     elif run_args.algo_name == 'per':
         algo_args: PERArguments = tyro.cli(PERArguments)
-        Agent: PERAgent = PERAgent
+        Agent: PERDQNAgent = PERDQNAgent
     elif run_args.algo_name == 'rainbow':
         algo_args: RainbowArguments = tyro.cli(RainbowArguments)
         Agent: RainbowAgent = RainbowAgent
@@ -197,7 +198,10 @@ def main() -> None:
     if args.algo_name in [
             'c51',
             'dqn',
-            'ddqn',
+            'double_dqn',
+            'noisy_dqn',
+            'dueling_dqn',
+            'categorical_dqn',
             'ddpg',
             'sac',
             'saccon',

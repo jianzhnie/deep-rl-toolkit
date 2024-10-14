@@ -2,10 +2,11 @@ from .base import BaseAgent
 from .c51 import C51Agent
 from .ddpg import DDPGAgent
 from .dqn import DQNAgent
-from .per import PERAgent
+from .noisy_dqn import NoisyDQNAgent
+from .per_dqn import PERDQNAgent
 from .ppo_clip import PPOClipAgent
 from .ppo_penalty import PPOPenaltyAgent
-from .rainbow import RainbowAgent
+from .rainbow_dqn import RainbowAgent
 from .sac import SACAgent
 from .sac_con import SACConAgent
 from .td3 import TD3Agent
@@ -20,6 +21,7 @@ __all__ = [
     'SACAgent',
     'SACConAgent',
     'TD3Agent',
-    'PERAgent',
+    'PERDQNAgent',
     'RainbowAgent',
+    'NoisyDQNAgent',
 ]

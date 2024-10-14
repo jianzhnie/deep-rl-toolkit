@@ -1,4 +1,4 @@
-from typing import Optional, Tuple, Union
+from typing import Optional, Tuple
 
 import numpy as np
 import torch
@@ -145,29 +145,68 @@ class NoisyNet(nn.Module):
 
     def __init__(
         self,
-        state_shape: Union[int, Tuple[int]],
-        action_shape: Union[int, Tuple[int]],
+        obs_dim: int,
+        action_dim: int,
         hidden_dim: int,
         noisy_std: float = 0.5,
-    ):
+    ) -> None:
         """Initialization."""
         super(NoisyNet, self).__init__()
-        obs_dim = int(np.prod(state_shape))
-        action_dim = int(np.prod(action_shape))
-        self.feature = nn.Linear(obs_dim, hidden_dim)
-        self.noisy_layer = NoisyLinear(hidden_dim, action_dim, noisy_std)
-        self.relu = nn.ReLU(inplace=True)
+        self.noisy_net = nn.Sequential(
+            nn.Linear(obs_dim, hidden_dim),
+            nn.ReLU(inplace=True),
+            NoisyLinear(hidden_dim, hidden_dim, noisy_std),
+            nn.ReLU(inplace=True),
+            NoisyLinear(hidden_dim, action_dim, noisy_std),
+        )
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, obs: torch.Tensor) -> torch.Tensor:
         """Forward method implementation."""
-        out = self.feature(x)
-        out = self.relu(out)
-        out = self.noisy_layer(out)
+        out = self.noisy_net(obs)
         return out
 
-    def reset_noise(self):
-        """Reset all noisy layers."""
-        self.noisy_layer.reset_noise()
+    def reset_noise(self) -> None:
+        """Resets noise of value and advantage networks."""
+        for layer in self.noisy_net:
+            if isinstance(layer, NoisyLinear):
+                layer.reset_noise()
+
+
+class CategoricalNet(nn.Module):
+
+    def __init__(
+        self,
+        obs_dim: int,
+        action_dim: int,
+        hidden_dim: int,
+        num_atoms: int,
+        support: torch.Tensor,
+    ) -> None:
+        """Initialization."""
+        super().__init__()
+
+        self.out_dim = action_dim
+        self.num_atoms = num_atoms
+        self.support = support
+        self.layers = nn.Sequential(
+            nn.Linear(obs_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, hidden_dim),
+            nn.ReLU(),
+            nn.Linear(hidden_dim, action_dim * num_atoms),
+        )
+
+    def forward(self,
+                obs: torch.Tensor,
+                return_qval: bool = True) -> torch.Tensor:
+        """Forward method implementation."""
+        logits = self.layers(obs).view(-1, self.out_dim, self.num_atoms)
+        prob_dist = F.softmax(logits, dim=-1)
+        prob_dist = prob_dist.clamp(min=1e-3)  # for avoiding nans
+        q_val = torch.sum(prob_dist * self.support, dim=2)
+        if return_qval:
+            return q_val
+        return prob_dist
 
 
 class RainbowNet(nn.Module):
@@ -230,7 +269,7 @@ class RainbowNet(nn.Module):
             advantage = advantage.view(-1, self.action_dim, self.num_atoms)
             logits = value + advantage - advantage.mean(dim=1, keepdim=True)
         else:
-            logits = advantage
+            logits = value
 
         prob_dist = logits.softmax(dim=2)
         prob_dist = prob_dist.clamp(min=1e-3)  # for avoiding nans
