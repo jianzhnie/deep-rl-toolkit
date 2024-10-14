@@ -140,7 +140,12 @@ class A2CAgent(BaseAgent):
         logits = self.actor_critic.get_action(obs)
         dist = Categorical(logits=logits)
         new_log_probs = dist.log_prob(actions)
-        entropy = dist.entropy().mean()
+        entropy = dist.entropy()
+
+        # Normalize advantage (not present in the original implementation)
+        if self.args.norm_advantages:
+            advantages = (advantages - advantages.mean()) / (
+                advantages.std() + 1e-8).to(self.device)
 
         # Actor (policy) loss: Maximize log_probs weighted by advantages
         actor_loss = -(new_log_probs * advantages).mean()
@@ -148,9 +153,12 @@ class A2CAgent(BaseAgent):
         # Critic (value) loss: Mean squared error between returns and new values
         value_loss = F.mse_loss(returns, new_values)
 
+        # Entropy loss: Mean entropy of the action distribution
+        entropy_loss = -torch.mean(entropy)
+
         # Total loss
         total_loss = (actor_loss + self.args.value_loss_coef * value_loss -
-                      self.args.entropy_coef * entropy)
+                      self.args.entropy_coef * entropy_loss)
 
         # Backpropagation
         self.optimizer.zero_grad()
@@ -171,5 +179,5 @@ class A2CAgent(BaseAgent):
             'total_loss': total_loss.item(),
             'value_loss': value_loss.item(),
             'actor_loss': actor_loss.item(),
-            'entropy_loss': entropy.item(),
+            'entropy_loss': entropy_loss.item(),
         }

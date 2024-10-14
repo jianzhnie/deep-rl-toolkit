@@ -781,30 +781,10 @@ class A2CArguments(RLArguments):
             'The hidden dimension size of the neural network. Defaults to 128'
         },
     )
-    entropy_weight: float = field(
-        default=0.01,
-        metadata={
-            'help':
-            'Entropy weight for the policy gradient method. Defaults to 0.01'
-        },
-    )
     learning_rate: float = field(
         default=1e-2,
         metadata={'help': 'Learning rate for the optimizer. Defaults to 1e-4'},
     )
-    actor_lr: float = field(
-        default=1e-4,
-        metadata={
-            'help': 'Learning rate for the actor network. Defaults to 1e-4'
-        },
-    )
-    critic_lr: float = field(
-        default=1e-4,
-        metadata={
-            'help': 'Learning rate for the critic network. Defaults to 1e-4'
-        },
-    )
-
     epsilon: float = field(
         default=1e-5,
         metadata={'help': 'Epsilon for the PPO algorithm. Defaults to 1e-5'},
@@ -835,19 +815,6 @@ class A2CArguments(RLArguments):
         metadata={
             'help':
             'Coefficient for the entropy term in the PPO algorithm. Defaults to 0.01'
-        },
-    )
-    clip_vloss: bool = field(
-        default=True,
-        metadata={
-            'help':
-            'Flag indicating whether to clip the value loss. Defaults to False'
-        },
-    )
-    clip_param: float = field(
-        default=0.2,
-        metadata={
-            'help': 'Clip parameter for the PPO algorithm. Defaults to 0.2'
         },
     )
     max_grad_norm: float = field(
@@ -883,18 +850,6 @@ class PPOArguments(RLArguments):
     learning_rate: float = field(
         default=1e-2,
         metadata={'help': 'Learning rate for the optimizer. Defaults to 1e-4'},
-    )
-    actor_lr: float = field(
-        default=1e-4,
-        metadata={
-            'help': 'Learning rate for the actor network. Defaults to 1e-4'
-        },
-    )
-    critic_lr: float = field(
-        default=1e-4,
-        metadata={
-            'help': 'Learning rate for the critic network. Defaults to 1e-4'
-        },
     )
     epsilon: float = field(
         default=1e-5,
