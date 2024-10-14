@@ -157,6 +157,38 @@ class DQNArguments(RLArguments):
             'Flag indicating whether to use Noisy DQN. Defaults to False'
         },
     )
+    categorical_dqn: bool = field(
+        default=False,
+        metadata={
+            'help':
+            'Flag indicating whether to use Categorical DQN. Defaults to False'
+        },
+    )
+    v_min: float = field(
+        default=0.0,
+        metadata={
+            'help': 'Minimum value for the value function. Defaults to 0.0'
+        },
+    )
+    v_max: float = field(
+        default=200.0,
+        metadata={
+            'help': 'Maximum value for the value function. Defaults to 200.0'
+        },
+    )
+    num_atoms: float = field(
+        default=51,
+        metadata={
+            'help': 'Number of atoms for the value function. Defaults to 51'
+        },
+    )
+    noisy_std: float = field(
+        default=0.5,
+        metadata={
+            'help':
+            'Standard deviation for the initial weights of the value function. Defaults to 0.1'
+        },
+    )
     learning_rate: float = field(
         default=1e-3,
         metadata={
