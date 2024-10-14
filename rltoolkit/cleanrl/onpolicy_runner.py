@@ -115,6 +115,9 @@ class OnPolicyRunner(BaseRunner):
                 done = next_done
                 episode_reward += reward
 
+                if done:
+                    obs, info = self.train_env.reset()
+
             # Bootstrap value if not done
             with torch.no_grad():
                 last_value = self.agent.get_value(obs)

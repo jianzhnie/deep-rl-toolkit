@@ -153,8 +153,9 @@ class A2CAgent(BaseAgent):
             advantages = (advantages - advantages.mean()) / (
                 advantages.std() + 1e-8).to(self.device)
 
+        log_prob = new_log_probs.reshape(len(advantages), -1).transpose(0, 1)
         # Actor (policy) loss: Maximize log_probs weighted by advantages
-        actor_loss = -(new_log_probs * advantages).mean()
+        actor_loss = -(log_prob * advantages).mean()
 
         # Critic (value) loss: Mean squared error between returns and new values
         value_loss = F.mse_loss(returns, new_values)
@@ -171,7 +172,7 @@ class A2CAgent(BaseAgent):
         total_loss.backward()
 
         # Gradient clipping (if specified)
-        if self.args.max_grad_norm is not None:
+        if self.args.max_grad_norm:
             torch.nn.utils.clip_grad_norm_(self.all_parameters,
                                            self.args.max_grad_norm)
 
