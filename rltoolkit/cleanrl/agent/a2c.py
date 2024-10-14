@@ -1,57 +1,14 @@
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import gymnasium as gym
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import A2CArguments
-
-
-def initialize_uniformly(layer: nn.Linear, init_w: float = 3e-3) -> None:
-    """Initialize the weights and bias in [-init_w, init_w]."""
-    layer.weight.data.uniform_(-init_w, init_w)
-    layer.bias.data.uniform_(-init_w, init_w)
-
-
-class PolicyNet(nn.Module):
-
-    def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int):
-        super(PolicyNet, self).__init__()
-        self.hidden = nn.Linear(obs_dim, hidden_dim)
-        self.relu = nn.ReLU(inplace=True)
-        self.mu_layer = nn.Linear(hidden_dim, action_dim)
-        self.log_std_layer = nn.Linear(hidden_dim, action_dim)
-        self.mu_layer.apply(initialize_uniformly)
-        self.log_std_layer.apply(initialize_uniformly)
-
-    def forward(self, obs: torch.Tensor) -> torch.Tensor:
-        out = self.hidden(obs)
-        out = self.relu(out)
-
-        mu = torch.tanh(self.mu_layer(out)) * 2
-        log_std = F.softplus(self.log_std_layer(out))
-
-        std = torch.exp(log_std)
-        dist = torch.distributions.Normal(mu, std)
-        action = dist.sample()
-        return action, dist
-
-
-class ValueNet(nn.Module):
-
-    def __init__(self, obs_dim: int, hidden_dim: int):
-        super(ValueNet, self).__init__()
-        self.fc1 = nn.Linear(obs_dim, hidden_dim)
-        self.fc2 = nn.Linear(hidden_dim, 1)
-        self.relu = nn.ReLU(inplace=True)
-
-    def forward(self, obs: torch.Tensor) -> torch.Tensor:
-        out = self.fc1(obs)
-        out = self.relu(out)
-        out = self.fc2(out)
-        return out
+from rltoolkit.cleanrl.utils.pg_net import ActorCriticNet
+from rltoolkit.data.utils.type_aliases import RolloutBufferSamples
+from torch.distributions import Categorical
 
 
 class A2CAgent(BaseAgent):
@@ -60,14 +17,15 @@ class A2CAgent(BaseAgent):
     V value). The “Actor” updates the policy distribution in the direction
     suggested by the Critic (such as with policy gradients).
 
-    Attribute:
-        gamma (float): discount factor
-        entropy_weight (float): rate of weighting entropy into the loss function
-        actor (nn.Module): target actor model to select actions
-        critic (nn.Module): critic model to predict state values
-        actor_optimizer (optim.Optimizer) : optimizer of actor
-        critic_optimizer (optim.Optimizer) : optimizer of critic
-        device (torch.device): cpu / gpu
+    The agent interacts with the environment using an actor-critic model.
+    The actor updates the policy distribution based on the critic's feedback.
+
+    Args:
+        args (PPOArguments): Configuration arguments for PPO.
+        env (gym.Env): Environment to interact with.
+        state_shape (Union[int, List[int]]): Shape of the state space.
+        action_shape (Union[int, List[int]]): Shape of the action space.
+        device (Optional[Union[str, torch.device]]): Device for computations.
     """
 
     def __init__(
@@ -77,86 +35,116 @@ class A2CAgent(BaseAgent):
         state_shape: Union[int, List[int]] = None,
         action_shape: Union[int, List[int]] = None,
         device: Optional[Union[str, torch.device]] = None,
-    ):
+    ) -> None:
         self.args = args
         self.env = env
         self.device = device
         self.obs_dim = int(np.prod(state_shape))
         self.action_dim = int(np.prod(action_shape))
         self.learner_update_step = 0
-        self.target_model_update_step = 0
 
-        # 策略网络
-        self.policy_net = PolicyNet(self.obs_dim, self.args.hidden_dim,
-                                    self.action_dim).to(device)
-        # 价值网络
-        self.critic = ValueNet(self.obs_dim, self.args.hidden_dim).to(device)
+        # Initialize actor and critic networks
+        self.actor_critic = ActorCriticNet(self.obs_dim, self.args.hidden_dim,
+                                           self.action_dim).to(self.device)
 
-        # 策略网络优化器
-        self.policy_optimizer = torch.optim.Adam(self.policy_net.parameters(),
-                                                 lr=self.args.actor_lr)
-        # 价值网络优化器
-        self.critic_optimizer = torch.optim.Adam(self.critic.parameters(),
-                                                 lr=self.args.critic_lr)
-        # 折扣因子
+        self.optimizer = torch.optim.Adam(self.actor_critic.parameters(),
+                                          lr=self.args.learning_rate)
         self.device = device
 
-    def get_action(self, obs: np.ndarray) -> Tuple[int, float]:
-        obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        action, dist = self.policy_net(obs)
-        log_prob = dist.log_prob(action).sum(dim=-1)
-        return action.item(), log_prob.item()
+    def get_action(self, obs: np.ndarray) -> Tuple[float, int, float, float]:
+        """Sample an action from the policy given an observation.
 
-    def predict(self, obs: np.ndarray) -> Tuple[int, float]:
-        obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        action, dist = self.policy_net(obs)
-        selected_action = dist.mean
-        return selected_action.item()
+        Args:
+            obs (np.ndarray): The observation from the environment.
 
-    def compute_advantage(self, gamma, lmbda, td_delta):
-        td_delta = td_delta.detach().numpy()
-        advantage_list = []
-        advantage = 0.0
-        for delta in td_delta[::-1]:
-            advantage = gamma * lmbda * advantage + delta
-            advantage_list.append(advantage)
-        advantage_list.reverse()
-        return torch.tensor(advantage_list, dtype=torch.float)
+        Returns:
+            Tuple[float, int, float, float]: A tuple containing:
+                - value (float): The value estimate from the critic.
+                - action (int): The sampled action.
+                - log_prob (float): The log probability of the sampled action.
+                - entropy (float): The entropy of the action distribution.
+        """
+        obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
+        value = self.actor_critic.get_value(obs_tensor)
+        logits = self.actor_critic.get_action(obs_tensor)
+        dist = Categorical(logits=logits)
+        action = dist.sample()
+        log_prob = dist.log_prob(action)
+        entropy = dist.entropy()
+        return value.item(), action.item(), log_prob.item(), entropy.item()
 
-    def learn(self, transition_dict) -> Tuple[float, float]:
-        """Update the model by TD actor-critic."""
-        obs = torch.tensor(transition_dict['obs'],
-                           dtype=torch.float).to(self.device)
-        actions = torch.tensor(transition_dict['actions']).view(-1, 1).to(
-            self.device)
-        rewards = (torch.tensor(transition_dict['rewards'],
-                                dtype=torch.float).view(-1, 1).to(self.device))
-        next_obs = torch.tensor(transition_dict['next_obs'],
-                                dtype=torch.float).to(self.device)
-        dones = (torch.tensor(transition_dict['dones'],
-                              dtype=torch.float).view(-1, 1).to(self.device))
+    def get_value(self, obs: np.ndarray) -> float:
+        """Use the critic model to predict the value of an observation.
 
-        log_probs = torch.log(self.policy_net(obs).gather(1, actions))
+        Args:
+            obs (np.ndarray): The observation from the environment.
 
-        pred_value = self.critic(obs)
-        # 时序差分目标
-        td_target = rewards + self.args.gamma * self.critic(next_obs) * (1 -
-                                                                         dones)
-        # 均方误差损失函数
-        value_loss = F.mse_loss(pred_value, td_target.detach())
+        Returns:
+            float: The predicted value of the observation.
+        """
+        obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
+        value = self.actor_critic.get_value(obs_tensor)
+        return value.item()
 
-        # 时序差分误差
-        td_delta = td_target - pred_value
-        policy_loss = torch.mean(-log_probs * td_delta.detach())
+    def learn(self, batch: RolloutBufferSamples) -> Dict[str, float]:
+        """Update the model using a batch of sampled experiences.
 
-        # update value
-        self.critic_optimizer.zero_grad()
-        value_loss.backward()
-        self.critic_optimizer.step()
+        Args:
+            batch (RolloutBufferSamples): A batch of sampled experiences.
+            RolloutBufferSamples contains the following fields:
+            - obs (torch.Tensor): The observations from the environment.
+            - actions (torch.Tensor): The actions taken by the agent.
+            - old_values (torch.Tensor): The value estimates from the critic.
+            - old_log_prob (torch.Tensor): The log probabilities of the actions.
+            - advantages (torch.Tensor): The advantages of the actions.
+            - returns (torch.Tensor): The returns from the environment.
 
-        # update policy
-        self.policy_optimizer.zero_grad()
-        policy_loss.backward()  # 计算策略网络的梯度
-        self.policy_optimizer.step()  # 更新策略网络的参数
+        Returns:
+            Dict[str, float]: A dictionary containing the following metrics:
+            - value_loss (float): The value loss of the critic.
+            - actor_loss (float): The actor loss of the policy.
+            - entropy_loss (float): The entropy loss of the policy.
+            - approx_kl (float): The approximate KL divergence.
+            - approx_kl (float): The approximate KL divergence.
+            - clipped_frac (float): The fraction of clipped actions.
+        """
+        obs = batch.obs
+        actions = batch.actions
+        advantages = batch.advantages
+        returns = batch.returns
 
-        return policy_loss.item(), value_loss.item()
+        # Compute new values, log probs, and entropy
+        new_values = self.actor_critic.get_value(obs)
+        logits = self.actor_critic.get_action(obs)
+        dist = Categorical(logits=logits)
+        new_log_probs = dist.log_prob(actions)
+        entropy = dist.entropy()
+
+        # actor loss
+        actor_loss = torch.mean(-new_log_probs * advantages)
+
+        # value loss
+        value_loss = F.mse_loss(returns, new_values)
+
+        # entropy loss
+        entropy_loss = entropy.mean()
+
+        loss = (actor_loss + value_loss * self.args.value_loss_coef -
+                entropy_loss * self.args.entropy_coef)
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        if self.args.max_grad_norm is not None:
+            torch.nn.utils.clip_grad_norm_(
+                self.actor_critic.parameters(),
+                max_norm=self.args.max_grad_norm,
+            )
+        self.optimizer.step()
+        self.learner_update_step += 1
+
+        return {
+            'loss': loss.item(),
+            'value_loss': value_loss.item(),
+            'actor_loss': actor_loss.item(),
+            'entropy_loss': entropy_loss.item(),
+        }

@@ -788,7 +788,10 @@ class A2CArguments(RLArguments):
             'Entropy weight for the policy gradient method. Defaults to 0.01'
         },
     )
-
+    learning_rate: float = field(
+        default=1e-2,
+        metadata={'help': 'Learning rate for the optimizer. Defaults to 1e-4'},
+    )
     actor_lr: float = field(
         default=1e-4,
         metadata={

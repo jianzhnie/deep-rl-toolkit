@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import PPOArguments
-from rltoolkit.cleanrl.utils.pg_net import PPONet
+from rltoolkit.cleanrl.utils.pg_net import ActorCriticNet
 from rltoolkit.data.utils.type_aliases import RolloutBufferSamples
 from torch.distributions import Categorical
 
@@ -40,8 +40,8 @@ class PPOClipAgent(BaseAgent):
         self.device = device if device is not None else torch.device('cpu')
 
         # Initialize actor and critic networks
-        self.actor_critic = PPONet(self.obs_dim, self.args.hidden_dim,
-                                   self.action_dim).to(self.device)
+        self.actor_critic = ActorCriticNet(self.obs_dim, self.args.hidden_dim,
+                                           self.action_dim).to(self.device)
 
         # All Parameters
         self.all_parameters = self.actor_critic.parameters()
