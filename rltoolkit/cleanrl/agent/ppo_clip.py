@@ -71,7 +71,7 @@ class PPOClipAgent(BaseAgent):
         action = dist.sample()
         log_prob = dist.log_prob(action)
         entropy = dist.entropy()
-        return value.item(), action.item(), log_prob.item(), entropy.item()
+        return value.item(), action.item(), log_prob.item(), entropy
 
     def get_value(self, obs: np.ndarray) -> float:
         """Use the critic model to predict the value of an observation.

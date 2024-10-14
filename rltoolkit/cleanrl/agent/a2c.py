@@ -12,139 +12,147 @@ from torch.distributions import Categorical
 
 
 class A2CAgent(BaseAgent):
-    """Agent interacting with environment. The “Critic” estimates the value
-    function. This could be the action-value (the Q value) or state-value (the
-    V value). The “Actor” updates the policy distribution in the direction
-    suggested by the Critic (such as with policy gradients).
+    """A2C (Advantage Actor-Critic) agent for interacting with an environment.
 
-    The agent interacts with the environment using an actor-critic model.
-    The actor updates the policy distribution based on the critic's feedback.
+    This agent uses an actor-critic model:
+    - The Actor: updates the policy based on the action probabilities.
+    - The Critic: estimates the value of a state (or action) and provides feedback to the Actor.
 
     Args:
-        args (PPOArguments): Configuration arguments for PPO.
-        env (gym.Env): Environment to interact with.
-        state_shape (Union[int, List[int]]): Shape of the state space.
-        action_shape (Union[int, List[int]]): Shape of the action space.
-        device (Optional[Union[str, torch.device]]): Device for computations.
+        args (A2CArguments): Configuration arguments for the agent.
+        env (gym.Env): The environment the agent interacts with.
+        state_shape (Union[int, List[int]]): The shape of the state/observation space.
+        action_shape (Union[int, List[int]]): The shape of the action space.
+        device (Optional[Union[str, torch.device]]): The device to run computations on (CPU or GPU).
     """
 
     def __init__(
         self,
         args: A2CArguments,
         env: gym.Env,
-        state_shape: Union[int, List[int]] = None,
-        action_shape: Union[int, List[int]] = None,
+        state_shape: Union[int, List[int]],
+        action_shape: Union[int, List[int]],
         device: Optional[Union[str, torch.device]] = None,
     ) -> None:
+        super().__init__()
         self.args = args
         self.env = env
-        self.device = device
+        self.device = device or torch.device(
+            'cpu')  # Default to CPU if no device provided
+
+        # Define the dimensions of the state and action spaces
         self.obs_dim = int(np.prod(state_shape))
         self.action_dim = int(np.prod(action_shape))
+
         self.learner_update_step = 0
 
-        # Initialize actor and critic networks
+        # Initialize the actor-critic network
         self.actor_critic = ActorCriticNet(self.obs_dim, self.args.hidden_dim,
                                            self.action_dim).to(self.device)
 
+        # Set up optimizer
         self.optimizer = torch.optim.Adam(self.actor_critic.parameters(),
                                           lr=self.args.learning_rate)
-        self.device = device
 
     def get_action(self, obs: np.ndarray) -> Tuple[float, int, float, float]:
-        """Sample an action from the policy given an observation.
+        """Sample an action based on the given observation from the
+        environment.
 
         Args:
             obs (np.ndarray): The observation from the environment.
 
         Returns:
-            Tuple[float, int, float, float]: A tuple containing:
-                - value (float): The value estimate from the critic.
+            Tuple[float, int, float, float]:
+                - value (float): The value estimate of the state from the critic.
                 - action (int): The sampled action.
-                - log_prob (float): The log probability of the sampled action.
-                - entropy (float): The entropy of the action distribution.
+                - log_prob (float): The log-probability of the sampled action.
+                - entropy (float): The entropy of the action distribution (a measure of randomness).
         """
         obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
         value = self.actor_critic.get_value(obs_tensor)
         logits = self.actor_critic.get_action(obs_tensor)
         dist = Categorical(logits=logits)
+
+        # Sample action and calculate log probability and entropy
         action = dist.sample()
         log_prob = dist.log_prob(action)
         entropy = dist.entropy()
-        return value.item(), action.item(), log_prob.item(), entropy.item()
+
+        return value.item(), action.item(), log_prob.item(), entropy
 
     def get_value(self, obs: np.ndarray) -> float:
-        """Use the critic model to predict the value of an observation.
+        """Get the value estimate of the given observation using the critic.
 
         Args:
             obs (np.ndarray): The observation from the environment.
 
         Returns:
-            float: The predicted value of the observation.
+            float: The estimated value of the state.
         """
         obs_tensor = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
         value = self.actor_critic.get_value(obs_tensor)
         return value.item()
 
     def learn(self, batch: RolloutBufferSamples) -> Dict[str, float]:
-        """Update the model using a batch of sampled experiences.
+        """Perform a learning step using a batch of sampled experiences.
 
         Args:
-            batch (RolloutBufferSamples): A batch of sampled experiences.
-            RolloutBufferSamples contains the following fields:
-            - obs (torch.Tensor): The observations from the environment.
-            - actions (torch.Tensor): The actions taken by the agent.
-            - old_values (torch.Tensor): The value estimates from the critic.
-            - old_log_prob (torch.Tensor): The log probabilities of the actions.
-            - advantages (torch.Tensor): The advantages of the actions.
-            - returns (torch.Tensor): The returns from the environment.
+            batch (RolloutBufferSamples): A batch of experiences containing:
+                - obs (torch.Tensor): Observations.
+                - actions (torch.Tensor): Actions taken.
+                - old_values (torch.Tensor): Old value estimates.
+                - old_log_prob (torch.Tensor): Log probabilities of the actions.
+                - advantages (torch.Tensor): Advantages for each action.
+                - returns (torch.Tensor): Estimated returns.
 
         Returns:
-            Dict[str, float]: A dictionary containing the following metrics:
-            - value_loss (float): The value loss of the critic.
-            - actor_loss (float): The actor loss of the policy.
-            - entropy_loss (float): The entropy loss of the policy.
-            - approx_kl (float): The approximate KL divergence.
-            - approx_kl (float): The approximate KL divergence.
-            - clipped_frac (float): The fraction of clipped actions.
+            Dict[str, float]: A dictionary with various loss metrics:
+                - value_loss (float): Loss from the value function.
+                - actor_loss (float): Loss from the policy (actor).
+                - entropy_loss (float): Loss from the entropy term.
+                - total_loss (float): The combined total loss.
         """
+        # Unpack batch data
         obs = batch.obs
         actions = batch.actions
         advantages = batch.advantages
         returns = batch.returns
 
-        # Compute new values, log probs, and entropy
+        # Compute new value estimates and log probabilities
         new_values = self.actor_critic.get_value(obs)
         logits = self.actor_critic.get_action(obs)
         dist = Categorical(logits=logits)
         new_log_probs = dist.log_prob(actions)
-        entropy = dist.entropy()
+        entropy = dist.entropy().mean()
 
-        # actor loss
-        actor_loss = torch.mean(-new_log_probs * advantages)
+        # Actor (policy) loss: Maximize log_probs weighted by advantages
+        actor_loss = -(new_log_probs * advantages).mean()
 
-        # value loss
+        # Critic (value) loss: Mean squared error between returns and new values
         value_loss = F.mse_loss(returns, new_values)
 
-        # entropy loss
-        entropy_loss = entropy.mean()
+        # Total loss
+        total_loss = (actor_loss + self.args.value_loss_coef * value_loss -
+                      self.args.entropy_coef * entropy)
 
-        loss = (actor_loss + value_loss * self.args.value_loss_coef -
-                entropy_loss * self.args.entropy_coef)
-
+        # Backpropagation
         self.optimizer.zero_grad()
-        loss.backward()
+        total_loss.backward()
+
+        # Gradient clipping (if specified)
         if self.args.max_grad_norm is not None:
-            torch.nn.utils.clip_grad_norm_(
-                self.actor_critic.parameters(),
-                max_norm=self.args.max_grad_norm,
-            )
+            torch.nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
+                                           self.args.max_grad_norm)
+
         self.optimizer.step()
+
+        # Track learner update step
         self.learner_update_step += 1
 
+        # Return loss metrics
         return {
-            'loss': loss.item(),
+            'total_loss': total_loss.item(),
             'value_loss': value_loss.item(),
             'actor_loss': actor_loss.item(),
-            'entropy_loss': entropy_loss.item(),
+            'entropy_loss': entropy.item(),
         }
