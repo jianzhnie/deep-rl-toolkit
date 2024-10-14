@@ -16,7 +16,7 @@ dqn:
     batch_size: 64
     n_steps: 3
 
-ddqn:
+double_dqn:
   CartPole-v0:
     algo_name: ddqn
     learning_rate: 0.01
@@ -43,6 +43,7 @@ dueling_dqn:
     buffer_size: 10000
     batch_size: 64
     dueling_dqn : True
+    double_dqn: True
 
   CartPole-v1:
     algo_name: dueling_dqn
@@ -51,36 +52,21 @@ dueling_dqn:
     buffer_size: 10000
     batch_size: 64
     dueling_dqn : True
-    n_steps: 3
-
-dueling_ddqn:
-  CartPole-v0:
-    algo_name: dueling_ddqn
-    learning_rate: 0.01
-    max_timesteps: 20000
-    buffer_size: 10000
-    batch_size: 64
     double_dqn: True
-    dueling_dqn: True
-
-  CartPole-v1:
-    algo_name: dueling_ddqn
-    learning_rate: 0.01
-    max_timesteps: 100000
-    buffer_size: 10000
-    batch_size: 64
-    double_dqn: True
-    dueling_dqn: True
     n_steps: 3
 
 noisy_dqn:
   CartPole-v0:
     algo_name: noisy_dqn
-    learning_rate: 0.01
-    max_timesteps: 20000
+    learning_rate: 0.05
+    max_timesteps: 30000
     buffer_size: 10000
     batch_size: 64
+    double_dqn: True
     noisy_dqn: True
+    train_frequency: 20
+    learn_steps: 2
+    target_update_frequency: 100
     logger: tensorboard
 
   CartPole-v1:
@@ -90,6 +76,19 @@ noisy_dqn:
     buffer_size: 10000
     batch_size: 64
     noisy_dqn: True
+    logger: tensorboard
+
+categorical_dqn:
+  CartPole-v0:
+    algo_name: categorical_dqn
+    learning_rate: 0.05
+    max_timesteps: 20000
+    buffer_size: 10000
+    batch_size: 128
+    train_frequency: 20
+    learn_steps: 2
+    n_steps: 1
+    target_update_frequency: 100
     logger: tensorboard
 
 per:
@@ -120,17 +119,14 @@ per:
 rainbow:
   CartPole-v0:
     algo_name: rainbow
-    learning_rate: 0.01
-    learn_step: 2
-    n_steps: 1
-    v_max: 20
-    v_min: -20
+    learning_rate: 0.05
     max_timesteps: 20000
     buffer_size: 10000
-    train_frequency: 10
+    batch_size: 128
+    train_frequency: 20
     learn_steps: 2
+    n_steps: 1
     target_update_frequency: 100
-    batch_size: 64
     logger: tensorboard
 
   CartPole-v1:

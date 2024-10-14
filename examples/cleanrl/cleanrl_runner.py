@@ -81,10 +81,10 @@ def main() -> None:
         type=str,
         choices=[
             'dqn',
-            'ddqn',
+            'double_dqn',
             'dueling_dqn',
-            'dueling_ddqn',
             'noisy_dqn',
+            'categorical_dqn',
             'per',
             'rainbow',
             'c51',
@@ -115,10 +115,10 @@ def main() -> None:
     run_args = parser.parse_args()
     if run_args.algo_name in [
             'dqn',
-            'ddqn',
-            'noisy_dqn',
+            'double_dqn',
             'dueling_dqn',
-            'dueling_ddqn',
+            'noisy_dqn',
+            'categorical_dqn',
     ]:
         # Update parser with DQN configuration
         algo_args: DQNArguments = tyro.cli(DQNArguments)
@@ -198,10 +198,10 @@ def main() -> None:
     if args.algo_name in [
             'c51',
             'dqn',
-            'ddqn',
+            'double_dqn',
             'noisy_dqn',
             'dueling_dqn',
-            'dueling_ddqn',
+            'categorical_dqn',
             'ddpg',
             'sac',
             'saccon',
