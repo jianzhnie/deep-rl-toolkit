@@ -37,22 +37,25 @@ class A2CAgent(BaseAgent):
         super().__init__(args)
         self.args = args
         self.env = env
-        self.device = device or torch.device(
-            'cpu')  # Default to CPU if no device provided
-
+        # Default to CPU if no device provided
         # Define the dimensions of the state and action spaces
         self.obs_dim = int(np.prod(state_shape))
         self.action_dim = int(np.prod(action_shape))
-
         self.learner_update_step = 0
+        self.device = device or torch.device('cpu')
 
         # Initialize the actor-critic network
         self.actor_critic = ActorCriticNet(self.obs_dim, self.args.hidden_dim,
                                            self.action_dim).to(self.device)
 
+        # All Parameters
+        self.all_parameters = self.actor_critic.parameters()
         # Set up optimizer
-        self.optimizer = torch.optim.Adam(self.actor_critic.parameters(),
-                                          lr=self.args.learning_rate)
+        self.optimizer = torch.optim.Adam(
+            self.all_parameters,
+            lr=self.args.learning_rate,
+            eps=self.args.epsilon,
+        )
 
     def get_action(self, obs: np.ndarray) -> Tuple[float, int, float, float]:
         """Sample an action based on the given observation from the
@@ -135,6 +138,9 @@ class A2CAgent(BaseAgent):
         advantages = batch.advantages
         returns = batch.returns
 
+        # Convert discrete action from float to long
+        actions = actions.long()
+
         # Compute new value estimates and log probabilities
         new_values = self.actor_critic.get_value(obs)
         logits = self.actor_critic.get_action(obs)
@@ -166,7 +172,7 @@ class A2CAgent(BaseAgent):
 
         # Gradient clipping (if specified)
         if self.args.max_grad_norm is not None:
-            torch.nn.utils.clip_grad_norm_(self.actor_critic.parameters(),
+            torch.nn.utils.clip_grad_norm_(self.all_parameters,
                                            self.args.max_grad_norm)
 
         self.optimizer.step()

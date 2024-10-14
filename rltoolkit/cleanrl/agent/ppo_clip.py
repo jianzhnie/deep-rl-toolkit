@@ -139,7 +139,7 @@ class PPOClipAgent(BaseAgent):
         entropy = dist.entropy()
 
         # Compute entropy loss
-        entropy_loss = entropy.mean()
+        entropy_loss = -entropy.mean()
 
         # Normalize advantages
         if self.args.norm_advantages:
@@ -168,7 +168,7 @@ class PPOClipAgent(BaseAgent):
             value_loss = 0.5 * (new_values - returns).pow(2).mean()
 
         # Total loss
-        loss = (actor_loss + value_loss * self.args.value_loss_coef -
+        loss = (actor_loss + value_loss * self.args.value_loss_coef +
                 entropy_loss * self.args.entropy_coef)
 
         # Backpropagation
