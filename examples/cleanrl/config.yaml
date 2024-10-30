@@ -165,6 +165,27 @@ ddpg:
     batch_size: 256
     logger: tensorboard
 
+a2c:
+  CartPole-v0:
+    algo_name: a2c
+    max_timesteps: 50000
+    learning_rate: 0.001
+    buffer_size: 128
+    rollout_steps: 128
+    batch_size: 64
+    update_epochs: 5
+    logger: tensorboard
+
+  CartPole-v1:
+    algo_name: a2c
+    max_timesteps: 300000
+    learning_rate: 1.0e-3
+    buffer_size: 128
+    rollout_steps: 128
+    batch_size: 32
+    logger: tensorboard
+
+
 ppo_clip:
   CartPole-v0:
     algo_name: ppo_clip
@@ -183,7 +204,6 @@ ppo_clip:
     rollout_steps: 128
     batch_size: 32
     logger: wandb
-
 
 ppo_penalty:
   CartPole-v0:

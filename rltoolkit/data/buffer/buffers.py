@@ -82,6 +82,12 @@ class BaseBuffer(ABC):
         """
         return self.curr_size
 
+    def __len__(self) -> int:
+        """
+        :return: The total capacity of the buffer
+        """
+        return self.size()
+
     def add(self, *args, **kwargs) -> None:
         """Add elements to the buffer."""
         raise NotImplementedError()
@@ -182,7 +188,7 @@ class OffPolicyBuffer(BaseBuffer):
         buffer_size: int,
         observation_space: spaces.Space,
         action_space: spaces.Space,
-        device: Union[torch.device, str] = 'cpu',
+        device: Union[torch.device, str] = 'auto',
         num_envs: int = 1,
         optimize_memory_usage: bool = False,
         handle_timeout_termination: bool = True,
@@ -404,7 +410,7 @@ class RolloutBuffer(BaseBuffer):
         gae_lambda: float = 1,
         gamma: float = 0.99,
         num_envs: int = 1,
-    ):
+    ) -> None:
         super().__init__(buffer_size,
                          observation_space,
                          action_space,
@@ -522,7 +528,9 @@ class RolloutBuffer(BaseBuffer):
         self,
         batch_size: Optional[int] = None
     ) -> Generator[RolloutBufferSamples, None, None]:
-        assert self.full, ''
+        assert (
+            len(self) == self.buffer_size
+        ), f'Buffer not full, get {len(self)}, required {self.buffer_size}'
         indices = np.random.permutation(self.buffer_size * self.num_envs)
         # Prepare the data
         if not self.generator_ready:

@@ -1,3 +1,4 @@
+from .a2c import A2CAgent
 from .base import BaseAgent
 from .c51 import C51Agent
 from .ddpg import DDPGAgent
@@ -13,6 +14,7 @@ from .td3 import TD3Agent
 
 __all__ = [
     'BaseAgent',
+    'A2CAgent',
     'C51Agent',
     'DDPGAgent',
     'DQNAgent',

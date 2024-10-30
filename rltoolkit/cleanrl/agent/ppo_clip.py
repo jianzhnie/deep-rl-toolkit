@@ -5,7 +5,7 @@ import numpy as np
 import torch
 from rltoolkit.cleanrl.agent.base import BaseAgent
 from rltoolkit.cleanrl.rl_args import PPOArguments
-from rltoolkit.cleanrl.utils.pg_net import PPONet
+from rltoolkit.cleanrl.utils.pg_net import ActorCriticNet
 from rltoolkit.data.utils.type_aliases import RolloutBufferSamples
 from torch.distributions import Categorical
 
@@ -40,8 +40,8 @@ class PPOClipAgent(BaseAgent):
         self.device = device if device is not None else torch.device('cpu')
 
         # Initialize actor and critic networks
-        self.actor_critic = PPONet(self.obs_dim, self.args.hidden_dim,
-                                   self.action_dim).to(self.device)
+        self.actor_critic = ActorCriticNet(self.obs_dim, self.args.hidden_dim,
+                                           self.action_dim).to(self.device)
 
         # All Parameters
         self.all_parameters = self.actor_critic.parameters()
@@ -71,7 +71,7 @@ class PPOClipAgent(BaseAgent):
         action = dist.sample()
         log_prob = dist.log_prob(action)
         entropy = dist.entropy()
-        return value.item(), action.item(), log_prob.item(), entropy.item()
+        return value.item(), action.item(), log_prob.item(), entropy
 
     def get_value(self, obs: np.ndarray) -> float:
         """Use the critic model to predict the value of an observation.
@@ -122,7 +122,6 @@ class PPOClipAgent(BaseAgent):
             - actor_loss (float): The actor loss of the policy.
             - entropy_loss (float): The entropy loss of the policy.
             - approx_kl (float): The approximate KL divergence.
-            - approx_kl (float): The approximate KL divergence.
             - clipped_frac (float): The fraction of clipped actions.
         """
         obs = batch.obs
@@ -140,7 +139,7 @@ class PPOClipAgent(BaseAgent):
         entropy = dist.entropy()
 
         # Compute entropy loss
-        entropy_loss = entropy.mean()
+        entropy_loss = -entropy.mean()
 
         # Normalize advantages
         if self.args.norm_advantages:
@@ -169,7 +168,7 @@ class PPOClipAgent(BaseAgent):
             value_loss = 0.5 * (new_values - returns).pow(2).mean()
 
         # Total loss
-        loss = (actor_loss + value_loss * self.args.value_loss_coef -
+        loss = (actor_loss + value_loss * self.args.value_loss_coef +
                 entropy_loss * self.args.entropy_coef)
 
         # Backpropagation

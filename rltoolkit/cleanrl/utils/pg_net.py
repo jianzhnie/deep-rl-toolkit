@@ -9,10 +9,10 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     return layer
 
 
-class PPONet(nn.Module):
+class ActorCriticNet(nn.Module):
 
     def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int):
-        super(PPONet, self).__init__()
+        super(ActorCriticNet, self).__init__()
         self.actor = nn.Sequential(
             layer_init(nn.Linear(obs_dim, hidden_dim)),
             nn.Tanh(),
@@ -42,10 +42,10 @@ class PPONet(nn.Module):
         return logits, value
 
 
-class PPOPolicyNet(nn.Module):
+class ActorNet(nn.Module):
 
     def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int):
-        super(PPOPolicyNet, self).__init__()
+        super(ActorNet, self).__init__()
         self.net = nn.Sequential(
             nn.Linear(obs_dim, hidden_dim),
             nn.ReLU(inplace=True),
@@ -59,10 +59,10 @@ class PPOPolicyNet(nn.Module):
         return logits
 
 
-class PPOValueNet(nn.Module):
+class ValueNet(nn.Module):
 
     def __init__(self, obs_dim: int, hidden_dim: int):
-        super(PPOValueNet, self).__init__()
+        super(ValueNet, self).__init__()
         self.net = nn.Sequential(
             nn.Linear(obs_dim, hidden_dim),
             nn.ReLU(inplace=True),
