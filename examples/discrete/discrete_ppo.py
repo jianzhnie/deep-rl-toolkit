@@ -1,10 +1,13 @@
 import argparse
 import os
 import pprint
+import sys
 
 import gymnasium as gym
 import numpy as np
 import torch
+
+sys.path.append(os.getcwd())
 from rltoolkit.data import Collector, VectorReplayBuffer
 from rltoolkit.envs import DummyVectorEnv
 from rltoolkit.policy import PPOPolicy

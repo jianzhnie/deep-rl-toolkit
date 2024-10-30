@@ -11,17 +11,18 @@ import yaml
 
 sys.path.append(os.getcwd())
 import gymnasium as gym
-from rltoolkit.cleanrl.agent import (C51Agent, DDPGAgent, DQNAgent,
+from rltoolkit.cleanrl.agent import (A2CAgent, C51Agent, DDPGAgent, DQNAgent,
                                      PERDQNAgent, PPOClipAgent,
                                      PPOPenaltyAgent, RainbowAgent, SACAgent,
                                      SACConAgent, TD3Agent)
 from rltoolkit.cleanrl.offpolicy_runner import (OffPolicyRunner,
                                                 PerOffPolicyRunner)
 from rltoolkit.cleanrl.onpolicy_runner import OnPolicyRunner
-from rltoolkit.cleanrl.rl_args import (C51Arguments, DDPGArguments,
-                                       DQNArguments, PERArguments,
-                                       PPOArguments, RainbowArguments,
-                                       SACArguments, TD3Arguments)
+from rltoolkit.cleanrl.rl_args import (A2CArguments, C51Arguments,
+                                       DDPGArguments, DQNArguments,
+                                       PERArguments, PPOArguments,
+                                       RainbowArguments, SACArguments,
+                                       TD3Arguments)
 from rltoolkit.utils.logger.logging import get_logger
 
 logger = get_logger(__name__)
@@ -135,6 +136,9 @@ def main() -> None:
     elif run_args.algo_name == 'ddpg':
         algo_args: DDPGArguments = tyro.cli(DDPGArguments)
         Agent: DDPGAgent = DDPGAgent
+    elif run_args.algo_name == 'a2c':
+        algo_args: A2CArguments = tyro.cli(A2CArguments)
+        Agent: A2CAgent = A2CAgent
     elif run_args.algo_name == 'ppo_clip':
         algo_args: PPOArguments = tyro.cli(PPOArguments)
         Agent: PPOClipAgent = PPOClipAgent
@@ -223,6 +227,7 @@ def main() -> None:
             device=device,
         )
     elif args.algo_name in [
+            'a2c',
             'ppo_clip',
             'ppo_penalty',
             'pg',
