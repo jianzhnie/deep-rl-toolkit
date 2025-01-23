@@ -1,4 +1,4 @@
-from typing import Any, List, Tuple, Union
+from typing import List, Optional, Tuple, Union
 
 import gym
 import numpy as np
@@ -9,6 +9,13 @@ from torch.distributions import Categorical
 
 
 class PolicyNet(nn.Module):
+    """Neural network that represents the policy for the REINFORCE algorithm.
+
+    Args:
+        obs_dim (int): Dimension of the observation space
+        hidden_dim (int): Number of hidden units in the network
+        action_dim (int): Dimension of the action space
+    """
 
     def __init__(self, obs_dim: int, hidden_dim: int, action_dim: int) -> None:
         super(PolicyNet, self).__init__()
@@ -19,8 +26,8 @@ class PolicyNet(nn.Module):
 
     def forward(self, obs: torch.Tensor) -> torch.Tensor:
         out = self.fc1(obs)
-        out = self.relu(obs)
-        out = self.fc2(obs)
+        out = self.relu(out)
+        out = self.fc2(out)
         out = self.softmax(out)
         return out
 
@@ -33,7 +40,7 @@ class PGAgent(object):
         env: gym.Env,
         state_shape: Union[int, List[int]],
         action_shape: Union[int, List[int]],
-        device: Any = None,
+        device: Optional[torch.device] = None,
     ) -> None:
         self.args = args
         self.env = env
@@ -62,34 +69,42 @@ class PGAgent(object):
         action = action_dist.sample()
         return action.item()
 
-    def learn(self, log_probs: list, returns: list) -> None:
-        """REINFORCE algorithm, also known as Monte Carlo Policy Gradients.
+    def learn(self,
+              log_probs: List[torch.Tensor],
+              returns: List[float],
+              use_baseline: bool = False) -> float:
+        """REINFORCE algorithm implementation with optional baseline.
 
         Args:
-            - log_probs:
-            - returns:
+            log_probs (List[torch.Tensor]): Log probabilities of taken actions
+            returns (List[float]): Discounted returns for each timestep
+            use_baseline (bool): Whether to use baseline subtraction. Defaults to False.
 
-        Return:
-            loss (torch.tensor): shape of (1)
+        Returns:
+            float: The policy loss value after optimization
         """
-        policy_loss = []
-        for log_prob, G in zip(log_probs, returns):
-            policy_loss.append(-log_prob * G)
-
-        loss = torch.cat(policy_loss).sum()
         self.optimizer.zero_grad()
-        loss.backward()  # 反向传播计算梯度
-        self.optimizer.step()  # 梯度下降
-        return loss.item()
 
-    def learn_with_baseline(self, log_probs: list, returns: list) -> float:
-        baseline = np.mean(returns)
+        returns_tensor = torch.tensor(returns, device=self.device)
+
+        if use_baseline:
+            # Subtract baseline (mean of returns) to reduce variance
+            baseline = returns_tensor.mean()
+            advantage = returns_tensor - baseline
+        else:
+            advantage = returns_tensor
+
+        # Calculate policy loss
         policy_loss = []
-        for log_prob, G in zip(log_probs, returns):
-            policy_loss.append(-log_prob * (G - baseline))
+        for log_prob, adv in zip(log_probs, advantage):
+            policy_loss.append(-log_prob * adv)
 
-        loss = torch.cat(policy_loss).sum()
-        self.optimizer.zero_grad()
-        loss.backward()  # 反向传播计算梯度
-        self.optimizer.step()  # 梯度下降
+        loss = torch.stack(policy_loss).sum()
+
+        # Backpropagate and optimize
+        loss.backward()
+        torch.nn.utils.clip_grad_norm_(self.policy_net.parameters(),
+                                       max_norm=0.5)
+        self.optimizer.step()
+
         return loss.item()
