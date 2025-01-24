@@ -1,10 +1,11 @@
-from typing import List, Optional, Tuple, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 import gym
 import numpy as np
 import torch
 import torch.nn as nn
 from rltoolkit.cleanrl.rl_args import PGArguments
+from rltoolkit.data.utils.type_aliases import RolloutBufferSamples
 from torch.distributions import Categorical
 
 
@@ -57,32 +58,47 @@ class PGAgent(object):
     def get_action(self, obs: np.ndarray) -> Tuple[int, float]:
         obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
         prob = self.policy_net(obs)
-        action_dist = Categorical(prob)
-        action = action_dist.sample()
-        log_prob = action_dist.log_prob(action)
-        return action.item(), log_prob
+        dist = Categorical(prob)
+
+        action = dist.sample()
+        log_prob = dist.log_prob(action)
+        entropy = dist.entropy()
+        value = 0
+        return value, action.item(), log_prob.item(), entropy
 
     def predict(self, obs: np.ndarray) -> int:
         obs = torch.from_numpy(obs).float().unsqueeze(0).to(self.device)
-        prob = self.policy_net(obs)
-        action_dist = Categorical(prob)
-        action = action_dist.sample()
+        with torch.no_grad():
+            prob = self.policy_net(obs)
+            action_dist = Categorical(prob)
+            action = action_dist.sample()
         return action.item()
 
-    def learn(self,
-              log_probs: List[torch.Tensor],
-              returns: List[float],
-              use_baseline: bool = False) -> float:
-        """REINFORCE algorithm implementation with optional baseline.
+    def learn(self, batch: RolloutBufferSamples) -> Dict[str, float]:
+        """Update the model using a batch of sampled experiences.
 
         Args:
-            log_probs (List[torch.Tensor]): Log probabilities of taken actions
-            returns (List[float]): Discounted returns for each timestep
-            use_baseline (bool): Whether to use baseline subtraction. Defaults to False.
+            batch (RolloutBufferSamples): A batch of sampled experiences.
+            RolloutBufferSamples contains the following fields:
+            - obs (torch.Tensor): The observations from the environment.
+            - actions (torch.Tensor): The actions taken by the agent.
+            - old_values (torch.Tensor): The value estimates from the critic.
+            - old_log_prob (torch.Tensor): The log probabilities of the actions.
+            - advantages (torch.Tensor): The advantages of the actions.
+            - returns (torch.Tensor): The returns from the environment.
 
         Returns:
-            float: The policy loss value after optimization
+            Dict[str, float]: A dictionary containing the following metrics:
+            - value_loss (float): The value loss of the critic.
+            - actor_loss (float): The actor loss of the policy.
+            - entropy_loss (float): The entropy loss of the policy.
+            - approx_kl (float): The approximate KL divergence.
+            - clipped_frac (float): The fraction of clipped actions.
         """
+        log_probs = batch.old_log_prob
+        returns = batch.returns
+        use_baseline: bool = self.args.use_baseline
+
         self.optimizer.zero_grad()
 
         returns_tensor = torch.tensor(returns, device=self.device)
@@ -107,4 +123,4 @@ class PGAgent(object):
                                        max_norm=0.5)
         self.optimizer.step()
 
-        return loss.item()
+        return {'loss': loss.item()}

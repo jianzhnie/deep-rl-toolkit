@@ -208,23 +208,23 @@ ppo_clip:
 ppo_penalty:
   CartPole-v0:
     algo_name: ppo_penalty
-    max_timesteps: 50000
+    max_timesteps: 2000
     actor_lr: 1.0e-3
     critic_lr: 1.0e-2
     buffer_size: 128
     rollout_steps: 128
     batch_size: 32
-    logger: wandb
+    logger: tensorboard
 
   CartPole-v1:
     algo_name: ppo_penalty
-    max_timesteps: 300000
+    max_timesteps: 3000
     actor_lr: 1.0e-3
     critic_lr: 1.0e-2
     buffer_size: 128
     rollout_steps: 128
     batch_size: 32
-    logger: wandb
+    logger: tensorboard
 
 sac:
   CartPole-v0:
